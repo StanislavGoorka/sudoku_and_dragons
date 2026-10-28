@@ -1,0 +1,10 @@
+{
+  // Core must stay pure TypeScript: no DOM, no PixiJS, no Node APIs.
+  // The same code runs in the game and in Supabase Edge Functions (Deno).
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": []
+  },
+  "include": ["."]
+}

@@ -1,0 +1,42 @@
+# Sudoku & Dragons
+
+Mobile game (iOS + Android): sudoku where solving drives RPG duels, in the spirit of Match Masters.
+Built by vibe coding: Claude writes the code, the owner steers. The owner writes in Polish; in-game text is Polish,
+code and comments are English.
+
+## Stack
+
+- **PixiJS v8** for rendering, **GSAP** for animation, **TypeScript 7**, **Vite 8**, **Vitest 5**
+- Planned: **Capacitor** wraps the web build for iOS/Android; **Supabase** backend
+  (project `SudokuAndDragons`, ref `wmsngertpctiiermiigz`, eu-central-1) for accounts and server-validated duels.
+
+## Commands
+
+- `npm run dev`: dev server on port 5173, also exposed on the LAN so a phone on the same Wi-Fi can open it
+- `npm test`: Vitest
+- `npm run typecheck`: checks the whole app, then `src/core` on its own without DOM types
+- `npm run build`: typecheck + production build into `dist/`
+
+## Layout
+
+- `src/core/`: pure game logic (sudoku generator, solver, move rules). No DOM, no PixiJS, no Node APIs.
+  It must also run in Supabase Edge Functions (Deno), so imports use explicit `.ts` extensions.
+  `src/core/tsconfig.json` enforces the no-DOM rule. Tests sit next to the code as `*.test.ts`.
+- `src/game/`: PixiJS client. `main.ts` boots the app, `screens/` are full screens, `ui/` are reusable views,
+  `theme.ts` holds colours and fonts.
+
+## Conventions
+
+- Boards are seeded (`generatePuzzle(seed, difficulty)`) and fully deterministic, so a seed is enough to share
+  a board between players or reproduce a bug.
+- In duels the client must never be trusted with the solution; the server holds it and validates moves with `core`.
+- Single npm package, no workspaces: the repo lives on an exFAT drive (D:), which cannot hold the symlinks
+  npm workspaces need.
+- Pixi `Container` already has a `label` property; don't name fields `label` on Container subclasses.
+- Kill GSAP tweens in `destroy()` of views that animate their children.
+
+## Checking changes in the browser
+
+- `?seed=123&difficulty=easy|medium|hard` in the URL reproduces a board.
+- Arrow keys move the selection, keys 1–9 place digits.
+- In dev, `window.__game.screen` is the current `GameScreen`; `__game.screen.debugFill(n)` fills all but `n` cells.
