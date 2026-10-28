@@ -11,6 +11,7 @@ import {
   type Puzzle,
   type Unit,
 } from '../../core/index.ts';
+import { feedback } from '../audio/feedback.ts';
 import { DIFFICULTY_INFO } from '../difficulty.ts';
 import { burst, floatText, launchOrb, shake, stopEffects, wait } from '../fx/effects.ts';
 import { OVERSCAN } from '../safeArea.ts';
@@ -60,6 +61,8 @@ export class GameScreen extends Container {
   /** Seconds of battle so far, not counting pauses. */
   private elapsed = 0;
   private endShown = false;
+  /** Whole seconds left at the last countdown tick sound, or null outside the last seconds. */
+  private lastTick: number | null = null;
   private screenWidth = 0;
   private screenHeight = 0;
 
@@ -145,6 +148,7 @@ export class GameScreen extends Container {
     this.arena.charge.visible = ongoing;
     this.arena.charge.update(this.battle.charge / attackEvery, secondsLeft, dt);
     this.arena.dragon.setHeat(ongoing ? Math.max(0, 1 - secondsLeft / 5) : 0);
+    this.tickCountdown(ongoing ? secondsLeft : Infinity);
     if (hit) this.play(hit, this.playDragonAttack(hit));
   }
 
@@ -250,8 +254,11 @@ export class GameScreen extends Container {
     if (result.kind === 'wrong') {
       this.mistakes++;
       this.updateStatus();
-    } else if (result.kind === 'correct' && this.board.countOf(digit) === 9) {
-      this.pad.setDone(digit, true);
+      feedback.mistake();
+    } else if (result.kind === 'correct') {
+      if (this.board.countOf(digit) === 9) this.pad.setDone(digit, true);
+      feedback.digit(digit);
+      if (result.completed.length > 0) feedback.unitsCompleted(result.completed.length);
     }
 
     const hit = resolveMove(this.battle, result);
@@ -304,6 +311,7 @@ export class GameScreen extends Container {
 
         // The first orb to land carries the whole hit.
         landed = true;
+        feedback.enemyHit(big);
         this.arena.enemyHp.setHp(hit.hpAfter);
         this.arena.dragon.hurt(big ? 18 : 6);
         const jitter = (Math.random() - 0.5) * 40;
@@ -323,18 +331,33 @@ export class GameScreen extends Container {
 
   /** The dragon lunges and spits a fireball at the player's HP bar. */
   private async playDragonAttack(hit: Hit): Promise<void> {
+    feedback.dragonLunge();
     await this.arena.dragon.attack();
     if (this.destroyed) return;
+    feedback.fireball();
     const from = this.fx.toLocal(this.arena.enemyTarget(), this.arena);
     const to = this.fx.toLocal(this.arena.playerTarget(), this.arena);
     await launchOrb(this.fx, from, to, { color: theme.fire, radius: 12, duration: 0.4, arc: 30 });
     if (this.destroyed) return;
 
+    feedback.playerHit();
     burst(this.fx, to, theme.fire, 18);
     shake(this, 8, 0.35);
     gsap.fromTo(this.hurtFlash, { alpha: 0.3 }, { alpha: 0, duration: 0.45, ease: 'power2.out' });
     this.arena.playerHp.setHp(hit.hpAfter);
     floatText(this.fx, `-${hit.damage}`, { x: to.x, y: to.y - 30 }, { color: theme.error, fontSize: 26 });
+  }
+
+  /** A tick for each of the last five seconds before the dragon's timed attack. */
+  private tickCountdown(secondsLeft: number): void {
+    if (secondsLeft > 5) {
+      this.lastTick = null;
+      return;
+    }
+    const whole = Math.ceil(secondsLeft);
+    if (whole === this.lastTick) return;
+    this.lastTick = whole;
+    feedback.countdownTick();
   }
 
   private updateStatus(): void {
@@ -350,6 +373,7 @@ export class GameScreen extends Container {
 
     const won = this.battle.outcome === 'won';
     if (won) {
+      feedback.dragonFalls();
       await this.arena.dragon.die();
     } else {
       await wait(0.6);
@@ -362,6 +386,11 @@ export class GameScreen extends Container {
       finalHit.cause === 'mistake'
         ? `Każdy błąd to cios smoka za ${attack} HP.`
         : 'Szybkie cyfry i ukończone linie odpychają atak smoka.';
+    if (won) {
+      feedback.victory();
+    } else {
+      feedback.defeat();
+    }
     this.openModal(
       new Modal(won ? `${name} pokonany!` : `${name} cię pokonał…`, won ? stats : `${hint}\n${stats}`, [
         { text: 'Walcz ponownie', variant: 'primary', onTap: () => this.options.onRestart() },

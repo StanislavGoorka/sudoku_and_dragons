@@ -58,6 +58,14 @@ code and comments are English.
   pauses itself when the app goes to the background. Screens are laid out inside the safe area
   (`safeArea.ts` reads CSS env(safe-area-inset-*)); full-screen layers they draw extend by `OVERSCAN`.
   The Android back button goes to the screen's `handleBack()`; returning false exits the app.
+- `src/game/audio/`: `feedback.ts` is the one place for sound and vibration. Screens report events
+  (`feedback.digit(d)`, `unitsCompleted(n)`, `playerHit()`, `victory()`…) and it plays a sound from `Synth.ts`
+  and a haptic (Capacitor Haptics, native app only), honouring the menu toggles (`settings.ts`, localStorage).
+  `Synth.ts` synthesises every effect with Web Audio (no sample files); each digit plays a note of the
+  C major pentatonic. Audio starts on the first tap (`feedback.unlock()` in main.ts) and is suspended in the
+  background. To check sounds without ears, render them in an `OfflineAudioContext` (`new Synth(offlineCtx)`)
+  and measure the peak: quiet effects ~0.05–0.15, digits ~0.3, big hits ~0.6, never above 1. Don't add a
+  DynamicsCompressor: Chrome's turns short quiet sounds down ~10 dB even below its threshold.
 
 ## Conventions
 
@@ -80,5 +88,9 @@ code and comments are English.
 - In dev, `window.__game.start(difficulty, seed?)` and `__game.menu()` switch screens, and `__game.screen` is the
   current screen. On a `GameScreen`: `debugFill(n)` fills all but `n` cells,
   `debugMistake()` plays a wrong digit, `battle.charge = 36` jumps the dragon's timer to 4 s before its attack.
-- When the Browser pane is hidden the page gets only a couple of frames per second, so animations crawl and
-  screenshots catch them half-way. Check state through `__game` instead of trusting such a screenshot.
+- When the Browser pane is hidden (or the game's tab is not the front one) the page gets few or no animation
+  frames, so animations crawl or stop and screenshots catch them half-way. Check state through `__game`
+  instead, and drive time yourself: import gsap from the prebundled `/node_modules/.vite/deps/gsap.js?v=…` URL
+  (find it in `performance.getEntriesByType('resource')`), call `gsap.ticker.lagSmoothing(0)`, then every
+  50 ms `gsap.ticker.tick()` and `__game.screen.update(50)`. `__game.feedback` is the live sound/haptics module.
+  Keep each javascript_tool call under ~40 s.

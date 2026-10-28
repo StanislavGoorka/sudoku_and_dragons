@@ -12,6 +12,7 @@ import {
   type Puzzle,
   type Unit,
 } from '../../core/index.ts';
+import { feedback } from '../audio/feedback.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 
@@ -58,7 +59,10 @@ export class BoardView extends Container {
       const value = this.board[cell];
       view.digit.text = value === 0 ? '' : String(value);
       view.digit.style.fill = value === 0 ? theme.placed : theme.given;
-      view.on('pointertap', () => this.select(cell));
+      view.on('pointertap', () => {
+        feedback.select();
+        this.select(cell);
+      });
       this.cells.push(view);
       this.addChild(view);
     }

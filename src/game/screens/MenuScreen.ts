@@ -1,6 +1,7 @@
 import gsap from 'gsap';
 import { Container, Text, type DestroyOptions } from 'pixi.js';
 import { CLUES, ENEMIES, type Difficulty } from '../../core/index.ts';
+import { feedback } from '../audio/feedback.ts';
 import { DIFFICULTIES, DIFFICULTY_INFO } from '../difficulty.ts';
 import { lookOf } from '../enemies.ts';
 import { killTweens } from '../fx/tweens.ts';
@@ -14,7 +15,10 @@ export interface MenuOptions {
   onPick: (difficulty: Difficulty) => void;
 }
 
-/** Start screen: title, the dragon, and one card per difficulty. */
+const soundLabel = (on: boolean) => (on ? '🔊' : '🔇');
+const hapticsLabel = (on: boolean) => (on ? '📳' : '📴');
+
+/** Start screen: title, the dragon, one card per difficulty, and sound / vibration toggles. */
 export class MenuScreen extends Container {
   private readonly title = new Text({
     text: 'Sudoku\n& Dragons',
@@ -37,6 +41,8 @@ export class MenuScreen extends Container {
   });
   private readonly dragon: DragonView;
   private readonly cards: Button[];
+  private readonly soundToggle: Button;
+  private readonly hapticsToggle: Button;
   private readonly onPick: (difficulty: Difficulty) => void;
   private entered = false;
 
@@ -58,7 +64,36 @@ export class MenuScreen extends Container {
       card.setHighlighted(difficulty === options.selected);
       return card;
     });
-    this.addChild(this.title, this.tagline, this.dragon, this.prompt, ...this.cards);
+    const { settings } = feedback;
+    this.soundToggle = new Button({
+      text: soundLabel(settings.sound),
+      onTap: () => {
+        feedback.setSound(!settings.sound);
+        this.soundToggle.setText(soundLabel(settings.sound));
+        this.soundToggle.setHighlighted(settings.sound);
+        // The button's own click played while sound was still off; confirm the switch now.
+        if (settings.sound) feedback.tap();
+      },
+    });
+    this.soundToggle.setHighlighted(settings.sound);
+    this.hapticsToggle = new Button({
+      text: hapticsLabel(settings.haptics),
+      onTap: () => {
+        feedback.setHaptics(!settings.haptics);
+        this.hapticsToggle.setText(hapticsLabel(settings.haptics));
+        this.hapticsToggle.setHighlighted(settings.haptics);
+      },
+    });
+    this.hapticsToggle.setHighlighted(settings.haptics);
+    this.addChild(
+      this.title,
+      this.tagline,
+      this.dragon,
+      this.prompt,
+      ...this.cards,
+      this.soundToggle,
+      this.hapticsToggle,
+    );
   }
 
   layout(width: number, height: number): void {
@@ -79,7 +114,14 @@ export class MenuScreen extends Container {
     });
     this.prompt.position.set(width / 2, cardsTop - 32);
 
-    const titleTop = Math.max(margin, height * 0.07);
+    // Toggles in the top-right corner; the title starts below them.
+    const toggleSize = 42;
+    this.hapticsToggle.position.set(width - 12 - toggleSize, 10);
+    this.hapticsToggle.layout(toggleSize, toggleSize);
+    this.soundToggle.position.set(width - 12 - toggleSize * 2 - 8, 10);
+    this.soundToggle.layout(toggleSize, toggleSize);
+
+    const titleTop = Math.max(60, height * 0.07);
     this.title.position.set(width / 2, titleTop);
     this.tagline.position.set(width / 2, titleTop + this.title.height + 8);
 

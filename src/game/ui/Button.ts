@@ -1,5 +1,6 @@
 import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.js';
+import { feedback } from '../audio/feedback.ts';
 import { theme } from '../theme.ts';
 
 export type ButtonVariant = 'primary' | 'secondary';
@@ -56,7 +57,10 @@ export class Button extends Container {
     this.on('pointerdown', () => this.press(0.95));
     this.on('pointerup', () => this.press(1));
     this.on('pointerupoutside', () => this.press(1));
-    this.on('pointertap', () => options.onTap());
+    this.on('pointertap', () => {
+      feedback.tap();
+      options.onTap();
+    });
   }
 
   layout(width: number, height: number): void {
@@ -76,6 +80,10 @@ export class Button extends Container {
       this.title.position.set(width / 2, height / 2);
     }
     this.draw();
+  }
+
+  setText(text: string): void {
+    this.title.text = text;
   }
 
   /** A gold outline, e.g. for the option chosen last time. */

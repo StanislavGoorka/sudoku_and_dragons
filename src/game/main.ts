@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import gsap from 'gsap';
 import { Application, type Container } from 'pixi.js';
 import { generatePuzzle, type Difficulty } from '../core/index.ts';
+import { feedback } from './audio/feedback.ts';
 import { DIFFICULTIES, loadDifficulty, saveDifficulty } from './difficulty.ts';
 import { readSafeArea, type Insets } from './safeArea.ts';
 import { GameScreen } from './screens/GameScreen.ts';
@@ -103,9 +104,17 @@ async function boot(): Promise<void> {
     layoutScreen();
   });
 
-  window.addEventListener('keydown', (event) => screen?.handleKey?.(event));
+  // Browsers start audio only after a user gesture, so every tap or key press may unlock it.
+  window.addEventListener('pointerdown', () => feedback.unlock());
+  window.addEventListener('keydown', (event) => {
+    feedback.unlock();
+    screen?.handleKey?.(event);
+  });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) screen?.pause?.();
+    if (document.hidden) {
+      screen?.pause?.();
+      feedback.suspend();
+    }
   });
   if (Capacitor.isNativePlatform()) {
     void App.addListener('backButton', () => {
@@ -121,6 +130,7 @@ async function boot(): Promise<void> {
         },
         start: startBattle,
         menu: showMenu,
+        feedback,
       },
     });
   }
