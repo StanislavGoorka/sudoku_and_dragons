@@ -1,8 +1,10 @@
 import gsap from 'gsap';
 import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
 import {
+  advanceTime,
   createBattle,
   DRAGON,
+  moveKnockback,
   resolveMove,
   type Battle,
   type Difficulty,
@@ -105,6 +107,20 @@ export class GameScreen extends Container {
     if (this.endBanner) this.layoutEndBanner(this.endBanner);
   }
 
+  /** Called every frame with the frame time; drives the dragon's timed attack. */
+  update(deltaMs: number): void {
+    const dt = deltaMs / 1000;
+    const hit = advanceTime(this.battle, dt);
+    const ongoing = this.battle.outcome === 'ongoing';
+    const { attackEvery } = this.battle.enemy;
+    const secondsLeft = attackEvery - this.battle.charge;
+
+    this.arena.charge.visible = ongoing;
+    this.arena.charge.update(this.battle.charge / attackEvery, secondsLeft, dt);
+    this.arena.dragon.setHeat(ongoing ? Math.max(0, 1 - secondsLeft / 5) : 0);
+    if (hit) this.play(hit, this.playDragonAttack(hit));
+  }
+
   handleKey(event: KeyboardEvent): void {
     if (/^[1-9]$/.test(event.key)) {
       this.handleDigit(Number(event.key));
@@ -162,18 +178,26 @@ export class GameScreen extends Container {
 
     const hit = resolveMove(this.battle, result);
     if (!hit) return;
-    const completed = result.kind === 'correct' ? result.completed : [];
-    void this.playHit(hit, cell, completed);
+    if (result.kind === 'correct') {
+      this.play(hit, this.playPlayerAttack(hit, cell, result.completed));
+      if (hit.units > 0 && this.battle.outcome === 'ongoing') {
+        const at = this.fx.toLocal(this.arena.chargePoint(), this.arena);
+        floatText(this.fx, `+${moveKnockback(hit.units)} s`, { x: at.x + 12, y: at.y - 30 }, {
+          color: theme.placed,
+          fontSize: 16,
+        });
+      }
+    } else {
+      this.play(hit, this.playDragonAttack(hit));
+    }
   }
 
-  private async playHit(hit: Hit, cell: number, completed: Unit[]): Promise<void> {
-    if (hit.target === 'enemy') {
-      await this.playPlayerAttack(hit, cell, completed);
-    } else {
-      await this.playDragonAttack(hit);
-    }
-    // Only the hit that brought someone to 0 HP ends the battle; earlier hits may still be landing.
-    if (!this.destroyed && hit.hpAfter === 0) await this.showEnd();
+  /** Runs a hit's animation, then ends the battle if that hit brought someone to 0 HP. */
+  private play(hit: Hit, animation: Promise<void>): void {
+    // Only the final hit ends the battle; earlier hits may still be landing.
+    void animation.then(() => {
+      if (!this.destroyed && hit.hpAfter === 0) return this.showEnd();
+    });
   }
 
   /** Orbs fly from the board to the dragon: a small one per digit, a big one per completed unit. */

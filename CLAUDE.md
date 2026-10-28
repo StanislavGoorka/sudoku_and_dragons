@@ -25,6 +25,10 @@ code and comments are English.
   `core/battle` turns sudoku moves into hits: correct digit = damage to the enemy (more for completed
   rows/columns/boxes, combo bonus for several at once), wrong digit = enemy hits the player, solving the board
   is a finishing blow. Enemy HP is tuned so the dragon falls with the last few digits (~98–100% of the board).
+  The enemy also charges a timed attack (`advanceTime`, fed the frame time by the game loop; core has no clocks
+  of its own). Correct digits push the charge back, completed units much more, so speed is what keeps you safe.
+  Balance numbers come from simulations: `npm run sim:hp` (when the dragon falls) and `npm run sim:timer`
+  (HP lost to the timer at different speeds). Re-run them when changing HP, damage, interval or knockback.
 - `src/game/`: PixiJS client. `main.ts` boots the app, `screens/` are full screens, `ui/` are reusable views,
   `fx/` holds short-lived effects (orbs, particles, floating text, shake), `theme.ts` holds colours and fonts.
   `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
@@ -44,4 +48,5 @@ code and comments are English.
 - `?seed=123&difficulty=easy|medium|hard` in the URL reproduces a board.
 - Arrow keys move the selection, keys 1–9 place digits.
 - In dev, `window.__game.screen` is the current `GameScreen`; `__game.screen.debugFill(n)` fills all but `n` cells,
-  `__game.screen.debugMistake()` plays a wrong digit.
+  `__game.screen.debugMistake()` plays a wrong digit, `__game.screen.battle.charge = 36` jumps the dragon's
+  timer to 4 s before its attack.

@@ -1,11 +1,16 @@
 import { Container, Graphics, type PointData } from 'pixi.js';
 import { theme } from '../theme.ts';
+import { ChargeMeter } from './ChargeMeter.ts';
 import { DragonView } from './DragonView.ts';
 import { HpBar } from './HpBar.ts';
 
-/** The panel above the board: enemy HP on top, the dragon, player HP at the bottom. */
+/**
+ * The panel above the board: enemy HP on top, the dragon with its attack countdown,
+ * player HP at the bottom.
+ */
 export class BattleArena extends Container {
   readonly dragon = new DragonView();
+  readonly charge = new ChargeMeter();
   readonly enemyHp: HpBar;
   readonly playerHp: HpBar;
   private readonly bg = new Graphics();
@@ -14,7 +19,7 @@ export class BattleArena extends Container {
     super();
     this.enemyHp = new HpBar(enemyName, enemyMaxHp, theme.enemyHp);
     this.playerHp = new HpBar('Ty', playerMaxHp, theme.playerHp);
-    this.addChild(this.bg, this.dragon, this.enemyHp, this.playerHp);
+    this.addChild(this.bg, this.dragon, this.charge, this.enemyHp, this.playerHp);
   }
 
   layout(width: number, height: number): void {
@@ -32,8 +37,14 @@ export class BattleArena extends Container {
 
     const top = pad + HpBar.HEIGHT + 4;
     const bottom = height - pad - HpBar.HEIGHT - 4;
-    this.dragon.position.set(width / 2, (top + bottom) / 2);
+    const middle = (top + bottom) / 2;
+    this.dragon.position.set(width / 2, middle);
     this.dragon.layout(Math.max(32, Math.min(width * 0.5, bottom - top)));
+
+    // The caption under the ring needs ~16 px, so the dial sits a little above the middle.
+    const radius = Math.max(12, Math.min(24, (bottom - top - 20) / 2));
+    this.charge.position.set(pad + radius + 6, middle - 8);
+    this.charge.layout(radius);
   }
 
   /** Where player attacks land, in arena coordinates. */
@@ -45,5 +56,10 @@ export class BattleArena extends Container {
   playerTarget(): PointData {
     const center = this.playerHp.barCenter();
     return { x: this.playerHp.x + center.x, y: this.playerHp.y + center.y };
+  }
+
+  /** The attack countdown, in arena coordinates. */
+  chargePoint(): PointData {
+    return { x: this.charge.x, y: this.charge.y };
   }
 }

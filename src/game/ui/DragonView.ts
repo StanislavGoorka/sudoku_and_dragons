@@ -10,6 +10,10 @@ export class DragonView extends Container {
   private readonly rig = new Container();
   private readonly body = new Text({ text: '🐉', style: { fontSize: 100 } });
   private size = 100;
+  /** 0–1: how close the timed attack is; tints the dragon towards orange. */
+  private heat = 0;
+  private flashing = false;
+  private dead = false;
 
   constructor() {
     super();
@@ -35,9 +39,23 @@ export class DragonView extends Container {
       { x: 0, rotation: 0, duration: 0.5, ease: 'elastic.out(1, 0.3)' },
     );
     this.body.tint = 0xff6b6b;
+    this.flashing = true;
     gsap.delayedCall(0.12, () => {
-      if (!this.destroyed) this.body.tint = 0xffffff;
+      this.flashing = false;
+      if (!this.destroyed && !this.dead) this.body.tint = this.restingTint();
     });
+  }
+
+  setHeat(heat: number): void {
+    if (heat === this.heat) return;
+    this.heat = heat;
+    if (!this.flashing && !this.dead) this.body.tint = this.restingTint();
+  }
+
+  private restingTint(): number {
+    const green = Math.round(255 - 115 * this.heat);
+    const blue = Math.round(255 - 165 * this.heat);
+    return (0xff << 16) | (green << 8) | blue;
   }
 
   /** Lunges forward. Resolves at the peak of the lunge, when the fireball should leave. */
@@ -56,6 +74,7 @@ export class DragonView extends Container {
 
   die(): Promise<void> {
     gsap.killTweensOf([this.rig, this.rig.scale, this.body.scale]);
+    this.dead = true;
     this.body.tint = 0x8a8a8a;
     return new Promise((resolve) => {
       gsap

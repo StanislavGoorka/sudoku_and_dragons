@@ -37,7 +37,10 @@ async function boot(): Promise<void> {
   // resizeTo applies the new size on the next frame, so lay out when the screen size actually changes.
   let width = app.screen.width;
   let height = app.screen.height;
-  app.ticker.add(() => {
+  // The ticker caps a frame at 100 ms (minFPS = 10), and stops while the page is hidden,
+  // so the dragon's attack timer pauses instead of firing a burst after a long break.
+  app.ticker.add((ticker) => {
+    screen?.update(ticker.deltaMS);
     if (app.screen.width === width && app.screen.height === height) return;
     width = app.screen.width;
     height = app.screen.height;
