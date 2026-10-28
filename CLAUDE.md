@@ -21,6 +21,10 @@ code and comments are English.
 - `npm run android:sync`: build and copy the game into `android/` (run after every web change you want on the device)
 - `npm run android:run`: sync, then build and install on a connected phone or running emulator
 - `npm run android:open`: open `android/` in Android Studio
+- `npm run icons`: render the app icon from `assets/src/icon-{background,foreground}.svg` (drawn on the full
+  108 dp adaptive canvas, 1024 px; keep the artwork within ~320 px of the centre) into every Android
+  mipmap density plus `assets/icon-1024.png` / `icon-512.png` for the stores. `--preview out.png` draws
+  it under launcher masks. Don't use @capacitor/assets: it insets the layers and renders them blurry.
 - Building Android from a shell needs the JDK bundled with Android Studio:
   `JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"`, then `android\gradlew.bat assembleDebug`
   (APK lands in `android/app/build/outputs/apk/debug/`). `android/local.properties` (not in git) points at the SDK.

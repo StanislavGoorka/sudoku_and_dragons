@@ -14,7 +14,8 @@
     "sim:timer": "node scripts/sim-timer.ts",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
-    "android:run": "npm run android:sync && cap run android"
+    "android:run": "npm run android:sync && cap run android",
+    "icons": "node scripts/render-icons.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.0",
+    "sharp": "^0.35.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
