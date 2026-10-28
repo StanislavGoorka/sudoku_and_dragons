@@ -1,4 +1,6 @@
 import { Container, Graphics, type PointData } from 'pixi.js';
+import type { EnemyDef } from '../../core/index.ts';
+import { lookOf } from '../enemies.ts';
 import { theme } from '../theme.ts';
 import { ChargeMeter } from './ChargeMeter.ts';
 import { DragonView } from './DragonView.ts';
@@ -9,15 +11,16 @@ import { HpBar } from './HpBar.ts';
  * player HP at the bottom.
  */
 export class BattleArena extends Container {
-  readonly dragon = new DragonView();
+  readonly dragon: DragonView;
   readonly charge = new ChargeMeter();
   readonly enemyHp: HpBar;
   readonly playerHp: HpBar;
   private readonly bg = new Graphics();
 
-  constructor(enemyName: string, enemyMaxHp: number, playerMaxHp: number) {
+  constructor(enemy: EnemyDef, playerMaxHp: number) {
     super();
-    this.enemyHp = new HpBar(enemyName, enemyMaxHp, theme.enemyHp);
+    this.dragon = new DragonView(lookOf(enemy));
+    this.enemyHp = new HpBar(enemy.name, enemy.maxHp, theme.enemyHp);
     this.playerHp = new HpBar('Ty', playerMaxHp, theme.playerHp);
     this.addChild(this.bg, this.dragon, this.charge, this.enemyHp, this.playerHp);
   }

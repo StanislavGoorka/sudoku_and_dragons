@@ -1,7 +1,8 @@
 import gsap from 'gsap';
 import { Container, Text, type DestroyOptions } from 'pixi.js';
-import { CLUES, type Difficulty } from '../../core/index.ts';
+import { CLUES, ENEMIES, type Difficulty } from '../../core/index.ts';
 import { DIFFICULTIES, DIFFICULTY_INFO } from '../difficulty.ts';
+import { lookOf } from '../enemies.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 import { Button } from '../ui/Button.ts';
@@ -34,7 +35,7 @@ export class MenuScreen extends Container {
     text: 'Wybierz poziom',
     style: { fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 16, fill: theme.text },
   });
-  private readonly dragon = new DragonView();
+  private readonly dragon: DragonView;
   private readonly cards: Button[];
   private readonly onPick: (difficulty: Difficulty) => void;
   private entered = false;
@@ -42,6 +43,8 @@ export class MenuScreen extends Container {
   constructor(options: MenuOptions) {
     super();
     this.onPick = options.onPick;
+    // The dragon of the difficulty picked last time.
+    this.dragon = new DragonView(lookOf(ENEMIES[options.selected]));
     this.title.anchor.set(0.5, 0);
     this.tagline.anchor.set(0.5, 0);
     this.prompt.anchor.set(0.5, 0);
@@ -49,7 +52,7 @@ export class MenuScreen extends Container {
       const info = DIFFICULTY_INFO[difficulty];
       const card = new Button({
         text: info.name,
-        subtitle: `${CLUES[difficulty]} podpowiedzi · ${info.tagline}`,
+        subtitle: `${ENEMIES[difficulty].name} · ${CLUES[difficulty]} podpowiedzi`,
         onTap: () => this.onPick(difficulty),
       });
       card.setHighlighted(difficulty === options.selected);

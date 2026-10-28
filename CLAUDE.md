@@ -24,16 +24,21 @@ code and comments are English.
   `src/core/tsconfig.json` enforces the no-DOM rule. Tests sit next to the code as `*.test.ts`.
   `core/battle` turns sudoku moves into hits: correct digit = damage to the enemy (more for completed
   rows/columns/boxes, combo bonus for several at once), wrong digit = enemy hits the player, solving the board
-  is a finishing blow. Enemy HP is tuned so the dragon falls with the last few digits (~98–100% of the board).
+  is a finishing blow. Each difficulty has its own dragon (`core/battle/enemies.ts`: Młody smok, Smok,
+  Pradawny smok) with HP tuned so it falls with the last few digits of its board, and harder hits and a faster
+  timed attack the higher the level; `enemies.test.ts` guards the HP. Enemy names are masculine Polish
+  because the UI says "{name} pokonany!".
   The enemy also charges a timed attack (`advanceTime`, fed the frame time by the game loop; core has no clocks
   of its own). Correct digits push the charge back, completed units much more, so speed is what keeps you safe.
-  Balance numbers come from simulations: `npm run sim:hp` (when the dragon falls) and `npm run sim:timer`
-  (HP lost to the timer at different speeds). Re-run them when changing HP, damage, interval or knockback.
+  Balance numbers come from simulations: `npm run sim:hp` (when each dragon falls, and how much damage a
+  board deals) and `npm run sim:timer` (HP lost to the timer at different speeds; `node scripts/sim-timer.ts
+  hard 30 4` tries other values for one difficulty). Re-run them when changing HP, damage, interval or knockback.
 - `src/game/`: PixiJS client. `main.ts` boots the app and swaps full screens (`screens/`: `MenuScreen` for
   picking a difficulty, `GameScreen` for a battle); a screen has `layout`, and optionally `update` (per frame)
   and `handleKey`. `ui/` are reusable views (`Button`, `Modal`, board, arena…), `fx/` holds short-lived effects
   (orbs, particles, floating text, shake) and `killTweens`, `theme.ts` holds colours and fonts,
-  `difficulty.ts` the Polish difficulty names and the remembered last choice (localStorage).
+  `difficulty.ts` the Polish difficulty names and the remembered last choice (localStorage),
+  `enemies.ts` each dragon's placeholder look (emoji, tint, size) keyed by enemy id.
   `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
   While a `Modal` is open on the battle screen the battle is paused (no timer, no input).
 

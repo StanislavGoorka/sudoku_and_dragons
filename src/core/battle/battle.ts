@@ -12,17 +12,6 @@ export interface EnemyDef {
   timedAttack: number;
 }
 
-export const DRAGON: EnemyDef = {
-  id: 'dragon',
-  name: 'Smok',
-  maxHp: 460,
-  attack: 10,
-  // Tuned by simulation (no mistakes, easy board): ~8 s per digit costs ~16 HP,
-  // ~12 s per digit ~28 HP, 16 s gets risky, 20 s loses.
-  attackEvery: 40,
-  timedAttack: 4,
-};
-
 export const PLAYER_MAX_HP = 50;
 
 export const DAMAGE = {

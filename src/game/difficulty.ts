@@ -2,10 +2,10 @@ import type { Difficulty } from '../core/index.ts';
 
 export const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
 
-export const DIFFICULTY_INFO: Record<Difficulty, { name: string; tagline: string }> = {
-  easy: { name: 'Łatwy', tagline: 'na rozgrzewkę' },
-  medium: { name: 'Średni', tagline: 'dla wprawionych' },
-  hard: { name: 'Trudny', tagline: 'tylko dla mistrzów' },
+export const DIFFICULTY_INFO: Record<Difficulty, { name: string }> = {
+  easy: { name: 'Łatwy' },
+  medium: { name: 'Średni' },
+  hard: { name: 'Trudny' },
 };
 
 const STORAGE_KEY = 'sudoku-dragons.difficulty';

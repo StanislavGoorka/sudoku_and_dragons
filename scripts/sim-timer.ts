@@ -1,11 +1,14 @@
-// How much does the timed attack hurt? Plays boards without mistakes at several speeds
+// How much does each dragon's timed attack hurt? Plays boards without mistakes at several speeds
 // (seconds per digit) and reports the player HP left.
+// Usage: node scripts/sim-timer.ts [difficulty] [attackEvery] [timedAttack]
+// The optional numbers override that difficulty's enemy, to try values before changing enemies.ts.
 import {
   advanceTime,
   applyMove,
+  CLUES,
   createBattle,
   createRng,
-  DRAGON,
+  ENEMIES,
   generatePuzzle,
   resolveMove,
   shuffle,
@@ -13,17 +16,21 @@ import {
   type EnemyDef,
 } from '../src/core/index.ts';
 
-// Usage: node scripts/sim-timer.ts [attackEvery] [timedAttack]
-const enemy: EnemyDef = {
-  ...DRAGON,
-  attackEvery: Number(process.argv[2] ?? DRAGON.attackEvery),
-  timedAttack: Number(process.argv[3] ?? DRAGON.timedAttack),
-};
-console.log(`attackEvery=${enemy.attackEvery}s timedAttack=${enemy.timedAttack}`);
-
 const SEEDS = 120;
-for (const difficulty of ['easy', 'medium'] as Difficulty[]) {
-  for (const secondsPerCell of [5, 8, 12, 16, 20, 25]) {
+const SPEEDS = [5, 8, 10, 12, 14, 16, 20];
+
+const only = process.argv[2] as Difficulty | undefined;
+const difficulties: Difficulty[] = only ? [only] : ['easy', 'medium', 'hard'];
+
+for (const difficulty of difficulties) {
+  const enemy: EnemyDef = {
+    ...ENEMIES[difficulty],
+    attackEvery: Number(process.argv[3] ?? ENEMIES[difficulty].attackEvery),
+    timedAttack: Number(process.argv[4] ?? ENEMIES[difficulty].timedAttack),
+  };
+  console.log(`${difficulty}: ${enemy.name}, attack every ${enemy.attackEvery} s for ${enemy.timedAttack} HP`);
+
+  for (const secondsPerCell of SPEEDS) {
     const hpLeft: number[] = [];
     let deaths = 0;
     for (let seed = 1; seed <= SEEDS; seed++) {
@@ -47,14 +54,11 @@ for (const difficulty of ['easy', 'medium'] as Difficulty[]) {
       hpLeft.push(battle.playerHp);
     }
     hpLeft.sort((a, b) => a - b);
-    const minutes = ((secondsPerCell * (givens(difficulty))) / 60).toFixed(1);
+    const minutes = ((secondsPerCell * (81 - CLUES[difficulty])) / 60).toFixed(1);
     console.log(
-      `${difficulty.padEnd(6)} ${String(secondsPerCell).padStart(2)}s/digit (~${minutes} min): ` +
-        `HP left median=${hpLeft[SEEDS / 2]} worst=${hpLeft[0]}  deaths=${deaths}/${SEEDS}`,
+      `  ${String(secondsPerCell).padStart(2)} s/digit (~${minutes.padStart(4)} min): ` +
+        `HP left median=${String(hpLeft[SEEDS / 2]).padStart(2)} worst=${String(hpLeft[0]).padStart(2)}  ` +
+        `deaths=${deaths}/${SEEDS}`,
     );
   }
-}
-
-function givens(difficulty: Difficulty): number {
-  return 81 - { easy: 40, medium: 32, hard: 26 }[difficulty];
 }

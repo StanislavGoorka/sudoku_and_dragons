@@ -3,7 +3,7 @@ import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
 import {
   advanceTime,
   createBattle,
-  DRAGON,
+  ENEMIES,
   moveKnockback,
   resolveMove,
   type Battle,
@@ -65,13 +65,13 @@ export class GameScreen extends Container {
   constructor(puzzle: Puzzle, options: GameScreenOptions) {
     super();
     this.puzzle = puzzle;
-    this.battle = createBattle(DRAGON);
+    this.battle = createBattle(ENEMIES[puzzle.difficulty]);
     this.options = options;
     this.menuButton = new Button({ text: '‹ Menu', onTap: () => this.requestLeave() });
 
     this.title.anchor.set(0.5, 0);
     this.status.anchor.set(0.5, 0);
-    this.arena = new BattleArena(DRAGON.name, DRAGON.maxHp, this.battle.playerMaxHp);
+    this.arena = new BattleArena(this.battle.enemy, this.battle.playerMaxHp);
     this.board = new BoardView(puzzle);
     this.pad = new NumberPad((digit) => this.handleDigit(digit));
     for (let digit = 1; digit <= 9; digit++) {
@@ -337,13 +337,14 @@ export class GameScreen extends Container {
     }
     if (this.destroyed) return;
 
+    const { name, attack } = this.battle.enemy;
     const stats = `Czas: ${formatTime(this.elapsed)} · Błędy: ${this.mistakes}`;
     const hint =
       finalHit.cause === 'mistake'
-        ? 'Każdy błąd to cios smoka za 10 HP.'
+        ? `Każdy błąd to cios smoka za ${attack} HP.`
         : 'Szybkie cyfry i ukończone linie odpychają atak smoka.';
     this.openModal(
-      new Modal(won ? 'Smok pokonany!' : 'Smok cię pokonał…', won ? stats : `${hint}\n${stats}`, [
+      new Modal(won ? `${name} pokonany!` : `${name} cię pokonał…`, won ? stats : `${hint}\n${stats}`, [
         { text: 'Walcz ponownie', variant: 'primary', onTap: () => this.options.onRestart() },
         { text: 'Menu', onTap: () => this.options.onMenu() },
       ]),

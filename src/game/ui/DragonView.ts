@@ -2,6 +2,21 @@ import gsap from 'gsap';
 import { Container, Text, type DestroyOptions } from 'pixi.js';
 import { killTweens } from '../fx/tweens.ts';
 
+/** How a dragon looks until there is real art: an emoji, a colour tint and a size relative to its box. */
+export interface DragonLook {
+  emoji: string;
+  tint: number;
+  scale: number;
+}
+
+export const DEFAULT_LOOK: DragonLook = { emoji: '🐉', tint: 0xffffff, scale: 1 };
+
+/** Per-channel multiply of two 0xRRGGBB colours. */
+function multiply(a: number, b: number): number {
+  const channel = (shift: number) => Math.round((((a >> shift) & 0xff) * ((b >> shift) & 0xff)) / 255);
+  return (channel(16) << 16) | (channel(8) << 8) | channel(0);
+}
+
 /**
  * Placeholder dragon drawn with an emoji until there is real art.
  * `rig` takes the action poses (hurt, attack, death); `body` inside it breathes idly,
@@ -9,16 +24,20 @@ import { killTweens } from '../fx/tweens.ts';
  */
 export class DragonView extends Container {
   private readonly rig = new Container();
-  private readonly body = new Text({ text: '🐉', style: { fontSize: 100 } });
+  private readonly body: Text;
+  private readonly look: DragonLook;
   private size = 100;
   /** 0–1: how close the timed attack is; tints the dragon towards orange. */
   private heat = 0;
   private flashing = false;
   private dead = false;
 
-  constructor() {
+  constructor(look: DragonLook = DEFAULT_LOOK) {
     super();
+    this.look = look;
+    this.body = new Text({ text: look.emoji, style: { fontSize: 100 } });
     this.body.anchor.set(0.5);
+    this.body.tint = this.restingTint();
     this.rig.addChild(this.body);
     this.addChild(this.rig);
     gsap.to(this.body.scale, { x: 0.97, y: 1.04, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' });
@@ -28,7 +47,7 @@ export class DragonView extends Container {
   layout(size: number): void {
     this.size = size;
     // An emoji glyph is roughly 1.2× its font size tall.
-    this.body.style.fontSize = Math.round(size / 1.2);
+    this.body.style.fontSize = Math.round((size / 1.2) * this.look.scale);
   }
 
   hurt(strength: number): void {
@@ -56,7 +75,7 @@ export class DragonView extends Container {
   private restingTint(): number {
     const green = Math.round(255 - 115 * this.heat);
     const blue = Math.round(255 - 165 * this.heat);
-    return (0xff << 16) | (green << 8) | blue;
+    return multiply(this.look.tint, (0xff << 16) | (green << 8) | blue);
   }
 
   /** Lunges forward. Resolves at the peak of the lunge, when the fireball should leave. */
