@@ -1,17 +1,6 @@
 import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions, type PointData } from 'pixi.js';
-import {
-  applyMove,
-  boxOf,
-  CELL_COUNT,
-  colOf,
-  rowOf,
-  unitCells,
-  type Grid,
-  type MoveResult,
-  type Puzzle,
-  type Unit,
-} from '../../core/index.ts';
+import { boxOf, CELL_COUNT, colOf, rowOf, unitCells, type Grid, type Unit } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
@@ -39,20 +28,23 @@ function distance(a: number, b: number): number {
   return Math.abs(rowOf(a) - rowOf(b)) + Math.abs(colOf(a) - colOf(b));
 }
 
+/**
+ * The sudoku board on screen. It does not judge moves: the caller checks a digit (locally with core
+ * against the solution, or on the server in a duel) and then tells the board what happened.
+ */
 export class BoardView extends Container {
+  /** What the board shows: givens plus revealed digits. */
   readonly board: Grid;
   selected: number | null = null;
 
-  private readonly solution: Grid;
   private readonly cells: CellView[] = [];
   private readonly lines = new Graphics();
   private readonly ghosts = new Set<Text>();
   private cellSize = 0;
 
-  constructor(puzzle: Puzzle) {
+  constructor(givens: Grid) {
     super();
-    this.board = [...puzzle.givens];
-    this.solution = puzzle.solution;
+    this.board = [...givens];
 
     for (let cell = 0; cell < CELL_COUNT; cell++) {
       const view = new CellView();
@@ -100,24 +92,31 @@ export class BoardView extends Container {
     this.select(row * 9 + col);
   }
 
-  /** Tries a digit in the selected cell. Returns null when nothing is selected. */
-  place(digit: number): MoveResult | null {
-    if (this.selected === null) return null;
-    const cell = this.selected;
-    const result = applyMove(this.board, this.solution, cell, digit);
-    switch (result.kind) {
-      case 'correct':
-        this.animateCorrect(cell);
-        result.completed.forEach((unit, i) => this.animateUnit(unit, cell, 0.1 + i * 0.12));
-        break;
-      case 'wrong':
-        this.animateWrong(cell, digit);
-        break;
-      case 'occupied':
-        break;
-    }
+  /** Shows a correct digit with its pop, plus a golden wave through every unit it completed. */
+  reveal(cell: number, digit: number, completed: Unit[], color: number = theme.placed): void {
+    this.board[cell] = digit;
+    this.cells[cell].digit.style.fill = color;
+    this.animateCorrect(cell);
+    completed.forEach((unit, i) => this.animateUnit(unit, cell, 0.1 + i * 0.12));
     this.refresh();
-    return result;
+  }
+
+  /** Shows a wrong digit bouncing off the cell; nothing is written. */
+  reject(cell: number, digit: number): void {
+    this.animateWrong(cell, digit);
+    this.refresh();
+  }
+
+  /** Catches up with `board` without animation (e.g. after missing updates in a duel). */
+  sync(board: Grid, color: number = theme.placed): void {
+    board.forEach((digit, cell) => {
+      if (digit === 0 || this.board[cell] === digit) return;
+      this.board[cell] = digit;
+      const view = this.cells[cell];
+      view.digit.text = String(digit);
+      view.digit.style.fill = color;
+    });
+    this.refresh();
   }
 
   countOf(digit: number): number {

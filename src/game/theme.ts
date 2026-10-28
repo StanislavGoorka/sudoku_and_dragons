@@ -26,6 +26,8 @@ export const theme = {
   playerHp: 0x5ad17a,
   fire: 0xff7a1a,
   combo: 0xffb347,
+  /** Digits placed by the opponent in a duel (yours use `placed`). */
+  opponent: 0xffa66b,
 
   buttonPrimary: 0xc9a227,
   buttonPrimaryText: 0x1a1423,

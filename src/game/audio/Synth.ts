@@ -119,6 +119,12 @@ export class Synth {
     this.noise({ filter: 'lowpass', freq: 900, to: 150, duration: 0.25, volume: 0.4 });
   }
 
+  /** A duel turn passes to you: a short rising ping. */
+  yourTurn(): void {
+    this.tone({ freq: hz(88), duration: 0.14, volume: 0.2 });
+    this.tone({ freq: hz(93), at: 0.09, duration: 0.22, volume: 0.2 });
+  }
+
   /** One of the last seconds before the dragon's timed attack. */
   tick(): void {
     this.tone({ freq: 1320, duration: 0.05, volume: 0.12 });

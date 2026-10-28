@@ -9,8 +9,10 @@ code and comments are English.
 - **PixiJS v8** for rendering, **GSAP** for animation, **TypeScript 7**, **Vite 8**, **Vitest 5**
 - **Capacitor 8** wraps the web build: `android/` is the native Android project (app id
   `com.metrezz.sudokudragons`, portrait only). iOS is not added yet; it needs a Mac or cloud CI.
-- Planned: **Supabase** backend (project `SudokuAndDragons`, ref `wmsngertpctiiermiigz`, eu-central-1)
-  for accounts and server-validated duels.
+- **Supabase** (project `SudokuAndDragons`, ref `wmsngertpctiiermiigz`, eu-central-1) runs online duels:
+  anonymous sign-in (enabled in the dashboard: Authentication → Sign In / Providers), tables `profiles`,
+  `duels`, `duel_secrets` (schema in `supabase/migrations/`) and the Edge Function `duel`.
+  Free plan: it allows two active projects, and this one shares the quota with the owner's other projects.
 
 ## Commands
 
@@ -28,6 +30,12 @@ code and comments are English.
 - Building Android from a shell needs the JDK bundled with Android Studio:
   `JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"`, then `android\gradlew.bat assembleDebug`
   (APK lands in `android/app/build/outputs/apk/debug/`). `android/local.properties` (not in git) points at the SDK.
+- `npm run function:bundle`: copy `src/core` into `supabase/functions/duel/core/` (gitignored) before deploying the
+  `duel` function (MCP `deploy_edge_function` with `index.ts` + every `core/**` file, verify_jwt on).
+  Redeploy whenever core rules change, or the server judges by old rules.
+- `npm run test:server`: end-to-end check of the deployed function with fresh anonymous players (rooms,
+  matchmaking, moves, forfeits, and that nobody can read solutions or other players' duels).
+- `npm run sim:duel`: bots duel each other; reports how duels end, first-mover advantage, strategy edge.
 - The Vite dev server must not watch `android/` (see vite.config.ts): its file handles stop Capacitor and
   Gradle from deleting folders there on Windows. Stop the dev server if `cap add`/Gradle reports a busy folder.
 
@@ -47,12 +55,27 @@ code and comments are English.
   Balance numbers come from simulations: `npm run sim:hp` (when each dragon falls, and how much damage a
   board deals) and `npm run sim:timer` (HP lost to the timer at different speeds; `node scripts/sim-timer.ts
   hard 30 4` tries other values for one difficulty). Re-run them when changing HP, damage, interval or knockback.
+- `core/duel`: online duel rules on one shared board. Players take turns of up to 3 correct digits (a digit that
+  completes a unit is free: extra move); correct digits damage the rival (same damage as vs the dragon), a wrong
+  digit costs its own player 10 HP and ends the turn; 30 s per turn, three timeouts in a row forfeit; 150 HP;
+  a full board goes to the player with more HP. `npm run sim:duel`: duels end by KO at ~75-80% of the board
+  after ~8 turns; the first mover wins ~53%; tactics matter (smart bot beats random 96%).
+- `supabase/functions/duel/index.ts`: the referee. Holds each board's solution (`duel_secrets`, no RLS
+  policies, so no client can read it), judges moves with core, writes the new `state` + `last_event` and bumps
+  `version` (updates only the version it read: concurrent writes get 409 `conflict`). Clients only read
+  `duels` (their own, via RLS) and follow them live through Supabase Realtime. Note: a bot that solves the
+  sudoku itself can still play perfectly; hiding the solution stops reading answers, not solving.
 - `src/game/`: PixiJS client. `main.ts` boots the app and swaps full screens (`screens/`: `MenuScreen` for
-  picking a difficulty, `GameScreen` for a battle); a screen has `layout`, and optionally `update` (per frame)
+  picking a difficulty, `GameScreen` for a battle, `LobbyScreen` and `DuelScreen` for online duels); a screen has `layout`, and optionally `update` (per frame)
   and `handleKey`. `ui/` are reusable views (`Button`, `Modal`, board, arena…), `fx/` holds short-lived effects
   (orbs, particles, floating text, shake) and `killTweens`, `theme.ts` holds colours and fonts,
   `difficulty.ts` the Polish difficulty names and the remembered last choice (localStorage),
-  `enemies.ts` each dragon's placeholder look (emoji, tint, size) keyed by enemy id.
+  `enemies.ts` each dragon's placeholder look (emoji, tint, size) keyed by enemy id,
+  `net/online.ts` the Supabase client (sign-in, nickname, calls to the `duel` function, `watchDuel` for live
+  updates, `serverNow()` for the turn clock), `net/config.ts` the project URL and publishable key (public).
+  `BoardView` only shows results (`reveal`, `reject`, `sync`); `GameScreen` judges solo moves with core,
+  `DuelScreen` sends them to the server and animates each new duel version (`applyRow`: the next version is
+  animated from `last_event`, a jump in versions is synced without animation).
   `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
   While a `Modal` is open on the battle screen the battle is paused (no timer, no input); the battle also
   pauses itself when the app goes to the background. Screens are laid out inside the safe area
@@ -75,6 +98,8 @@ code and comments are English.
 - Single npm package, no workspaces: the repo lives on an exFAT drive (D:), which cannot hold the symlinks
   npm workspaces need.
 - Pixi `Container` already has a `label` property; don't name fields `label` on Container subclasses.
+- GSAP runs with `lazy: false` (main.ts): otherwise a tween killed before its first tick still renders once
+  from GSAP's lazy queue, on an object that may already be destroyed.
 - Kill GSAP tweens in `destroy()` of views that animate their children, with `killTweens(a, b, …)` from
   `fx/tweens.ts`, never `gsap.killTweensOf([a, b])`: the array form leaves delayed or not-yet-started tweens
   alive, they later throw on the destroyed object every frame and freeze every animation in the game.
@@ -85,7 +110,11 @@ code and comments are English.
   reproduces a board.
 - Menu: keys 1–3 pick a difficulty. Battle: arrow keys move the selection, keys 1–9 place digits, Escape asks
   to leave.
-- In dev, `window.__game.start(difficulty, seed?)` and `__game.menu()` switch screens, and `__game.screen` is the
+- Two players in one browser: open `?profile=1` and `?profile=2` in two tabs; each gets its own anonymous
+  account (dev only). Drive them with `__game.lobby()`, then `__game.screen.createRoom()` /
+  `quickMatch()` / `join(code)`; in a duel, `board.select(cell)` + `handleDigit(d)` (find digits with
+  `(await import('/src/core/index.ts')).solve(screen.state.board)`).
+- In dev, `window.__game.start(difficulty, seed?)`, `__game.menu()` and `__game.lobby()` switch screens, and `__game.screen` is the
   current screen. On a `GameScreen`: `debugFill(n)` fills all but `n` cells,
   `debugMistake()` plays a wrong digit, `battle.charge = 36` jumps the dragon's timer to 4 s before its attack.
 - When the Browser pane is hidden (or the game's tab is not the front one) the page gets few or no animation

@@ -13,6 +13,7 @@ export interface MenuOptions {
   /** Highlighted as the last choice. */
   selected: Difficulty;
   onPick: (difficulty: Difficulty) => void;
+  onOnline: () => void;
 }
 
 const soundLabel = (on: boolean) => (on ? '🔊' : '🔇');
@@ -36,13 +37,14 @@ export class MenuScreen extends Container {
     style: { fontFamily: theme.fontFamily, fontSize: 15, fill: theme.textMuted },
   });
   private readonly prompt = new Text({
-    text: 'Wybierz poziom',
+    text: 'Walcz ze smokiem',
     style: { fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 16, fill: theme.text },
   });
   private readonly dragon: DragonView;
   private readonly cards: Button[];
   private readonly soundToggle: Button;
   private readonly hapticsToggle: Button;
+  private readonly onlineButton: Button;
   private readonly onPick: (difficulty: Difficulty) => void;
   private entered = false;
 
@@ -63,6 +65,12 @@ export class MenuScreen extends Container {
       });
       card.setHighlighted(difficulty === options.selected);
       return card;
+    });
+    this.onlineButton = new Button({
+      text: '⚔ Pojedynek online',
+      subtitle: 'gracz kontra gracz na jednej planszy',
+      variant: 'primary',
+      onTap: options.onOnline,
     });
     const { settings } = feedback;
     this.soundToggle = new Button({
@@ -91,21 +99,26 @@ export class MenuScreen extends Container {
       this.dragon,
       this.prompt,
       ...this.cards,
+      this.onlineButton,
       this.soundToggle,
       this.hapticsToggle,
     );
   }
 
   layout(width: number, height: number): void {
-    killTweens(this.title, ...this.cards);
+    killTweens(this.title, ...this.cards, this.onlineButton);
     this.title.alpha = 1;
 
     const margin = 24;
     const gap = 12;
     const contentWidth = Math.min(width - margin * 2, 400);
     const left = (width - contentWidth) / 2;
-    const cardHeight = Math.round(Math.min(76, Math.max(60, height * 0.085)));
-    const cardsTop = height - margin - cardHeight * 3 - gap * 2;
+    const cardHeight = Math.round(Math.min(72, Math.max(56, height * 0.08)));
+    const onlineTop = height - margin - cardHeight;
+    this.onlineButton.alpha = 1;
+    this.onlineButton.position.set(left, onlineTop);
+    this.onlineButton.layout(contentWidth, cardHeight);
+    const cardsTop = onlineTop - gap * 2 - cardHeight * 3 - gap * 2;
 
     this.cards.forEach((card, i) => {
       card.alpha = 1;
@@ -142,7 +155,7 @@ export class MenuScreen extends Container {
   }
 
   override destroy(options?: DestroyOptions): void {
-    killTweens(this.title, ...this.cards);
+    killTweens(this.title, ...this.cards, this.onlineButton);
     super.destroy(options);
   }
 
@@ -151,5 +164,6 @@ export class MenuScreen extends Container {
     this.cards.forEach((card, i) => {
       gsap.from(card, { alpha: 0, y: card.y + 30, duration: 0.45, delay: 0.15 + i * 0.08, ease: 'power2.out' });
     });
+    gsap.from(this.onlineButton, { alpha: 0, y: this.onlineButton.y + 30, duration: 0.45, delay: 0.4, ease: 'power2.out' });
   }
 }

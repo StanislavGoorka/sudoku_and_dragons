@@ -84,6 +84,12 @@ class Feedback {
     this.buzz('heavy');
   }
 
+  /** A duel turn passes to you. */
+  yourTurn(): void {
+    this.play((s) => s.yourTurn());
+    this.buzz('light');
+  }
+
   /** One of the last seconds before the dragon's timed attack. */
   countdownTick(): void {
     this.play((s) => s.tick());

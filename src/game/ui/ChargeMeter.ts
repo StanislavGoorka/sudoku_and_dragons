@@ -3,7 +3,7 @@ import { theme } from '../theme.ts';
 
 const URGENT_SECONDS = 5;
 
-/** Round countdown to the enemy's timed attack: the ring fills up, the number shows seconds left. */
+/** Round countdown (the dragon's timed attack, a duel turn): the ring fills up, the number shows seconds left. */
 export class ChargeMeter extends Container {
   private readonly dial = new Container();
   private readonly ring = new Graphics();
@@ -21,8 +21,9 @@ export class ChargeMeter extends Container {
   private urgent = false;
   private clock = 0;
 
-  constructor() {
+  constructor(caption = 's do ataku') {
     super();
+    this.caption.text = caption;
     this.seconds.anchor.set(0.5);
     this.caption.anchor.set(0.5, 0);
     this.dial.addChild(this.ring, this.seconds);

@@ -46,6 +46,10 @@ export class HpBar extends Container {
     this.redraw();
   }
 
+  setName(name: string): void {
+    this.nameText.text = name;
+  }
+
   setHp(hp: number): void {
     const ratio = Math.max(0, hp) / this.maxHp;
     this.valueText.text = `${hp}/${this.maxHp}`;

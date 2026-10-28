@@ -2,11 +2,14 @@ import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import gsap from 'gsap';
 import { Application, type Container } from 'pixi.js';
-import { generatePuzzle, type Difficulty } from '../core/index.ts';
+import { generatePuzzle, type Difficulty, type Seat } from '../core/index.ts';
 import { feedback } from './audio/feedback.ts';
 import { DIFFICULTIES, loadDifficulty, saveDifficulty } from './difficulty.ts';
 import { readSafeArea, type Insets } from './safeArea.ts';
+import type { DuelRow, Me } from './net/online.ts';
+import { DuelScreen } from './screens/DuelScreen.ts';
 import { GameScreen } from './screens/GameScreen.ts';
+import { LobbyScreen } from './screens/LobbyScreen.ts';
 import { MenuScreen } from './screens/MenuScreen.ts';
 import { theme } from './theme.ts';
 
@@ -29,6 +32,10 @@ function randomSeed(): number {
 }
 
 async function boot(): Promise<void> {
+  // No deferred (lazy) first renders: a tween killed before the next tick would otherwise still
+  // render once from GSAP's lazy queue, on an object that may already be destroyed.
+  gsap.defaults({ lazy: false });
+
   const app = new Application();
   await app.init({
     resizeTo: window,
@@ -74,7 +81,21 @@ async function boot(): Promise<void> {
   };
 
   const showMenu = () => {
-    show(new MenuScreen({ selected: loadDifficulty(), onPick: (difficulty) => startBattle(difficulty) }));
+    show(
+      new MenuScreen({
+        selected: loadDifficulty(),
+        onPick: (difficulty) => startBattle(difficulty),
+        onOnline: () => showLobby(),
+      }),
+    );
+  };
+
+  const showLobby = () => {
+    show(new LobbyScreen({ onStart: startDuel, onMenu: showMenu }));
+  };
+
+  const startDuel = (duel: DuelRow, seat: Seat, me: Me) => {
+    show(new DuelScreen(duel, me, seat, { onLobby: showLobby, onMenu: showMenu }));
   };
 
   // resizeTo applies the new size on the next frame, so lay out when the size actually changes.
@@ -130,6 +151,7 @@ async function boot(): Promise<void> {
         },
         start: startBattle,
         menu: showMenu,
+        lobby: () => showLobby(),
         feedback,
       },
     });

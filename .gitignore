@@ -8,3 +8,6 @@ coverage/
 !.env.example
 .DS_Store
 Thumbs.db
+
+# Generated copy of src/core for the Edge Function (npm run function:bundle)
+supabase/functions/duel/core/

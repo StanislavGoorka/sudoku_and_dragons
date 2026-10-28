@@ -2,11 +2,13 @@ import gsap from 'gsap';
 import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
 import {
   advanceTime,
+  applyMove,
   createBattle,
   ENEMIES,
   moveKnockback,
   resolveMove,
   type Battle,
+  type Grid,
   type Hit,
   type Puzzle,
   type Unit,
@@ -36,6 +38,8 @@ function formatTime(seconds: number): string {
 export class GameScreen extends Container {
   private readonly puzzle: Puzzle;
   private readonly battle: Battle;
+  /** The board as the rules see it; moves are checked here against the solution. */
+  private readonly grid: Grid;
   private readonly options: GameScreenOptions;
 
   private readonly title = new Text({
@@ -70,13 +74,14 @@ export class GameScreen extends Container {
     super();
     this.puzzle = puzzle;
     this.battle = createBattle(ENEMIES[puzzle.difficulty]);
+    this.grid = [...puzzle.givens];
     this.options = options;
     this.menuButton = new Button({ text: '‹ Menu', onTap: () => this.requestLeave() });
 
     this.title.anchor.set(0.5, 0);
     this.status.anchor.set(0.5, 0);
     this.arena = new BattleArena(this.battle.enemy, this.battle.playerMaxHp);
-    this.board = new BoardView(puzzle);
+    this.board = new BoardView(puzzle.givens);
     this.pad = new NumberPad((digit) => this.handleDigit(digit));
     for (let digit = 1; digit <= 9; digit++) {
       if (this.board.countOf(digit) === 9) this.pad.setDone(digit, true);
@@ -198,7 +203,7 @@ export class GameScreen extends Container {
 
   /** Dev helper: fills every empty cell but `leave` with the right digit. */
   debugFill(leave = 1): void {
-    const empty = this.board.board.flatMap((value, cell) => (value === 0 ? [cell] : []));
+    const empty = this.grid.flatMap((value, cell) => (value === 0 ? [cell] : []));
     for (const cell of empty.slice(0, Math.max(0, empty.length - leave))) {
       this.board.select(cell);
       this.handleDigit(this.puzzle.solution[cell]);
@@ -207,7 +212,7 @@ export class GameScreen extends Container {
 
   /** Dev helper: plays a wrong digit in the first empty cell. */
   debugMistake(): void {
-    const cell = this.board.board.indexOf(0);
+    const cell = this.grid.indexOf(0);
     if (cell < 0) return;
     this.board.select(cell);
     this.handleDigit((this.puzzle.solution[cell] % 9) + 1);
@@ -248,14 +253,17 @@ export class GameScreen extends Container {
   private handleDigit(digit: number): void {
     if (this.battle.outcome !== 'ongoing' || this.modal) return;
     const cell = this.board.selected;
-    const result = this.board.place(digit);
-    if (cell === null || !result) return;
+    if (cell === null) return;
+    const result = applyMove(this.grid, this.puzzle.solution, cell, digit);
+    if (result.kind === 'occupied') return;
 
     if (result.kind === 'wrong') {
+      this.board.reject(cell, digit);
       this.mistakes++;
       this.updateStatus();
       feedback.mistake();
-    } else if (result.kind === 'correct') {
+    } else {
+      this.board.reveal(cell, digit, result.completed);
       if (this.board.countOf(digit) === 9) this.pad.setDone(digit, true);
       feedback.digit(digit);
       if (result.completed.length > 0) feedback.unitsCompleted(result.completed.length);
