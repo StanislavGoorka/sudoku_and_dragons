@@ -22,8 +22,12 @@ code and comments are English.
 - `src/core/`: pure game logic (sudoku generator, solver, move rules). No DOM, no PixiJS, no Node APIs.
   It must also run in Supabase Edge Functions (Deno), so imports use explicit `.ts` extensions.
   `src/core/tsconfig.json` enforces the no-DOM rule. Tests sit next to the code as `*.test.ts`.
+  `core/battle` turns sudoku moves into hits: correct digit = damage to the enemy (more for completed
+  rows/columns/boxes, combo bonus for several at once), wrong digit = enemy hits the player, solving the board
+  is a finishing blow. Enemy HP is tuned so the dragon falls with the last few digits (~98–100% of the board).
 - `src/game/`: PixiJS client. `main.ts` boots the app, `screens/` are full screens, `ui/` are reusable views,
-  `theme.ts` holds colours and fonts.
+  `fx/` holds short-lived effects (orbs, particles, floating text, shake), `theme.ts` holds colours and fonts.
+  `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
 
 ## Conventions
 
@@ -39,4 +43,5 @@ code and comments are English.
 
 - `?seed=123&difficulty=easy|medium|hard` in the URL reproduces a board.
 - Arrow keys move the selection, keys 1–9 place digits.
-- In dev, `window.__game.screen` is the current `GameScreen`; `__game.screen.debugFill(n)` fills all but `n` cells.
+- In dev, `window.__game.screen` is the current `GameScreen`; `__game.screen.debugFill(n)` fills all but `n` cells,
+  `__game.screen.debugMistake()` plays a wrong digit.

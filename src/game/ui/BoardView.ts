@@ -1,5 +1,5 @@
 import gsap from 'gsap';
-import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.js';
+import { Container, Graphics, Rectangle, Text, type DestroyOptions, type PointData } from 'pixi.js';
 import {
   applyMove,
   boxOf,
@@ -117,6 +117,21 @@ export class BoardView extends Container {
 
   countOf(digit: number): number {
     return this.board.filter((value) => value === digit).length;
+  }
+
+  /** Centre of a cell, in board coordinates. */
+  cellCenter(cell: number): PointData {
+    const s = this.cellSize;
+    return { x: colOf(cell) * s + s / 2, y: rowOf(cell) * s + s / 2 };
+  }
+
+  /** Centre of a row, column or box, in board coordinates. */
+  unitCenter(unit: Unit): PointData {
+    const centers = unitCells(unit).map((cell) => this.cellCenter(cell));
+    return {
+      x: centers.reduce((sum, p) => sum + p.x, 0) / centers.length,
+      y: centers.reduce((sum, p) => sum + p.y, 0) / centers.length,
+    };
   }
 
   override destroy(options?: DestroyOptions): void {

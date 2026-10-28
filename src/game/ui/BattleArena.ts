@@ -1,0 +1,49 @@
+import { Container, Graphics, type PointData } from 'pixi.js';
+import { theme } from '../theme.ts';
+import { DragonView } from './DragonView.ts';
+import { HpBar } from './HpBar.ts';
+
+/** The panel above the board: enemy HP on top, the dragon, player HP at the bottom. */
+export class BattleArena extends Container {
+  readonly dragon = new DragonView();
+  readonly enemyHp: HpBar;
+  readonly playerHp: HpBar;
+  private readonly bg = new Graphics();
+
+  constructor(enemyName: string, enemyMaxHp: number, playerMaxHp: number) {
+    super();
+    this.enemyHp = new HpBar(enemyName, enemyMaxHp, theme.enemyHp);
+    this.playerHp = new HpBar('Ty', playerMaxHp, theme.playerHp);
+    this.addChild(this.bg, this.dragon, this.enemyHp, this.playerHp);
+  }
+
+  layout(width: number, height: number): void {
+    const pad = 14;
+    this.bg
+      .clear()
+      .roundRect(0, 0, width, height, 14)
+      .fill(theme.arena)
+      .stroke({ width: 1, color: theme.lineThin });
+
+    this.enemyHp.position.set(pad, pad);
+    this.enemyHp.layout(width - pad * 2);
+    this.playerHp.position.set(pad, height - pad - HpBar.HEIGHT);
+    this.playerHp.layout(width - pad * 2);
+
+    const top = pad + HpBar.HEIGHT + 4;
+    const bottom = height - pad - HpBar.HEIGHT - 4;
+    this.dragon.position.set(width / 2, (top + bottom) / 2);
+    this.dragon.layout(Math.max(32, Math.min(width * 0.5, bottom - top)));
+  }
+
+  /** Where player attacks land, in arena coordinates. */
+  enemyTarget(): PointData {
+    return { x: this.dragon.x, y: this.dragon.y };
+  }
+
+  /** Where dragon attacks land, in arena coordinates. */
+  playerTarget(): PointData {
+    const center = this.playerHp.barCenter();
+    return { x: this.playerHp.x + center.x, y: this.playerHp.y + center.y };
+  }
+}

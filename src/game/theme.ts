@@ -20,5 +20,12 @@ export const theme = {
   padButton: 0x2f2548,
   padButtonDone: 0x1f1830,
 
+  hpTrack: 0x120d1c,
+  hpTrail: 0xffe3a3,
+  enemyHp: 0xe0484f,
+  playerHp: 0x5ad17a,
+  fire: 0xff7a1a,
+  combo: 0xffb347,
+
   fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
 } as const;
