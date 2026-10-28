@@ -7,8 +7,10 @@ code and comments are English.
 ## Stack
 
 - **PixiJS v8** for rendering, **GSAP** for animation, **TypeScript 7**, **Vite 8**, **Vitest 5**
-- Planned: **Capacitor** wraps the web build for iOS/Android; **Supabase** backend
-  (project `SudokuAndDragons`, ref `wmsngertpctiiermiigz`, eu-central-1) for accounts and server-validated duels.
+- **Capacitor 8** wraps the web build: `android/` is the native Android project (app id
+  `com.metrezz.sudokudragons`, portrait only). iOS is not added yet; it needs a Mac or cloud CI.
+- Planned: **Supabase** backend (project `SudokuAndDragons`, ref `wmsngertpctiiermiigz`, eu-central-1)
+  for accounts and server-validated duels.
 
 ## Commands
 
@@ -16,6 +18,14 @@ code and comments are English.
 - `npm test`: Vitest
 - `npm run typecheck`: checks the whole app, then `src/core` on its own without DOM types
 - `npm run build`: typecheck + production build into `dist/`
+- `npm run android:sync`: build and copy the game into `android/` (run after every web change you want on the device)
+- `npm run android:run`: sync, then build and install on a connected phone or running emulator
+- `npm run android:open`: open `android/` in Android Studio
+- Building Android from a shell needs the JDK bundled with Android Studio:
+  `JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"`, then `android\gradlew.bat assembleDebug`
+  (APK lands in `android/app/build/outputs/apk/debug/`). `android/local.properties` (not in git) points at the SDK.
+- The Vite dev server must not watch `android/` (see vite.config.ts): its file handles stop Capacitor and
+  Gradle from deleting folders there on Windows. Stop the dev server if `cap add`/Gradle reports a busy folder.
 
 ## Layout
 
@@ -40,7 +50,10 @@ code and comments are English.
   `difficulty.ts` the Polish difficulty names and the remembered last choice (localStorage),
   `enemies.ts` each dragon's placeholder look (emoji, tint, size) keyed by enemy id.
   `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
-  While a `Modal` is open on the battle screen the battle is paused (no timer, no input).
+  While a `Modal` is open on the battle screen the battle is paused (no timer, no input); the battle also
+  pauses itself when the app goes to the background. Screens are laid out inside the safe area
+  (`safeArea.ts` reads CSS env(safe-area-inset-*)); full-screen layers they draw extend by `OVERSCAN`.
+  The Android back button goes to the screen's `handleBack()`; returning false exits the app.
 
 ## Conventions
 

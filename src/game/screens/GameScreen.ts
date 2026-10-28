@@ -13,6 +13,7 @@ import {
 } from '../../core/index.ts';
 import { DIFFICULTY_INFO } from '../difficulty.ts';
 import { burst, floatText, launchOrb, shake, stopEffects, wait } from '../fx/effects.ts';
+import { OVERSCAN } from '../safeArea.ts';
 import { theme } from '../theme.ts';
 import { BattleArena } from '../ui/BattleArena.ts';
 import { BoardView } from '../ui/BoardView.ts';
@@ -126,7 +127,8 @@ export class GameScreen extends Container {
     this.pad.position.set(left, padY);
     this.pad.layout(boardSize, padHeight);
 
-    this.hurtFlash.clear().rect(0, 0, width, height).fill(theme.error);
+    // Oversized so the flash also covers the safe-area margins around this screen.
+    this.hurtFlash.clear().rect(-OVERSCAN, -OVERSCAN, width + OVERSCAN * 2, height + OVERSCAN * 2).fill(theme.error);
     this.modal?.layout(width, height);
   }
 
@@ -146,13 +148,30 @@ export class GameScreen extends Container {
     if (hit) this.play(hit, this.playDragonAttack(hit));
   }
 
+  /** Android back button and Escape: close an open question, ask to leave, or leave a finished battle. */
+  handleBack(): boolean {
+    if (this.endShown) {
+      this.options.onMenu();
+    } else if (this.modal) {
+      this.closeModal();
+    } else {
+      this.requestLeave();
+    }
+    return true;
+  }
+
+  /** The app went to the background: show a pause so the dragon does not strike the moment it returns. */
+  pause(): void {
+    if (this.modal || this.battle.outcome !== 'ongoing') return;
+    this.openModal(new Modal('Pauza', 'Smok czeka na Twój ruch.', [
+      { text: 'Wróć do walki', variant: 'primary', onTap: () => this.closeModal() },
+      { text: 'Wyjdź do menu', onTap: () => this.options.onMenu() },
+    ]));
+  }
+
   handleKey(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-      if (this.modal && !this.endShown) {
-        this.closeModal();
-      } else {
-        this.requestLeave();
-      }
+      this.handleBack();
       return;
     }
     if (this.modal) return;

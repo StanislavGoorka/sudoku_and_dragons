@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Same as theme.background in src/game/theme.ts. -->
+    <color name="game_background">#15101F</color>
+</resources>

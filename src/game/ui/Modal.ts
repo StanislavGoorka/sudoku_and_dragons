@@ -1,6 +1,7 @@
 import gsap from 'gsap';
 import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
 import { killTweens } from '../fx/tweens.ts';
+import { OVERSCAN } from '../safeArea.ts';
 import { theme } from '../theme.ts';
 import { Button, type ButtonVariant } from './Button.ts';
 
@@ -57,7 +58,10 @@ export class Modal extends Container {
   }
 
   layout(screenWidth: number, screenHeight: number): void {
-    this.shade.clear().rect(0, 0, screenWidth, screenHeight).fill({ color: 0x000000, alpha: 0.65 });
+    this.shade
+      .clear()
+      .rect(-OVERSCAN, -OVERSCAN, screenWidth + OVERSCAN * 2, screenHeight + OVERSCAN * 2)
+      .fill({ color: 0x000000, alpha: 0.65 });
 
     const width = Math.min(screenWidth - 32, 360);
     const inner = width - PADDING * 2;

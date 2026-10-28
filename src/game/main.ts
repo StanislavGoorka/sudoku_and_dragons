@@ -1,16 +1,26 @@
+import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import gsap from 'gsap';
 import { Application, type Container } from 'pixi.js';
 import { generatePuzzle, type Difficulty } from '../core/index.ts';
 import { DIFFICULTIES, loadDifficulty, saveDifficulty } from './difficulty.ts';
+import { readSafeArea, type Insets } from './safeArea.ts';
 import { GameScreen } from './screens/GameScreen.ts';
 import { MenuScreen } from './screens/MenuScreen.ts';
 import { theme } from './theme.ts';
 
-/** What every full screen offers to the app shell. */
+/**
+ * What every full screen offers to the app shell. A screen is placed inside the safe area,
+ * so `layout` gets the size of that area, not of the whole display.
+ */
 interface Screen extends Container {
   layout(width: number, height: number): void;
   update?(deltaMs: number): void;
   handleKey?(event: KeyboardEvent): void;
+  /** Android back button. Returns false when the screen has nothing to go back to (the app then exits). */
+  handleBack?(): boolean;
+  /** The app went to the background. */
+  pause?(): void;
 }
 
 function randomSeed(): number {
@@ -29,6 +39,17 @@ async function boot(): Promise<void> {
   document.getElementById('app')!.appendChild(app.canvas);
 
   let screen: Screen | null = null;
+  let insets: Insets = readSafeArea();
+
+  const layoutScreen = () => {
+    if (!screen) return;
+    screen.position.set(insets.left, insets.top);
+    screen.layout(
+      app.screen.width - insets.left - insets.right,
+      app.screen.height - insets.top - insets.bottom,
+    );
+  };
+
   const show = (next: Screen) => {
     if (screen) {
       gsap.killTweensOf(screen);
@@ -36,7 +57,7 @@ async function boot(): Promise<void> {
     }
     screen = next;
     app.stage.addChild(next);
-    next.layout(app.screen.width, app.screen.height);
+    layoutScreen();
     gsap.fromTo(next, { alpha: 0 }, { alpha: 1, duration: 0.25 });
   };
 
@@ -55,20 +76,42 @@ async function boot(): Promise<void> {
     show(new MenuScreen({ selected: loadDifficulty(), onPick: (difficulty) => startBattle(difficulty) }));
   };
 
-  // resizeTo applies the new size on the next frame, so lay out when the screen size actually changes.
+  // resizeTo applies the new size on the next frame, so lay out when the size actually changes.
+  // Safe-area insets can also arrive a moment after start (Android applies viewport-fit late),
+  // so they are re-read twice a second.
   let width = app.screen.width;
   let height = app.screen.height;
+  let sinceInsetCheck = 0;
   // The ticker caps a frame at 100 ms (minFPS = 10), and stops while the page is hidden,
   // so the dragon's attack timer pauses instead of firing a burst after a long break.
   app.ticker.add((ticker) => {
     screen?.update?.(ticker.deltaMS);
-    if (app.screen.width === width && app.screen.height === height) return;
+
+    sinceInsetCheck += ticker.deltaMS;
+    let changed = app.screen.width !== width || app.screen.height !== height;
+    if (sinceInsetCheck > 500) {
+      sinceInsetCheck = 0;
+      const next = readSafeArea();
+      if (JSON.stringify(next) !== JSON.stringify(insets)) {
+        insets = next;
+        changed = true;
+      }
+    }
+    if (!changed) return;
     width = app.screen.width;
     height = app.screen.height;
-    screen?.layout(width, height);
+    layoutScreen();
   });
 
   window.addEventListener('keydown', (event) => screen?.handleKey?.(event));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) screen?.pause?.();
+  });
+  if (Capacitor.isNativePlatform()) {
+    void App.addListener('backButton', () => {
+      if (!screen?.handleBack?.()) void App.exitApp();
+    });
+  }
 
   if (import.meta.env.DEV) {
     Object.assign(window, {

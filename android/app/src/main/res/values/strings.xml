@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sudoku &amp; Dragons</string>
+    <string name="title_activity_main">Sudoku &amp; Dragons</string>
+    <string name="package_name">com.metrezz.sudokudragons</string>
+    <string name="custom_url_scheme">com.metrezz.sudokudragons</string>
+</resources>

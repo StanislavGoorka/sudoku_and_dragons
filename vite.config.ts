@@ -6,6 +6,11 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
+    watch: {
+      // The native projects hold thousands of build files. Watching them is slow, and on Windows the
+      // watcher's handles keep Gradle and Capacitor from deleting or moving folders there.
+      ignored: ['**/android/**', '**/ios/**'],
+    },
   },
   build: {
     target: 'es2022',
