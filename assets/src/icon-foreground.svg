@@ -1,44 +1,88 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <!--
-    Foreground layer of the adaptive icon: a dragon's eye over a golden sudoku box.
-    Launchers crop the 1024 canvas to its middle ~683 px and then to a circle or squircle,
-    so everything stays within ~320 px of the centre.
+    Foreground layer of the adaptive icon: a dragon's head in profile, a dark silhouette backlit by fire,
+    seen through a golden sudoku box. Launchers crop the 1024 canvas to its middle ~683 px and then to a
+    circle or squircle, so everything stays within ~320 px of the centre (the box spans 262..762).
   -->
   <defs>
+    <clipPath id="box">
+      <rect x="262" y="262" width="500" height="500" rx="110"/>
+    </clipPath>
+    <radialGradient id="fire" gradientUnits="userSpaceOnUse" cx="590" cy="455" r="290">
+      <stop offset="0%" stop-color="#ffe089"/>
+      <stop offset="22%" stop-color="#ffb030"/>
+      <stop offset="50%" stop-color="#e2541a"/>
+      <stop offset="78%" stop-color="#7a1f2e" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#2a1d47" stop-opacity="0"/>
+    </radialGradient>
     <radialGradient id="iris" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#fff4b8"/>
-      <stop offset="30%" stop-color="#ffd156"/>
-      <stop offset="68%" stop-color="#ff8a1f"/>
-      <stop offset="100%" stop-color="#b3360c"/>
+      <stop offset="0%" stop-color="#fff6c0"/>
+      <stop offset="55%" stop-color="#ffb030"/>
+      <stop offset="100%" stop-color="#e2541a"/>
     </radialGradient>
     <!-- User-space units: a bounding-box gradient is invalid on the perfectly straight grid lines. -->
     <linearGradient id="gold" gradientUnits="userSpaceOnUse" x1="0" y1="262" x2="0" y2="762">
       <stop offset="0%" stop-color="#ffe08a"/>
       <stop offset="100%" stop-color="#c9a227"/>
     </linearGradient>
-    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="22"/>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10"/>
     </filter>
   </defs>
 
-  <!-- Sudoku box: rounded frame and the lines between its 3x3 cells. -->
-  <g fill="none" stroke="url(#gold)" stroke-linecap="round">
-    <rect x="262" y="262" width="500" height="500" rx="110" stroke-width="26"/>
-    <g stroke-width="12" opacity="0.75">
-      <line x1="429" y1="275" x2="429" y2="749"/>
-      <line x1="595" y1="275" x2="595" y2="749"/>
-      <line x1="275" y1="429" x2="749" y2="429"/>
-      <line x1="275" y1="595" x2="749" y2="595"/>
+  <g clip-path="url(#box)">
+    <!-- Night sky inside the box, lit by the fire behind the dragon. -->
+    <rect x="262" y="262" width="500" height="500" fill="#1a1230"/>
+    <circle cx="590" cy="455" r="290" fill="url(#fire)"/>
+
+    <!-- Sudoku cell lines, behind the dragon. -->
+    <g stroke="url(#gold)" stroke-width="10" opacity="0.55">
+      <line x1="429" y1="262" x2="429" y2="762"/>
+      <line x1="595" y1="262" x2="595" y2="762"/>
+      <line x1="262" y1="429" x2="762" y2="429"/>
+      <line x1="262" y1="595" x2="762" y2="595"/>
     </g>
+
+    <!-- Fire glowing inside the open mouth (shows through the gap between the jaws). -->
+    <ellipse cx="680" cy="502" rx="46" ry="14" fill="#ffd36b" filter="url(#blur)"/>
+
+    <!-- The dragon: head facing right, two horns curving back, neck rising from the bottom of the box. -->
+    <g fill="#120c1a" stroke="#ffb347" stroke-width="5" stroke-opacity="0.55" stroke-linejoin="round">
+      <!-- Spikes along the back of the neck (drawn first, so the neck covers their bases). -->
+      <path d="M440 505 L378 498 L428 548 Z"/>
+      <path d="M420 575 L352 572 L408 615 Z"/>
+      <path d="M402 635 L338 640 L394 675 Z"/>
+      <path d="M390 700 L328 708 L384 740 Z"/>
+      <path d="M372 800
+               C380 700 392 590 440 500
+               C448 486 456 470 468 452
+               C440 420 390 396 330 386
+               C396 384 452 402 484 432
+               L500 412
+               C476 352 430 310 352 296
+               C446 296 520 330 548 398
+               C580 400 612 410 640 424
+               C672 432 698 444 712 452
+               C724 456 732 468 730 486
+               L640 502
+               L712 512
+               C710 524 700 532 684 536
+               C650 546 616 556 594 562
+               L584 600
+               L566 576
+               C548 610 538 650 534 700
+               C530 740 530 770 532 800
+               Z"/>
+    </g>
+
+    <!-- A fang, the glowing eye and a nostril ember. -->
+    <path d="M699 491 L706 508 L713 489 Z" fill="#fff3d6"/>
+    <ellipse cx="630" cy="441" rx="36" ry="22" fill="#ff8a1f" opacity="0.7" filter="url(#blur)"/>
+    <path d="M606 442 C618 428 642 428 654 440 C642 452 618 454 606 442 Z" fill="url(#iris)"/>
+    <path d="M631 430 C636 437 636 446 631 453 C626 446 626 437 631 430 Z" fill="#120c1a"/>
+    <circle cx="716" cy="463" r="4" fill="#ff8a1f"/>
   </g>
 
-  <!-- Fiery glow behind the eye. -->
-  <path d="M272 512 C372 352 652 352 752 512 C652 672 372 672 272 512 Z" fill="#ff7a1a" opacity="0.6" filter="url(#glow)"/>
-
-  <!-- The eye: almond-shaped iris, dark rim, slit pupil and a glint. -->
-  <path d="M282 512 C380 366 644 366 742 512 C644 658 380 658 282 512 Z"
-        fill="url(#iris)" stroke="#120c1a" stroke-width="18" stroke-linejoin="round"/>
-  <path d="M512 398 C552 452 552 572 512 626 C472 572 472 452 512 398 Z" fill="#120c1a"/>
-  <ellipse cx="462" cy="460" rx="26" ry="17" fill="#ffffff" opacity="0.85" transform="rotate(-25 462 460)"/>
-  <circle cx="575" cy="560" r="9" fill="#ffffff" opacity="0.5"/>
+  <!-- The golden frame of the sudoku box, on top. -->
+  <rect x="262" y="262" width="500" height="500" rx="110" fill="none" stroke="url(#gold)" stroke-width="26"/>
 </svg>
