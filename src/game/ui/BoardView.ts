@@ -12,6 +12,7 @@ import {
   type Puzzle,
   type Unit,
 } from '../../core/index.ts';
+import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 
 class CellView extends Container {
@@ -135,8 +136,8 @@ export class BoardView extends Container {
   }
 
   override destroy(options?: DestroyOptions): void {
-    gsap.killTweensOf([...this.ghosts]);
-    for (const view of this.cells) gsap.killTweensOf([view, view.flash, view.digit.scale]);
+    killTweens(...this.ghosts);
+    for (const view of this.cells) killTweens(view, view.flash, view.digit.scale);
     super.destroy(options);
   }
 

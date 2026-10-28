@@ -1,6 +1,7 @@
 import gsap from 'gsap';
 import { Container, Graphics, Text, type PointData } from 'pixi.js';
 import { theme } from '../theme.ts';
+import { killTweens } from './tweens.ts';
 
 // Short-lived visual effects. Each one checks `destroyed` because the screen
 // (and with it the effect layer) can be torn down while a tween is still running.
@@ -155,5 +156,5 @@ export function shake(target: Container, strength: number, duration: number): vo
 
 /** Kills running tweens on every effect currently in the layer. Call before destroying it. */
 export function stopEffects(layer: Container): void {
-  for (const child of layer.children) gsap.killTweensOf([child, child.scale]);
+  for (const child of layer.children) killTweens(child, child.scale);
 }

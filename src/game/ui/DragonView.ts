@@ -1,5 +1,6 @@
 import gsap from 'gsap';
 import { Container, Text, type DestroyOptions } from 'pixi.js';
+import { killTweens } from '../fx/tweens.ts';
 
 /**
  * Placeholder dragon drawn with an emoji until there is real art.
@@ -31,7 +32,7 @@ export class DragonView extends Container {
   }
 
   hurt(strength: number): void {
-    gsap.killTweensOf([this.rig, this.rig.scale]);
+    killTweens(this.rig, this.rig.scale);
     this.rig.scale.set(1);
     gsap.fromTo(
       this.rig,
@@ -60,7 +61,7 @@ export class DragonView extends Container {
 
   /** Lunges forward. Resolves at the peak of the lunge, when the fireball should leave. */
   attack(): Promise<void> {
-    gsap.killTweensOf([this.rig, this.rig.scale]);
+    killTweens(this.rig, this.rig.scale);
     return new Promise((resolve) => {
       gsap
         .timeline()
@@ -73,7 +74,7 @@ export class DragonView extends Container {
   }
 
   die(): Promise<void> {
-    gsap.killTweensOf([this.rig, this.rig.scale, this.body.scale]);
+    killTweens(this.rig, this.rig.scale, this.body.scale);
     this.dead = true;
     this.body.tint = 0x8a8a8a;
     return new Promise((resolve) => {
@@ -85,7 +86,7 @@ export class DragonView extends Container {
   }
 
   override destroy(options?: DestroyOptions): void {
-    gsap.killTweensOf([this.rig, this.rig.scale, this.body.scale]);
+    killTweens(this.rig, this.rig.scale, this.body.scale);
     super.destroy(options);
   }
 }

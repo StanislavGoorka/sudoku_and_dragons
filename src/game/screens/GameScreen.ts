@@ -7,31 +7,38 @@ import {
   moveKnockback,
   resolveMove,
   type Battle,
-  type Difficulty,
   type Hit,
   type Puzzle,
   type Unit,
 } from '../../core/index.ts';
+import { DIFFICULTY_INFO } from '../difficulty.ts';
 import { burst, floatText, launchOrb, shake, stopEffects, wait } from '../fx/effects.ts';
 import { theme } from '../theme.ts';
 import { BattleArena } from '../ui/BattleArena.ts';
 import { BoardView } from '../ui/BoardView.ts';
+import { Button } from '../ui/Button.ts';
+import { Modal } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 
-const DIFFICULTY_LABEL: Record<Difficulty, string> = {
-  easy: 'łatwy',
-  medium: 'średni',
-  hard: 'trudny',
-};
+export interface GameScreenOptions {
+  /** A new battle on the same difficulty. */
+  onRestart: () => void;
+  onMenu: () => void;
+}
+
+function formatTime(seconds: number): string {
+  const whole = Math.floor(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
 
 export class GameScreen extends Container {
   private readonly puzzle: Puzzle;
   private readonly battle: Battle;
-  private readonly onNewGame: () => void;
+  private readonly options: GameScreenOptions;
 
   private readonly title = new Text({
     text: 'Sudoku & Dragons',
-    style: { fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 22, fill: theme.text },
+    style: { fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 20, fill: theme.text },
   });
   private readonly status = new Text({
     text: '',
@@ -44,18 +51,23 @@ export class GameScreen extends Container {
   private readonly fx = new Container();
   /** Red full-screen flash when the player is hit. */
   private readonly hurtFlash = new Graphics();
-  private endBanner: Container | null = null;
+  private readonly menuButton: Button;
+  /** The leave-battle question or the end-of-battle summary. While it is open the battle is paused. */
+  private modal: Modal | null = null;
 
   private mistakes = 0;
+  /** Seconds of battle so far, not counting pauses. */
+  private elapsed = 0;
   private endShown = false;
   private screenWidth = 0;
   private screenHeight = 0;
 
-  constructor(puzzle: Puzzle, onNewGame: () => void) {
+  constructor(puzzle: Puzzle, options: GameScreenOptions) {
     super();
     this.puzzle = puzzle;
     this.battle = createBattle(DRAGON);
-    this.onNewGame = onNewGame;
+    this.options = options;
+    this.menuButton = new Button({ text: '‹ Menu', onTap: () => this.requestLeave() });
 
     this.title.anchor.set(0.5, 0);
     this.status.anchor.set(0.5, 0);
@@ -69,7 +81,16 @@ export class GameScreen extends Container {
     this.hurtFlash.eventMode = 'none';
     this.hurtFlash.alpha = 0;
 
-    this.addChild(this.arena, this.title, this.status, this.board, this.pad, this.hurtFlash, this.fx);
+    this.addChild(
+      this.arena,
+      this.title,
+      this.status,
+      this.menuButton,
+      this.board,
+      this.pad,
+      this.hurtFlash,
+      this.fx,
+    );
     this.updateStatus();
   }
 
@@ -95,6 +116,8 @@ export class GameScreen extends Container {
 
     this.title.position.set(width / 2, margin);
     this.status.position.set(width / 2, margin + 28);
+    this.menuButton.position.set(left, margin + 2);
+    this.menuButton.layout(64, 30);
 
     this.arena.position.set(left, arenaY);
     this.arena.layout(boardSize, arenaHeight);
@@ -104,14 +127,16 @@ export class GameScreen extends Container {
     this.pad.layout(boardSize, padHeight);
 
     this.hurtFlash.clear().rect(0, 0, width, height).fill(theme.error);
-    if (this.endBanner) this.layoutEndBanner(this.endBanner);
+    this.modal?.layout(width, height);
   }
 
   /** Called every frame with the frame time; drives the dragon's timed attack. */
   update(deltaMs: number): void {
+    if (this.modal) return;
     const dt = deltaMs / 1000;
     const hit = advanceTime(this.battle, dt);
     const ongoing = this.battle.outcome === 'ongoing';
+    if (ongoing) this.elapsed += dt;
     const { attackEvery } = this.battle.enemy;
     const secondsLeft = attackEvery - this.battle.charge;
 
@@ -122,6 +147,15 @@ export class GameScreen extends Container {
   }
 
   handleKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      if (this.modal && !this.endShown) {
+        this.closeModal();
+      } else {
+        this.requestLeave();
+      }
+      return;
+    }
+    if (this.modal) return;
     if (/^[1-9]$/.test(event.key)) {
       this.handleDigit(Number(event.key));
       return;
@@ -159,12 +193,37 @@ export class GameScreen extends Container {
   override destroy(options?: DestroyOptions): void {
     stopEffects(this.fx);
     gsap.killTweensOf(this.hurtFlash);
-    if (this.endBanner) gsap.killTweensOf(this.endBanner);
     super.destroy(options);
   }
 
+  /** Leaving mid-battle asks first (and pauses); after the battle it just goes to the menu. */
+  private requestLeave(): void {
+    if (this.modal) return;
+    if (this.battle.outcome !== 'ongoing') {
+      this.options.onMenu();
+      return;
+    }
+    this.openModal(new Modal('Opuścić walkę?', 'Postęp tej walki przepadnie.', [
+      { text: 'Zostań', variant: 'primary', onTap: () => this.closeModal() },
+      { text: 'Wyjdź do menu', onTap: () => this.options.onMenu() },
+    ]));
+  }
+
+  private openModal(modal: Modal): void {
+    this.closeModal();
+    this.modal = modal;
+    this.addChild(modal);
+    modal.layout(this.screenWidth, this.screenHeight);
+    modal.show();
+  }
+
+  private closeModal(): void {
+    this.modal?.destroy({ children: true });
+    this.modal = null;
+  }
+
   private handleDigit(digit: number): void {
-    if (this.battle.outcome !== 'ongoing') return;
+    if (this.battle.outcome !== 'ongoing' || this.modal) return;
     const cell = this.board.selected;
     const result = this.board.place(digit);
     if (cell === null || !result) return;
@@ -196,7 +255,7 @@ export class GameScreen extends Container {
   private play(hit: Hit, animation: Promise<void>): void {
     // Only the final hit ends the battle; earlier hits may still be landing.
     void animation.then(() => {
-      if (!this.destroyed && hit.hpAfter === 0) return this.showEnd();
+      if (!this.destroyed && hit.hpAfter === 0) return this.showEnd(hit);
     });
   }
 
@@ -260,12 +319,15 @@ export class GameScreen extends Container {
   }
 
   private updateStatus(): void {
-    this.status.text = `Poziom: ${DIFFICULTY_LABEL[this.puzzle.difficulty]} · Błędy: ${this.mistakes}`;
+    const level = DIFFICULTY_INFO[this.puzzle.difficulty].name.toLowerCase();
+    this.status.text = `Poziom: ${level} · Błędy: ${this.mistakes}`;
   }
 
-  private async showEnd(): Promise<void> {
+  /** `finalHit` is the hit that brought someone to 0 HP. */
+  private async showEnd(finalHit: Hit): Promise<void> {
     if (this.endShown) return;
     this.endShown = true;
+    this.closeModal();
 
     const won = this.battle.outcome === 'won';
     if (won) {
@@ -275,39 +337,16 @@ export class GameScreen extends Container {
     }
     if (this.destroyed) return;
 
-    const banner = new Container();
-    const shade = new Graphics();
-    const message = won
-      ? `Smok pokonany!\nBłędy: ${this.mistakes}\n\nDotknij, aby walczyć dalej`
-      : 'Smok cię pokonał…\n\nDotknij, aby spróbować ponownie';
-    const text = new Text({
-      text: message,
-      style: {
-        fontFamily: theme.fontFamily,
-        fontWeight: '700',
-        fontSize: 24,
-        fill: theme.text,
-        align: 'center',
-        wordWrap: true,
-      },
-    });
-    text.anchor.set(0.5);
-    banner.addChild(shade, text);
-    banner.eventMode = 'static';
-    banner.cursor = 'pointer';
-    banner.on('pointertap', () => this.onNewGame());
-    this.endBanner = banner;
-    this.addChild(banner);
-    this.layoutEndBanner(banner);
-
-    banner.alpha = 0;
-    gsap.to(banner, { alpha: 1, duration: 0.4 });
-  }
-
-  private layoutEndBanner(banner: Container): void {
-    const [shade, text] = banner.children as [Graphics, Text];
-    shade.clear().rect(0, 0, this.screenWidth, this.screenHeight).fill({ color: 0x000000, alpha: 0.7 });
-    text.style.wordWrapWidth = Math.min(this.screenWidth - 48, 420);
-    text.position.set(this.screenWidth / 2, this.screenHeight / 2);
+    const stats = `Czas: ${formatTime(this.elapsed)} · Błędy: ${this.mistakes}`;
+    const hint =
+      finalHit.cause === 'mistake'
+        ? 'Każdy błąd to cios smoka za 10 HP.'
+        : 'Szybkie cyfry i ukończone linie odpychają atak smoka.';
+    this.openModal(
+      new Modal(won ? 'Smok pokonany!' : 'Smok cię pokonał…', won ? stats : `${hint}\n${stats}`, [
+        { text: 'Walcz ponownie', variant: 'primary', onTap: () => this.options.onRestart() },
+        { text: 'Menu', onTap: () => this.options.onMenu() },
+      ]),
+    );
   }
 }

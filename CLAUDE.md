@@ -29,9 +29,13 @@ code and comments are English.
   of its own). Correct digits push the charge back, completed units much more, so speed is what keeps you safe.
   Balance numbers come from simulations: `npm run sim:hp` (when the dragon falls) and `npm run sim:timer`
   (HP lost to the timer at different speeds). Re-run them when changing HP, damage, interval or knockback.
-- `src/game/`: PixiJS client. `main.ts` boots the app, `screens/` are full screens, `ui/` are reusable views,
-  `fx/` holds short-lived effects (orbs, particles, floating text, shake), `theme.ts` holds colours and fonts.
+- `src/game/`: PixiJS client. `main.ts` boots the app and swaps full screens (`screens/`: `MenuScreen` for
+  picking a difficulty, `GameScreen` for a battle); a screen has `layout`, and optionally `update` (per frame)
+  and `handleKey`. `ui/` are reusable views (`Button`, `Modal`, board, arena…), `fx/` holds short-lived effects
+  (orbs, particles, floating text, shake) and `killTweens`, `theme.ts` holds colours and fonts,
+  `difficulty.ts` the Polish difficulty names and the remembered last choice (localStorage).
   `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
+  While a `Modal` is open on the battle screen the battle is paused (no timer, no input).
 
 ## Conventions
 
@@ -41,12 +45,18 @@ code and comments are English.
 - Single npm package, no workspaces: the repo lives on an exFAT drive (D:), which cannot hold the symlinks
   npm workspaces need.
 - Pixi `Container` already has a `label` property; don't name fields `label` on Container subclasses.
-- Kill GSAP tweens in `destroy()` of views that animate their children.
+- Kill GSAP tweens in `destroy()` of views that animate their children, with `killTweens(a, b, …)` from
+  `fx/tweens.ts`, never `gsap.killTweensOf([a, b])`: the array form leaves delayed or not-yet-started tweens
+  alive, they later throw on the destroyed object every frame and freeze every animation in the game.
 
 ## Checking changes in the browser
 
-- `?seed=123&difficulty=easy|medium|hard` in the URL reproduces a board.
-- Arrow keys move the selection, keys 1–9 place digits.
-- In dev, `window.__game.screen` is the current `GameScreen`; `__game.screen.debugFill(n)` fills all but `n` cells,
-  `__game.screen.debugMistake()` plays a wrong digit, `__game.screen.battle.charge = 36` jumps the dragon's
-  timer to 4 s before its attack.
+- Without URL parameters the game opens on the menu. `?seed=123&difficulty=easy|medium|hard` skips it and
+  reproduces a board.
+- Menu: keys 1–3 pick a difficulty. Battle: arrow keys move the selection, keys 1–9 place digits, Escape asks
+  to leave.
+- In dev, `window.__game.start(difficulty, seed?)` and `__game.menu()` switch screens, and `__game.screen` is the
+  current screen. On a `GameScreen`: `debugFill(n)` fills all but `n` cells,
+  `debugMistake()` plays a wrong digit, `battle.charge = 36` jumps the dragon's timer to 4 s before its attack.
+- When the Browser pane is hidden the page gets only a couple of frames per second, so animations crawl and
+  screenshots catch them half-way. Check state through `__game` instead of trusting such a screenshot.

@@ -27,5 +27,10 @@ export const theme = {
   fire: 0xff7a1a,
   combo: 0xffb347,
 
+  buttonPrimary: 0xc9a227,
+  buttonPrimaryText: 0x1a1423,
+  buttonSecondary: 0x2f2548,
+  panel: 0x241b38,
+
   fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
 } as const;

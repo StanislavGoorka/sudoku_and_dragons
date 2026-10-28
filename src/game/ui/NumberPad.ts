@@ -1,5 +1,6 @@
 import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.js';
+import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 
 interface PadButton {
@@ -59,7 +60,7 @@ export class NumberPad extends Container {
   }
 
   override destroy(options?: DestroyOptions): void {
-    gsap.killTweensOf(this.buttons.map((button) => button.root.scale));
+    killTweens(...this.buttons.map((button) => button.root.scale));
     super.destroy(options);
   }
 
