@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Difficulty, DuelEvent, DuelState, Seat } from '../../core/index.ts';
 import { profileSuffix } from '../profile.ts';
+import { progress } from '../progress/store.ts';
 import { SUPABASE_KEY, SUPABASE_URL } from './config.ts';
 
 export interface DuelRow {
@@ -74,8 +75,8 @@ function randomNickname(): string {
 }
 
 const NICKNAME_KEY = `sudoku-dragons.nickname${suffix}`;
-/** The nickname the server has last confirmed. */
-const SYNCED_KEY = `sudoku-dragons.nickname-synced${suffix}`;
+/** The profile the server has last confirmed, as JSON. */
+const SYNCED_KEY = `sudoku-dragons.profile-synced${suffix}`;
 
 /** The player's nickname: made up on the first visit and kept on this device, so it shows before sign-in. */
 export function localNickname(): string {
@@ -87,14 +88,53 @@ export function localNickname(): string {
   return nickname;
 }
 
+/** What rivals see of a player: their nickname and the skin of their dragon (null: unknown, the default). */
+export interface Profile {
+  nickname: string;
+  dragon: string | null;
+}
+
+function localProfile(): Profile {
+  return { nickname: localNickname(), dragon: progress.dragonSkin };
+}
+
+let pushing: Promise<void> = Promise.resolve();
+
+/** Sends this player's profile unless the server already has it. One at a time, so the last change wins. */
+function pushProfile(): Promise<void> {
+  pushing = pushing
+    .catch(() => {})
+    .then(async () => {
+      const profile = localProfile();
+      const json = JSON.stringify(profile);
+      if (localStorage.getItem(SYNCED_KEY) === json) return;
+      await call('profile', { ...profile });
+      localStorage.setItem(SYNCED_KEY, json);
+    });
+  return pushing;
+}
+
+/**
+ * Tells the server about a changed profile (a new dragon skin), in the background. Before sign-in
+ * there is nothing to do: signing in sends it.
+ */
+export function syncProfile(): void {
+  void connecting?.then(pushProfile).catch(() => {});
+}
+
 let connecting: Promise<Me> | null = null;
 
 /**
- * Signs in (anonymously, once per device) and makes sure the server knows the nickname.
+ * Signs in (anonymously, once per device) and makes sure the server knows the profile.
  * Everyone shares one attempt; after a failure the next call tries again.
  */
 export function connect(): Promise<Me> {
-  connecting ??= signIn().catch((error: unknown) => {
+  if (connecting) {
+    // Signed in already: a profile change that did not get through goes now.
+    syncProfile();
+    return connecting;
+  }
+  connecting = signIn().catch((error: unknown) => {
     connecting = null;
     throw error;
   });
@@ -108,12 +148,8 @@ async function signIn(): Promise<Me> {
     if (signIn.error || !signIn.data.session) throw new OnlineError('sign-in');
     data = { session: signIn.data.session };
   }
-  const nickname = localNickname();
-  if (localStorage.getItem(SYNCED_KEY) !== nickname) {
-    await call('profile', { nickname });
-    localStorage.setItem(SYNCED_KEY, nickname);
-  }
-  return { id: data.session!.user.id, nickname };
+  await pushProfile();
+  return { id: data.session!.user.id, nickname: localNickname() };
 }
 
 export interface Joined {
@@ -154,9 +190,19 @@ export async function fetchDuel(id: string): Promise<DuelRow> {
   return data as DuelRow;
 }
 
-export async function fetchNickname(playerId: string): Promise<string> {
-  const { data } = await supabase.from('profiles').select('nickname').eq('id', playerId).maybeSingle();
-  return (data?.nickname as string | undefined) ?? 'Rywal';
+/** Profiles read this session, so a rematch shows the rival's name and dragon at once. */
+const knownProfiles = new Map<string, Profile>();
+
+export function knownProfile(playerId: string): Profile | undefined {
+  return knownProfiles.get(playerId);
+}
+
+export async function fetchProfile(playerId: string): Promise<Profile> {
+  const { data } = await supabase.from('profiles').select('nickname, dragon').eq('id', playerId).maybeSingle();
+  if (!data) return { nickname: 'Rywal', dragon: null };
+  const profile: Profile = { nickname: data.nickname as string, dragon: (data.dragon as string | undefined) ?? null };
+  knownProfiles.set(playerId, profile);
+  return profile;
 }
 
 /**

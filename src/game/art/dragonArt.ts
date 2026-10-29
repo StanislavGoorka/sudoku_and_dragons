@@ -339,7 +339,19 @@ export function dragonParts(design: DragonDesign): Part[] {
 
 const OUTLINE_YOUNG = 0x173a2a;
 
-/** Each dragon of the game, by id: the three enemies and the two duel colours. */
+/** The shape of a duel dragon: a grown fighter, all of them the same size so neither side looks weaker. */
+const FIGHTER = {
+  horns: 'curved',
+  spikes: true,
+  brow: true,
+  beard: false,
+  cute: false,
+  headScale: 1,
+  wingScale: 1,
+  size: 1,
+} as const satisfies Omit<DragonDesign, 'palette'>;
+
+/** Each dragon of the game, by id: the three enemies, the two duel colours and the skins sold in the shop. */
 export const DESIGNS: Record<string, DragonDesign> = {
   'young-dragon': {
     palette: {
@@ -437,14 +449,7 @@ export const DESIGNS: Record<string, DragonDesign> = {
       pupil: 0x10213a,
       mouth: 0x4a1424,
     },
-    horns: 'curved',
-    spikes: true,
-    brow: true,
-    beard: false,
-    cute: false,
-    headScale: 1,
-    wingScale: 1,
-    size: 1,
+    ...FIGHTER,
   },
   /** The rival's: orange like their digits. */
   'duel-rival': {
@@ -464,14 +469,138 @@ export const DESIGNS: Record<string, DragonDesign> = {
       pupil: 0x1a0a0a,
       mouth: 0x5a1020,
     },
-    horns: 'curved',
-    spikes: true,
-    brow: true,
-    beard: false,
-    cute: false,
-    headScale: 1,
-    wingScale: 1,
-    size: 1,
+    ...FIGHTER,
+  },
+  // Skins (src/game/dragonSkins.ts): each must stand out against the duel's twilight.
+  /** Green with golden wings and spikes. */
+  'skin-emerald': {
+    palette: {
+      body: 0x22b07d,
+      shade: 0x137a56,
+      light: 0x7ef0c0,
+      belly: 0xf3e6b0,
+      bellyLine: 0xcdb878,
+      membrane: 0xffd25e,
+      membraneShade: 0xd69a2a,
+      horn: 0xfff0c0,
+      hornShade: 0xd9bf78,
+      outline: 0x0b2a1f,
+      eyeWhite: 0xfffbe6,
+      iris: 0xe0402a,
+      pupil: 0x150808,
+      mouth: 0x5a1020,
+    },
+    ...FIGHTER,
+  },
+  /** A pink marshmallow with lilac wings and big round eyes. */
+  'skin-candy': {
+    palette: {
+      body: 0xff9ccf,
+      shade: 0xe06aa8,
+      light: 0xffd4ea,
+      belly: 0xfff3c4,
+      bellyLine: 0xf2cf8a,
+      membrane: 0xb9a2ff,
+      membraneShade: 0x8a6ee6,
+      horn: 0xfff6e0,
+      hornShade: 0xe9d6b0,
+      outline: 0x4a1238,
+      eyeWhite: 0xffffff,
+      iris: 0x7a3fe0,
+      pupil: 0x20103a,
+      mouth: 0x7a2040,
+    },
+    ...FIGHTER,
+    horns: 'nubs',
+    spikes: false,
+    brow: false,
+    cute: true,
+    headScale: 1.12,
+    wingScale: 0.92,
+  },
+  /** Pale ice with sky-blue wings. */
+  'skin-frost': {
+    palette: {
+      body: 0xcdeeff,
+      shade: 0x8cc6ea,
+      light: 0xffffff,
+      belly: 0xffffff,
+      bellyLine: 0xb8dcf2,
+      membrane: 0x6fd0ff,
+      membraneShade: 0x3f98d8,
+      horn: 0xeafcff,
+      hornShade: 0x9fdcf5,
+      outline: 0x123050,
+      eyeWhite: 0xffffff,
+      iris: 0x2f8fe0,
+      pupil: 0x0a1a33,
+      mouth: 0x2a3a6a,
+    },
+    ...FIGHTER,
+  },
+  /** Smoke grey with violet wings and glowing green eyes. */
+  'skin-shadow': {
+    palette: {
+      body: 0x4a4566,
+      shade: 0x2e2a45,
+      light: 0x7c74a8,
+      belly: 0x9b8fd0,
+      bellyLine: 0x6f63a8,
+      membrane: 0x9a5cff,
+      membraneShade: 0x5a2fb8,
+      horn: 0xd6ccff,
+      hornShade: 0x9a8fd8,
+      outline: 0x0c0a16,
+      eyeWhite: 0xd6ff6a,
+      iris: 0x3ccf6a,
+      pupil: 0x0c1a08,
+      mouth: 0x2a0a3a,
+    },
+    ...FIGHTER,
+    beard: true,
+  },
+  /** Dark rock glowing orange through the belly, wings and horns. */
+  'skin-magma': {
+    palette: {
+      body: 0x553030,
+      shade: 0x351c1c,
+      light: 0x8a5446,
+      belly: 0xff9a3a,
+      bellyLine: 0xe0602a,
+      membrane: 0xff6a2a,
+      membraneShade: 0xc23a1a,
+      horn: 0xffd05a,
+      hornShade: 0xe08a2a,
+      outline: 0x140808,
+      eyeWhite: 0xffe36a,
+      iris: 0xff5a1a,
+      pupil: 0x1a0505,
+      mouth: 0x5a1010,
+    },
+    ...FIGHTER,
+  },
+  /** Gold with crimson wings, a crown of ivory horns and a beard. */
+  'skin-king': {
+    palette: {
+      body: 0xf2c240,
+      shade: 0xc78f1f,
+      light: 0xffe89a,
+      belly: 0xfff4d0,
+      bellyLine: 0xe2c27a,
+      membrane: 0xd8343f,
+      membraneShade: 0x9a1c2c,
+      horn: 0xfffbea,
+      hornShade: 0xe0d4b0,
+      outline: 0x3a2205,
+      eyeWhite: 0xffffff,
+      iris: 0x2a8ad8,
+      pupil: 0x0a1020,
+      mouth: 0x5a1020,
+    },
+    ...FIGHTER,
+    horns: 'crown',
+    beard: true,
+    wingScale: 1.08,
   },
 };
 

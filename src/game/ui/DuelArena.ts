@@ -1,5 +1,8 @@
-import { Container, Graphics, Text, type PointData } from 'pixi.js';
-import { DESIGNS } from '../art/dragonArt.ts';
+import gsap from 'gsap';
+import { Container, Graphics, Text, type DestroyOptions, type PointData } from 'pixi.js';
+import type { DragonDesign } from '../art/dragonArt.ts';
+import { rivalDesign } from '../dragonSkins.ts';
+import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 import { ChargeMeter } from './ChargeMeter.ts';
 import { DragonView } from './DragonView.ts';
@@ -9,12 +12,17 @@ import { Scene, SCENES } from './Scene.ts';
 /**
  * The fight above the board in a duel: two dragons facing each other over a twilight scene, the
  * rival's HP across the sky, yours along the ground, and whose turn it is between the dragons.
+ * Each dragon wears its player's skin; the rival's appears once their profile says which.
  */
 export class DuelArena extends Container {
   readonly timer = new ChargeMeter('');
-  /** Each dragon in the colour of its player's digits: yours blue, the rival's orange. */
-  private readonly myDragon = new DragonView(DESIGNS['duel-mine']);
-  private readonly rivalDragon = new DragonView(DESIGNS['duel-rival']);
+  private readonly myDragon: DragonView;
+  /** Hidden until `showRival`. */
+  private rivalDragon = new DragonView(rivalDesign(null));
+  private rivalDesign: DragonDesign | null = null;
+  private dragonSize = 0;
+  /** Where the rival's dragon goes (x, ground), once laid out. */
+  private rivalSpot: [number, number] | null = null;
   private readonly myHp: HpBar;
   private readonly rivalHp: HpBar;
   private readonly scene = new Scene(SCENES.duel);
@@ -26,8 +34,10 @@ export class DuelArena extends Container {
   });
   private mine = false;
 
-  constructor(myName: string, rivalName: string, maxHp: number) {
+  constructor(myName: string, rivalName: string, maxHp: number, myDesign: DragonDesign) {
     super();
+    this.myDragon = new DragonView(myDesign);
+    this.rivalDragon.visible = false;
     this.myHp = new HpBar(`Ty · ${myName}`, maxHp, theme.playerHp);
     this.rivalHp = new HpBar(rivalName, maxHp, theme.enemyHp);
     this.turnText.anchor.set(0.5, 0.5);
@@ -48,14 +58,10 @@ export class DuelArena extends Container {
     const top = pad + HpBar.HEIGHT + 4;
     const ground = this.scene.groundY() + 4;
     // As big as fits beside the turn pill in the middle.
-    const dragonSize = Math.max(32, Math.min(width * 0.32, (ground - top) * 1.05));
-    for (const [dragon, x] of [
-      [this.myDragon, width * 0.18],
-      [this.rivalDragon, width * 0.82],
-    ] as const) {
-      dragon.layout(dragonSize);
-      dragon.position.set(x, ground - dragon.footOffset());
-    }
+    this.dragonSize = Math.max(32, Math.min(width * 0.32, (ground - top) * 1.05));
+    this.placeDragon(this.myDragon, width * 0.18, ground);
+    this.rivalSpot = [width * 0.82, ground];
+    this.placeDragon(this.rivalDragon, ...this.rivalSpot);
 
     const radius = Math.max(12, Math.min(22, (ground - top) * 0.15));
     this.turnText.position.set(width / 2, top + 26);
@@ -66,6 +72,25 @@ export class DuelArena extends Container {
 
   setRivalName(name: string): void {
     this.rivalHp.setName(name);
+  }
+
+  get rivalShown(): boolean {
+    return this.rivalDesign !== null;
+  }
+
+  /** Puts the rival's dragon in `design`: it swoops in the first time, and changes look later if it must. */
+  showRival(design: DragonDesign): void {
+    if (design === this.rivalDesign) return;
+    this.rivalDesign = design;
+    const old = this.rivalDragon;
+    const view = new DragonView(design);
+    this.addChildAt(view, this.getChildIndex(old));
+    killTweens(old.scale, old);
+    old.destroy({ children: true });
+    this.rivalDragon = view;
+    if (this.rivalSpot) this.placeDragon(view, ...this.rivalSpot);
+    gsap.fromTo(view, { alpha: 0 }, { alpha: 1, duration: 0.25 });
+    gsap.fromTo(view.scale, { x: 0.6, y: 0.6 }, { x: 1, y: 1, duration: 0.45, ease: 'back.out(2.5)' });
   }
 
   /** Whose turn it is and, on yours, how many digits are left (dots). */
@@ -95,6 +120,16 @@ export class DuelArena extends Container {
   dragonPoint(mine: boolean): PointData {
     const dragon = this.dragon(mine);
     return { x: dragon.x, y: dragon.y };
+  }
+
+  override destroy(options?: DestroyOptions): void {
+    killTweens(this.rivalDragon, this.rivalDragon.scale);
+    super.destroy(options);
+  }
+
+  private placeDragon(dragon: DragonView, x: number, ground: number): void {
+    dragon.layout(this.dragonSize);
+    dragon.position.set(x, ground - dragon.footOffset());
   }
 
   private drawPill(): void {

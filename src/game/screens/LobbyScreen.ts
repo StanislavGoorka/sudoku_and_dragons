@@ -14,7 +14,7 @@ import {
   type Me,
 } from '../net/online.ts';
 import { DESIGNS } from '../art/dragonArt.ts';
-import { chosenTheme } from '../progress/progress.ts';
+import { chosenSkin, chosenTheme } from '../progress/progress.ts';
 import { progress } from '../progress/store.ts';
 import { theme } from '../theme.ts';
 import { Button } from '../ui/Button.ts';
@@ -219,7 +219,7 @@ export class LobbyScreen extends Container {
   private addHero(): void {
     const hero = new Container();
     const scene = new Scene(SCENES.duel);
-    const mine = new DragonView(DESIGNS['duel-mine']);
+    const mine = new DragonView(chosenSkin(progress).design);
     const rival = new DragonView(DESIGNS['duel-rival']);
     mine.scale.x = -1;
     hero.addChild(scene, mine, rival);

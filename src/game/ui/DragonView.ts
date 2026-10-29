@@ -59,7 +59,8 @@ export class DragonView extends Container {
   private dead = false;
   private blinkCall: gsap.core.Tween | null = null;
 
-  constructor(design: DragonDesign) {
+  /** `idle: false` keeps it still (a small picture on a shop tile). */
+  constructor(design: DragonDesign, options: { idle?: boolean } = {}) {
     super();
     this.design = design;
     const byPart = contextsOf(design);
@@ -96,7 +97,7 @@ export class DragonView extends Container {
     this.rig.addChild(this.art);
     this.addChild(this.ground, this.rig);
     this.art.tint = this.restingTint();
-    this.startIdle();
+    if (options.idle ?? true) this.startIdle();
   }
 
   /** `size` is the height of the box the dragon should fill. */

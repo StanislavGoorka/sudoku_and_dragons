@@ -1,5 +1,6 @@
 import type { Difficulty } from '../../core/index.ts';
 import { BOARD_THEMES, boardTheme, DEFAULT_BOARD_THEME, type BoardTheme } from '../boardThemes.ts';
+import { DEFAULT_DRAGON_SKIN, DRAGON_SKINS, dragonSkin, type DragonSkin } from '../dragonSkins.ts';
 
 /** The solo levels in the order they unlock. */
 export const LEVELS: Difficulty[] = ['easy', 'medium', 'hard'];
@@ -31,6 +32,10 @@ export interface Progress {
   boardThemes: string[];
   /** The board theme in use. */
   boardTheme: string;
+  /** Dragon skins bought (the free one is not listed). */
+  dragonSkins: string[];
+  /** The skin of your dragon in duels. */
+  dragonSkin: string;
 }
 
 export function emptyProgress(): Progress {
@@ -45,6 +50,8 @@ export function emptyProgress(): Progress {
     achievements: {},
     boardThemes: [],
     boardTheme: DEFAULT_BOARD_THEME,
+    dragonSkins: [],
+    dragonSkin: DEFAULT_DRAGON_SKIN,
   };
 }
 
@@ -72,10 +79,13 @@ export function parseProgress(data: unknown): Progress {
   for (const [id, at] of Object.entries(saved.achievements ?? {})) {
     if (ACHIEVEMENTS.some((achievement) => achievement.id === id)) progress.achievements[id] = count(at);
   }
-  const bought = Array.isArray(saved.boardThemes) ? saved.boardThemes : [];
-  progress.boardThemes = BOARD_THEMES.filter((theme) => theme.price > 0 && bought.includes(theme.id)).map((theme) => theme.id);
-  const chosen = BOARD_THEMES.find((theme) => theme.id === saved.boardTheme);
-  if (chosen && ownsTheme(progress, chosen)) progress.boardTheme = chosen.id;
+  for (const kind of COSMETIC_KINDS) {
+    const { owned, chosen } = SLOTS[kind];
+    const bought: unknown[] = Array.isArray(saved[owned]) ? saved[owned] : [];
+    progress[owned] = COSMETICS[kind].filter((item) => item.price > 0 && bought.includes(item.id)).map((item) => item.id);
+    const pick = COSMETICS[kind].find((item) => item.id === saved[chosen]);
+    if (pick && owns(progress, kind, pick)) progress[chosen] = pick.id;
+  }
   return progress;
 }
 
@@ -224,9 +234,57 @@ export function recordDuel(progress: Progress, won: boolean, now = Date.now()): 
   return { stars, goals: [], unlocked: null, achievements: claimAchievements(progress, now) };
 }
 
-/** A board theme is the player's once bought; the free one always is. */
-export function ownsTheme(progress: Progress, theme: BoardTheme): boolean {
-  return theme.price === 0 || progress.boardThemes.includes(theme.id);
+/** Something bought with stars that changes only how the game looks. */
+export interface Cosmetic {
+  id: string;
+  name: string;
+  /** 0 for the one everyone has. */
+  price: number;
+}
+
+/** The shop's shelves: board themes and dragon skins. */
+export type CosmeticKind = 'board' | 'dragon';
+export const COSMETIC_KINDS: CosmeticKind[] = ['board', 'dragon'];
+export const COSMETICS: Record<CosmeticKind, readonly Cosmetic[]> = { board: BOARD_THEMES, dragon: DRAGON_SKINS };
+/** Where Progress keeps each kind: the ones bought, and the one in use. */
+const SLOTS = {
+  board: { owned: 'boardThemes', chosen: 'boardTheme' },
+  dragon: { owned: 'dragonSkins', chosen: 'dragonSkin' },
+} as const satisfies Record<CosmeticKind, { owned: keyof Progress; chosen: keyof Progress }>;
+
+/** A cosmetic is the player's once bought; the free one of each kind always is. */
+export function owns(progress: Progress, kind: CosmeticKind, item: Cosmetic): boolean {
+  return item.price === 0 || progress[SLOTS[kind].owned].includes(item.id);
+}
+
+export function isChosen(progress: Progress, kind: CosmeticKind, item: Cosmetic): boolean {
+  return progress[SLOTS[kind].chosen] === item.id;
+}
+
+/** The stars buy something of this kind (or of any kind) not owned yet. */
+export function canBuyNew(progress: Progress, kind?: CosmeticKind): boolean {
+  return (kind ? [kind] : COSMETIC_KINDS).some((k) =>
+    COSMETICS[k].some((item) => !owns(progress, k, item) && progress.stars >= item.price),
+  );
+}
+
+export type Purchase = 'bought' | 'owned' | 'too-few-stars';
+
+/** Buys a cosmetic with stars and puts it on. Mutates `progress`. */
+export function buy(progress: Progress, kind: CosmeticKind, item: Cosmetic): Purchase {
+  if (owns(progress, kind, item)) return 'owned';
+  if (progress.stars < item.price) return 'too-few-stars';
+  progress.stars -= item.price;
+  progress[SLOTS[kind].owned].push(item.id);
+  progress[SLOTS[kind].chosen] = item.id;
+  return 'bought';
+}
+
+/** Puts on a cosmetic the player owns. Returns false (and changes nothing) for one not bought yet. */
+export function choose(progress: Progress, kind: CosmeticKind, item: Cosmetic): boolean {
+  if (!owns(progress, kind, item)) return false;
+  progress[SLOTS[kind].chosen] = item.id;
+  return true;
 }
 
 /** The board theme in use. */
@@ -234,21 +292,7 @@ export function chosenTheme(progress: Progress): BoardTheme {
   return boardTheme(progress.boardTheme);
 }
 
-export type Purchase = 'bought' | 'owned' | 'too-few-stars';
-
-/** Buys a board theme with stars and puts it on. Mutates `progress`. */
-export function buyTheme(progress: Progress, theme: BoardTheme): Purchase {
-  if (ownsTheme(progress, theme)) return 'owned';
-  if (progress.stars < theme.price) return 'too-few-stars';
-  progress.stars -= theme.price;
-  progress.boardThemes.push(theme.id);
-  progress.boardTheme = theme.id;
-  return 'bought';
-}
-
-/** Puts on a board theme the player owns. Returns false (and changes nothing) for one not bought yet. */
-export function chooseTheme(progress: Progress, theme: BoardTheme): boolean {
-  if (!ownsTheme(progress, theme)) return false;
-  progress.boardTheme = theme.id;
-  return true;
+/** The skin of your dragon in duels. */
+export function chosenSkin(progress: Progress): DragonSkin {
+  return dragonSkin(progress.dragonSkin);
 }

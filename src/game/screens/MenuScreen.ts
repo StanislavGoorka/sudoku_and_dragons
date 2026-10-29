@@ -2,14 +2,13 @@ import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.js';
 import { CLUES, ENEMIES, type Difficulty } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
-import { BOARD_THEMES } from '../boardThemes.ts';
 import { DIFFICULTIES, DIFFICULTY_INFO, saveDifficulty } from '../difficulty.ts';
 import { designOf } from '../enemies.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 import { Button } from '../ui/Button.ts';
 import { DragonView } from '../ui/DragonView.ts';
-import { isUnlocked, LEVELS, ownsTheme } from '../progress/progress.ts';
+import { canBuyNew, isUnlocked, LEVELS } from '../progress/progress.ts';
 import { progress } from '../progress/store.ts';
 import { Modal } from '../ui/Modal.ts';
 import { Scene, SCENES } from '../ui/Scene.ts';
@@ -96,7 +95,7 @@ export class MenuScreen extends Container {
   private readonly playButton: Button;
   private readonly onlineButton: Button;
   private readonly settingsButton: Button;
-  /** Opens the board theme shop; a gold dot on it when the stars buy a theme not owned yet. */
+  /** Opens the shop (board themes, dragon skins); a gold dot on it when the stars buy something not owned yet. */
   private readonly shopButton: Button;
   private readonly shopDot = new Graphics();
   private modal: Modal | null = null;
@@ -129,8 +128,8 @@ export class MenuScreen extends Container {
       onTap: options.onOnline,
     });
     this.settingsButton = new Button({ text: 'Ustawienia', icon: 'gear', onTap: () => this.openSettings() });
-    this.shopButton = new Button({ text: 'Motywy', icon: 'palette', onTap: options.onShop });
-    this.shopDot.visible = BOARD_THEMES.some((t) => !ownsTheme(progress, t) && progress.stars >= t.price);
+    this.shopButton = new Button({ text: 'Sklep', icon: 'palette', onTap: options.onShop });
+    this.shopDot.visible = canBuyNew(progress);
     this.shopDot.circle(40, 5, 7).fill(theme.gold).stroke({ width: 2.5, color: theme.panelLip });
     this.shopDot.eventMode = 'none';
     this.shopButton.addChild(this.shopDot);

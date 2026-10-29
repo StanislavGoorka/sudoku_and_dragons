@@ -19,7 +19,7 @@ import { LobbyScreen } from './screens/LobbyScreen.ts';
 import { MenuScreen } from './screens/MenuScreen.ts';
 import { ProgressScreen } from './screens/ProgressScreen.ts';
 import { ShopScreen } from './screens/ShopScreen.ts';
-import { emptyProgress } from './progress/progress.ts';
+import { emptyProgress, type CosmeticKind } from './progress/progress.ts';
 import { progress, saveProgress } from './progress/store.ts';
 import { theme } from './theme.ts';
 import { Backdrop } from './ui/Backdrop.ts';
@@ -113,8 +113,8 @@ async function boot(): Promise<void> {
     );
   };
 
-  const showShop = () => {
-    show(new ShopScreen({ onBack: showMenu }));
+  const showShop = (kind?: CosmeticKind) => {
+    show(new ShopScreen({ onBack: showMenu, kind }));
   };
 
   const showProgress = () => {
@@ -190,7 +190,7 @@ async function boot(): Promise<void> {
         menu: showMenu,
         lobby: () => showLobby(),
         progress: () => showProgress(),
-        shop: () => showShop(),
+        shop: (kind?: CosmeticKind) => showShop(kind),
         feedback,
         /** The saved progress object; after changing it, call save(). */
         state: progress,

@@ -25,7 +25,19 @@ describe('dragon art', () => {
     });
   }
 
-  it('the enemies and both duel sides have a design', () => {
-    expect(Object.keys(DESIGNS).sort()).toEqual(['ancient-dragon', 'dragon', 'duel-mine', 'duel-rival', 'young-dragon']);
+  it('the enemies, both duel sides and the skins have a design', () => {
+    expect(Object.keys(DESIGNS).sort()).toEqual([
+      'ancient-dragon',
+      'dragon',
+      'duel-mine',
+      'duel-rival',
+      'skin-candy',
+      'skin-emerald',
+      'skin-frost',
+      'skin-king',
+      'skin-magma',
+      'skin-shadow',
+      'young-dragon',
+    ]);
   });
 });

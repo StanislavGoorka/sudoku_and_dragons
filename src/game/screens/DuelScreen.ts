@@ -2,13 +2,15 @@ import gsap from 'gsap';
 import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
 import { DUEL_RULES, otherSeat, solve, type DuelEvent, type DuelState, type Seat, type Unit } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
+import { rivalDesign } from '../dragonSkins.ts';
 import { burst, floatText, launchOrb, shake, stopEffects, wait } from '../fx/effects.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { DuelSync, type Prediction, type Snapshot } from '../net/duelSync.ts';
 import {
   errorMessage,
   fetchDuel,
-  fetchNickname,
+  fetchProfile,
+  knownProfile,
   leaveDuel,
   online,
   OnlineError,
@@ -24,7 +26,7 @@ import { Button } from '../ui/Button.ts';
 import { DuelArena } from '../ui/DuelArena.ts';
 import { Modal } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
-import { chosenTheme, recordDuel } from '../progress/progress.ts';
+import { chosenSkin, chosenTheme, recordDuel } from '../progress/progress.ts';
 import { rewardLines } from '../progress/rewardText.ts';
 import { progress, saveProgress } from '../progress/store.ts';
 import { fightLayout } from './fightLayout.ts';
@@ -47,6 +49,8 @@ interface RematchState {
 }
 
 const TURN_MS = DUEL_RULES.turnSeconds * 1000;
+/** How long the rival's dragon waits for their profile before it comes in the default look. */
+const RIVAL_PROFILE_WAIT_MS = 1500;
 /** Request failures worth another try: the server may simply not have been reached. */
 const RETRIED = new Set(['network', 'server-error', 'conflict', 'not-yet']);
 
@@ -114,6 +118,7 @@ export class DuelScreen extends Container {
   private lastTick: number | null = null;
   private readonly stopWatching: () => void;
   private readonly pollTimer: number;
+  private readonly rivalTimer: number;
   private screenWidth = 0;
   private screenHeight = 0;
 
@@ -132,7 +137,12 @@ export class DuelScreen extends Container {
     this.rematch = { by: row.rematch_by, declined: row.rematch_declined, next: row.next_duel };
 
     this.leaveButton = new Button({ text: 'Wyjdź', icon: 'back', onTap: () => this.requestLeave() });
-    this.arena = new DuelArena(me.nickname, this.rivalName, DUEL_RULES.maxHp);
+    // The rival as last seen this session (a rematch), until their profile is read again.
+    const rivalId = seat === 0 ? row.player1 : row.player0;
+    const known = rivalId ? knownProfile(rivalId) : undefined;
+    if (known) this.rivalName = known.nickname;
+    this.arena = new DuelArena(me.nickname, this.rivalName, DUEL_RULES.maxHp, chosenSkin(progress).design);
+    if (known) this.arena.showRival(rivalDesign(known.dragon));
     this.arena.hpBar(true).setHp(this.state.hp[seat]);
     this.arena.hpBar(false).setHp(this.state.hp[otherSeat(seat)]);
     const colors = chosenTheme(progress).colors;
@@ -149,14 +159,18 @@ export class DuelScreen extends Container {
       if (this.sending || this.switching || this.rematch.declined) return;
       void fetchDuel(this.duelId).then((next) => this.applyRow(next), () => {});
     }, 4000);
-    const rivalId = seat === 0 ? row.player1 : row.player0;
     if (rivalId) {
-      void fetchNickname(rivalId).then((name) => {
+      void fetchProfile(rivalId).then((profile) => {
         if (this.destroyed) return;
-        this.rivalName = name;
-        this.arena.setRivalName(name);
+        this.rivalName = profile.nickname;
+        this.arena.setRivalName(profile.nickname);
+        this.showRivalDragon(profile.dragon);
       });
     }
+    // A slow profile: the rival comes in the default look, and changes if their skin turns up.
+    this.rivalTimer = window.setTimeout(() => {
+      if (!this.arena.rivalShown) this.showRivalDragon(null);
+    }, RIVAL_PROFILE_WAIT_MS);
     this.updateTurn(false);
   }
 
@@ -242,11 +256,22 @@ export class DuelScreen extends Container {
     this.stopWatching();
     window.clearInterval(this.pollTimer);
     window.clearTimeout(this.sendTimer);
+    window.clearTimeout(this.rivalTimer);
     stopEffects(this.fx);
     gsap.killTweensOf(this.hurtFlash);
     killTweens(this.board, this.pad);
     if (this.intro) killTweens(this.intro.scale);
     super.destroy(options);
+  }
+
+  /**
+   * The rival's dragon in their skin (null: not known, the default look). Not once the duel is over:
+   * a dragon swapped while it falls would never finish falling.
+   */
+  private showRivalDragon(skin: string | null): void {
+    window.clearTimeout(this.rivalTimer);
+    if (this.destroyed || this.sync.confirmed.state.finished) return;
+    this.arena.showRival(rivalDesign(skin));
   }
 
   /** The duel as the screen shows it, predictions included. */

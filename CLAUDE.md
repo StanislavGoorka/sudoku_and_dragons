@@ -10,7 +10,8 @@ code and comments are English.
 - **Capacitor 8** wraps the web build: `android/` is the native Android project (app id
   `com.metrezz.sudokudragons`, portrait only). iOS is not added yet; it needs a Mac or cloud CI.
 - **Supabase** (project `SudokuAndDragons`, ref `wmsngertpctiiermiigz`, eu-central-1) runs online duels:
-  anonymous sign-in (enabled in the dashboard: Authentication → Sign In / Providers), tables `profiles`,
+  anonymous sign-in (enabled in the dashboard: Authentication → Sign In / Providers), tables `profiles` (nickname and
+  dragon skin, readable by every signed-in player),
   `duels`, `duel_secrets` (schema in `supabase/migrations/`) and the Edge Function `duel`.
   Free plan: it allows two active projects, and this one shares the quota with the owner's other projects.
 
@@ -83,7 +84,7 @@ code and comments are English.
   (orbs, particles, floating text, shake) and `killTweens`, `theme.ts` holds colours and fonts (see Look below),
   `difficulty.ts` the Polish difficulty names and the remembered last choice (localStorage),
   `enemies.ts` which design each enemy uses (by enemy id),
-  `net/online.ts` the Supabase client (sign-in, nickname, calls to the `duel` function, `watchDuel` for live
+  `net/online.ts` the Supabase client (sign-in, the profile, calls to the `duel` function, `watchDuel` for live
   updates, `serverNow()` for the turn clock), `net/config.ts` the project URL and publishable key (public).
   `BoardView` only shows results (`reveal`, `reject`, `sync`, which can also take digits back); `GameScreen`
   judges solo moves with core.
@@ -108,13 +109,14 @@ code and comments are English.
   only) on one 400×400 canvas, dragon hovering and facing left, grouped into parts that each turn about a
   pivot (wings, tail, head with jaw, eye and brow, body, ground shadow). `DESIGNS` holds the three enemies
   (green cute young dragon, red dragon, purple-and-gold ancient one with a crown of horns and a beard) and the
-  two duel sides (`duel-mine` blue and `duel-rival` orange, the colours of each player's digits). Outlined shapes
+  two duel sides (`duel-mine` blue, the free skin, and `duel-rival` orange) and the paid skins (`skin-*`, all
+  shaped like the duel dragons, `FIGHTER`, so neither side looks weaker). Outlined shapes
   get one thick outline around their union; shading and lines sit on top. `ui/DragonView` builds one shared
   GraphicsContext per part and design, and animates: hover with wing beats, tail and head sway, blinking;
   `setHeat` reddens it and opens its jaw on a glowing mouth before a timed attack; `attack()` rears back and
   lunges with jaws wide (the fireball starts at `mouthGlobal()`); `hurt`; `die` folds the wings and drops it.
-  Idle motion and action poses never share a property (`rig` vs parts, `headIdle` vs `head`). In duels the
-  dragon of whoever played a correct digit lunges. Check art with `npm run dragons` before the browser.
+  Idle motion and action poses never share a property (`rig` vs parts, `headIdle` vs `head`); `idle: false`
+  keeps one still (shop tiles). In duels the dragon of whoever played a correct digit lunges. Check art with `npm run dragons` before the browser.
 - Look (the owner wants it colourful and attractive, yet clear and with few objects on screen):
   - `main.ts` puts `ui/Backdrop` (violet gradient with a glow) under every screen, safe-area margins included,
     and waits for the bundled font **Baloo 2** (`@fontsource/baloo-2`, latin + latin-ext, 500/700/800) before
@@ -132,7 +134,7 @@ code and comments are English.
     `theme.gold` as the title colour for a win.
   - The menu shows one level at a time: its dragon in its scene, flipped with the arrows or a swipe, then
     one "Walcz!" button and the online button; sound and vibration live in the settings dialog (gear), board
-    themes in the shop (palette, with a gold dot when the stars buy a theme not owned yet).
+    themes and dragon skins in the shop (palette, with a gold dot when the stars buy something not owned yet).
 - Board themes (`src/game/boardThemes.ts`): cosmetics bought with stars, never gameplay help (the owner's call).
   `BOARD_THEMES` (Fiołek free, then Łąka 15, Ocean 25, Cukierek 35, Wulkan 50, Noc 65, Skarbiec 90) each give
   `BoardColors`: tray, lines, cells (`cellAlt` paints every other box for a checker), highlights, digit colours
@@ -141,16 +143,29 @@ code and comments are English.
   digit (`DigitOwner`), so screens pass an owner, not a colour. Battles, duels and the lobby's code pad use
   `chosenTheme(progress)`; in a duel each player sees their own theme. `boardThemes.test.ts` checks every theme
   stays readable (digit contrast on every cell state, yours and the rival's apart in hue, no red digits since
-  red means a mistake); keep it passing when adding one. `screens/ShopScreen` previews a fixed half-solved
-  board and the pad in the looked-at theme (tap a swatch, swipe, or arrow keys); its one button buys (stars run
-  down, sparks, `feedback.purchase()`) or puts on an owned theme.
+  red means a mistake); keep it passing when adding one.
+- Dragon skins (`src/game/dragonSkins.ts`): the look of your dragon in duels, also cosmetics. `DRAGON_SKINS`
+  (Lazur free, then Szmaragd 20, Pianka 30, Szron 40, Cień 55, Magma 70, Król 100) point at designs in
+  dragonArt. Rivals see your skin: it is the `dragon` column of your profile (the server keeps any well-formed id,
+  so a new skin needs no redeploy; an app that does not know an id shows the default). `net/online.ts` sends the
+  profile when it changed (`syncProfile()` after a purchase, and at sign-in; the last confirmed one is in
+  localStorage), and `fetchProfile` reads the rival's (remembered for the session, so a rematch shows them at
+  once). `DuelArena` shows the rival's dragon once the profile arrives (it pops in) or after 1.5 s in the
+  default look. `rivalDesign()`: a rival on the free skin is shown orange, so two players who bought nothing
+  still tell their dragons apart; two players with the same paid skin do look alike (mirrored). The lobby's
+  picture shows your skin too.
+- `screens/ShopScreen` has two shelves (tabs "Plansze" / "Smoki", the one opened last remembered for the run):
+  the looked-at item big (a fixed half-solved board and the pad in the theme's colours, or the dragon over the
+  duel scene, which attacks when tapped), a row of swatches (tap, swipe the preview, arrow keys; Tab switches
+  shelf), and one button that buys (stars run down, sparks, `feedback.purchase()`) or puts on an owned item.
 - Player progress (`src/game/progress/`), kept on the device only (localStorage, per dev `?profile`; the anonymous
   online account is per device too, so nothing is lost that the account would keep):
   - `progress.ts` is pure and tested: `Progress` (star balance, stars ever earned, per-level wins / losses / best
     stars / best time, duels played and won, flawless wins, best combo, unlocked achievements), `parseProgress`
     (saved data of any age made whole), `recordBattle` / `recordDuel` (update it and return the `Reward`).
-  - Stars are the currency, spent on board themes (`buyTheme`, `chooseTheme`, `ownsTheme`; `boardThemes` lists
-    the bought ones, `boardTheme` the one in use). A won battle gives one star per goal met: the win, no
+  - Stars are the currency, spent on cosmetics: `COSMETICS` by kind ('board', 'dragon'), and `buy`, `choose`,
+    `owns`, `isChosen`, `canBuyNew` for either kind (`boardThemes` / `dragonSkins` list the bought ones,
+    `boardTheme` / `dragonSkin` the ones in use; `chosenTheme`, `chosenSkin` look them up). A won battle gives one star per goal met: the win, no
     mistakes, at least 80% HP left (`HP_GOAL`; slow play lets the dragon's timed attacks through). An online
     duel win gives `DUEL_WIN_STARS` (2). Each level remembers its best stars.
   - Levels unlock in order: only the young dragon at first, each win opens the next (`isUnlocked`). Online duels
@@ -202,7 +217,8 @@ code and comments are English.
   `screen.sync.solution`; changing one there makes the next prediction wrong, to test a rollback).
   `screen.sync.predictions` lists what the server has not confirmed yet.
 - In dev, `__game.state` is the saved progress (change it, then `__game.save()`), `__game.unlockAll()` opens every
-  level, `__game.resetProgress()` starts over, `__game.progress()` and `__game.shop()` open those screens.
+  level, `__game.resetProgress()` starts over, `__game.progress()` and `__game.shop()` (or
+  `__game.shop('dragon')`) open those screens.
 - In dev, `window.__game.start(difficulty, seed?)`, `__game.menu()` and `__game.lobby()` switch screens, and `__game.screen` is the
   current screen. On a `GameScreen`: `debugFill(n)` fills all but `n` cells,
   `debugMistake()` plays a wrong digit, `battle.charge = 36` jumps the dragon's timer to 4 s before its attack.

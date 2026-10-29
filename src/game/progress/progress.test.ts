@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { boardTheme, DEFAULT_BOARD_THEME } from '../boardThemes.ts';
+import { DEFAULT_DRAGON_SKIN, dragonSkin } from '../dragonSkins.ts';
 import {
   ACHIEVEMENTS,
-  buyTheme,
-  chooseTheme,
+  buy,
+  canBuyNew,
+  choose,
+  chosenSkin,
   chosenTheme,
   DUEL_WIN_STARS,
   emptyProgress,
-  ownsTheme,
   isUnlocked,
+  owns,
   parseProgress,
   recordBattle,
   recordDuel,
@@ -111,42 +114,71 @@ describe('achievements', () => {
   });
 });
 
-describe('board themes', () => {
+describe('cosmetics', () => {
   const ocean = boardTheme('ocean');
+  const frost = dragonSkin('frost');
 
-  it('everyone owns the free theme and starts with it', () => {
+  it('everyone owns the free theme and skin and starts with them', () => {
     const progress = emptyProgress();
     expect(chosenTheme(progress).id).toBe(DEFAULT_BOARD_THEME);
-    expect(ownsTheme(progress, boardTheme(DEFAULT_BOARD_THEME))).toBe(true);
-    expect(ownsTheme(progress, ocean)).toBe(false);
+    expect(chosenSkin(progress).id).toBe(DEFAULT_DRAGON_SKIN);
+    expect(owns(progress, 'board', boardTheme(DEFAULT_BOARD_THEME))).toBe(true);
+    expect(owns(progress, 'dragon', dragonSkin(DEFAULT_DRAGON_SKIN))).toBe(true);
+    expect(owns(progress, 'board', ocean)).toBe(false);
+    expect(owns(progress, 'dragon', frost)).toBe(false);
   });
 
   it('buying takes the stars, keeps the theme and puts it on', () => {
     const progress = emptyProgress();
     progress.stars = ocean.price - 1;
-    expect(buyTheme(progress, ocean)).toBe('too-few-stars');
+    expect(buy(progress, 'board', ocean)).toBe('too-few-stars');
     expect(progress.stars).toBe(ocean.price - 1);
     progress.stars = ocean.price + 3;
     progress.starsEarned = progress.stars;
-    expect(buyTheme(progress, ocean)).toBe('bought');
+    expect(buy(progress, 'board', ocean)).toBe('bought');
     expect(progress.stars).toBe(3);
     // Spending never lowers what was earned.
     expect(progress.starsEarned).toBe(ocean.price + 3);
     expect(chosenTheme(progress).id).toBe('ocean');
-    expect(buyTheme(progress, ocean)).toBe('owned');
+    expect(buy(progress, 'board', ocean)).toBe('owned');
     expect(progress.stars).toBe(3);
   });
 
   it('only owned themes can be put on', () => {
     const progress = emptyProgress();
-    expect(chooseTheme(progress, ocean)).toBe(false);
+    expect(choose(progress, 'board', ocean)).toBe(false);
     expect(chosenTheme(progress).id).toBe(DEFAULT_BOARD_THEME);
     progress.stars = 100;
-    buyTheme(progress, ocean);
-    expect(chooseTheme(progress, boardTheme(DEFAULT_BOARD_THEME))).toBe(true);
+    buy(progress, 'board', ocean);
+    expect(choose(progress, 'board', boardTheme(DEFAULT_BOARD_THEME))).toBe(true);
     expect(chosenTheme(progress).id).toBe(DEFAULT_BOARD_THEME);
-    expect(chooseTheme(progress, ocean)).toBe(true);
+    expect(choose(progress, 'board', ocean)).toBe(true);
     expect(chosenTheme(progress).id).toBe('ocean');
+  });
+
+  it('a dragon skin is bought and worn apart from the board theme', () => {
+    const progress = emptyProgress();
+    progress.stars = frost.price;
+    expect(buy(progress, 'dragon', frost)).toBe('bought');
+    expect(progress.stars).toBe(0);
+    expect(chosenSkin(progress).id).toBe('frost');
+    expect(chosenTheme(progress).id).toBe(DEFAULT_BOARD_THEME);
+    expect(owns(progress, 'board', ocean)).toBe(false);
+    expect(choose(progress, 'dragon', dragonSkin(DEFAULT_DRAGON_SKIN))).toBe(true);
+    expect(chosenSkin(progress).id).toBe(DEFAULT_DRAGON_SKIN);
+  });
+
+  it('knows when the stars buy something new', () => {
+    const progress = emptyProgress();
+    expect(canBuyNew(progress)).toBe(false);
+    progress.stars = Math.min(ocean.price, frost.price);
+    expect(canBuyNew(progress)).toBe(true);
+    progress.stars = dragonSkin('emerald').price;
+    expect(canBuyNew(progress, 'dragon')).toBe(true);
+    expect(canBuyNew(progress, 'board')).toBe(true);
+    progress.stars = 15;
+    expect(canBuyNew(progress, 'board')).toBe(true);
+    expect(canBuyNew(progress, 'dragon')).toBe(false);
   });
 });
 
@@ -157,7 +189,8 @@ describe('saved data', () => {
     recordDuel(progress, true);
     progress.stars += 50;
     progress.starsEarned += 50;
-    buyTheme(progress, boardTheme('meadow'));
+    buy(progress, 'board', boardTheme('meadow'));
+    buy(progress, 'dragon', dragonSkin('emerald'));
     expect(parseProgress(JSON.parse(JSON.stringify(progress)))).toEqual(progress);
   });
 
@@ -177,5 +210,15 @@ describe('saved data', () => {
     });
     expect(parseProgress({ boardThemes: [], boardTheme: 'night' }).boardTheme).toBe(DEFAULT_BOARD_THEME);
     expect(parseProgress({ boardThemes: 'ocean', boardTheme: 'gone' })).toMatchObject({ boardThemes: [], boardTheme: DEFAULT_BOARD_THEME });
+  });
+
+  it('keeps only known bought skins, and a chosen skin only if owned', () => {
+    expect(parseProgress({ dragonSkins: ['king', 'gone', 'azure'], dragonSkin: 'king' })).toMatchObject({
+      dragonSkins: ['king'],
+      dragonSkin: 'king',
+    });
+    expect(parseProgress({ dragonSkin: 'magma' }).dragonSkin).toBe(DEFAULT_DRAGON_SKIN);
+    // Saves from before skins existed.
+    expect(parseProgress({ stars: 3 })).toMatchObject({ dragonSkins: [], dragonSkin: DEFAULT_DRAGON_SKIN });
   });
 });
