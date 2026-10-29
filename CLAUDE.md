@@ -121,23 +121,36 @@ code and comments are English.
     the first screen, because Pixi measures text when it is created. Fredoka was tried and lacks ą, ę, ż.
   - `ui/Button`: chunky casual-game buttons, a coloured face on a darker lip that it sinks into when pressed;
     variants `primary` (gold, the main action), `secondary` (violet), `accent` (blue, online); a square button
-    is round; `icon` (`pause`, `back`, `gear`) draws a vector icon instead of the text (no emoji).
+    is round; `icon` (`pause`, `back`, `gear`, `palette`) draws a vector icon instead of the text (no emoji).
   - `ui/Scene`: a rounded window onto a sky gradient, a soft light and two rows of hills, one look per dragon
     (morning for the young one, sunset for the red, moonlit night for the ancient) plus a twilight for duels.
     `groundY()` is where dragons stand; `DragonView.footOffset()` puts a dragon's shadow on it.
   - Fight screens (battle and duel) share `screens/fightLayout.ts`: the arena (scene, dragon, HP bars inside
     it, a round pause or leave button in its corner) on top, the board as big as fits, the number pad below.
-    The board is light with dark digits in a violet tray (`BoardView.BORDER`); yours are blue, the rival's orange.
+    The board sits in a tray (`BoardView.BORDER`) and takes its colours from the player's board theme.
   - `HpBar`: a thick pill with the name and HP inside it. `Modal`: a violet panel with a lip; pass
     `theme.gold` as the title colour for a win.
   - The menu shows one level at a time: its dragon in its scene, flipped with the arrows or a swipe, then
-    one "Walcz!" button and the online button; sound and vibration live in the settings dialog (gear).
+    one "Walcz!" button and the online button; sound and vibration live in the settings dialog (gear), board
+    themes in the shop (palette, with a gold dot when the stars buy a theme not owned yet).
+- Board themes (`src/game/boardThemes.ts`): cosmetics bought with stars, never gameplay help (the owner's call).
+  `BOARD_THEMES` (Fiołek free, then Łąka 15, Ocean 25, Cukierek 35, Wulkan 50, Noc 65, Skarbiec 90) each give
+  `BoardColors`: tray, lines, cells (`cellAlt` paints every other box for a checker), highlights, digit colours
+  (given / yours / the rival's, which are also the orb colours) and the number pad. `BoardView` and `NumberPad`
+  take the colours in their constructor (`setColors` repaints them) and `BoardView` remembers who placed each
+  digit (`DigitOwner`), so screens pass an owner, not a colour. Battles, duels and the lobby's code pad use
+  `chosenTheme(progress)`; in a duel each player sees their own theme. `boardThemes.test.ts` checks every theme
+  stays readable (digit contrast on every cell state, yours and the rival's apart in hue, no red digits since
+  red means a mistake); keep it passing when adding one. `screens/ShopScreen` previews a fixed half-solved
+  board and the pad in the looked-at theme (tap a swatch, swipe, or arrow keys); its one button buys (stars run
+  down, sparks, `feedback.purchase()`) or puts on an owned theme.
 - Player progress (`src/game/progress/`), kept on the device only (localStorage, per dev `?profile`; the anonymous
   online account is per device too, so nothing is lost that the account would keep):
   - `progress.ts` is pure and tested: `Progress` (star balance, stars ever earned, per-level wins / losses / best
     stars / best time, duels played and won, flawless wins, best combo, unlocked achievements), `parseProgress`
     (saved data of any age made whole), `recordBattle` / `recordDuel` (update it and return the `Reward`).
-  - Stars are the currency (nothing spends them yet). A won battle gives one star per goal met: the win, no
+  - Stars are the currency, spent on board themes (`buyTheme`, `chooseTheme`, `ownsTheme`; `boardThemes` lists
+    the bought ones, `boardTheme` the one in use). A won battle gives one star per goal met: the win, no
     mistakes, at least 80% HP left (`HP_GOAL`; slow play lets the dragon's timed attacks through). An online
     duel win gives `DUEL_WIN_STARS` (2). Each level remembers its best stars.
   - Levels unlock in order: only the young dragon at first, each win opens the next (`isUnlocked`). Online duels
@@ -189,7 +202,7 @@ code and comments are English.
   `screen.sync.solution`; changing one there makes the next prediction wrong, to test a rollback).
   `screen.sync.predictions` lists what the server has not confirmed yet.
 - In dev, `__game.state` is the saved progress (change it, then `__game.save()`), `__game.unlockAll()` opens every
-  level, `__game.resetProgress()` starts over, `__game.progress()` opens the progress screen.
+  level, `__game.resetProgress()` starts over, `__game.progress()` and `__game.shop()` open those screens.
 - In dev, `window.__game.start(difficulty, seed?)`, `__game.menu()` and `__game.lobby()` switch screens, and `__game.screen` is the
   current screen. On a `GameScreen`: `debugFill(n)` fills all but `n` cells,
   `debugMistake()` plays a wrong digit, `battle.charge = 36` jumps the dragon's timer to 4 s before its attack.

@@ -7,7 +7,7 @@ import { theme } from '../theme.ts';
 export type ButtonVariant = 'primary' | 'secondary' | 'accent';
 
 /** Icons drawn as shapes (no emoji, so they look the same on every phone). */
-export type ButtonIcon = 'pause' | 'back' | 'gear';
+export type ButtonIcon = 'pause' | 'back' | 'gear' | 'palette';
 
 export interface ButtonOptions {
   text: string;
@@ -164,6 +164,19 @@ export class Button extends Container {
         }
         g.circle(cx, cy, r * 0.78).fill(color);
         g.circle(cx, cy, r * 0.32).fill(this.colors.face);
+        break;
+      }
+      case 'palette': {
+        // A painter's palette with a thumb hole and four dabs of paint.
+        g.ellipse(cx, cy + r * 0.05, r * 1.2, r * 1.02).fill(color);
+        g.circle(cx + r * 0.42, cy + r * 0.48, r * 0.27).fill(this.colors.face);
+        const dabs: [number, number, number][] = [
+          [-0.58, 0.12, 0x4fd16b],
+          [-0.42, -0.45, 0xffc53d],
+          [0.12, -0.6, 0xff6fae],
+          [0.62, -0.18, 0x2fb2ff],
+        ];
+        for (const [dx, dy, paint] of dabs) g.circle(cx + dx * r, cy + dy * r, r * 0.24).fill(paint);
         break;
       }
     }

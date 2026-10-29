@@ -1,7 +1,8 @@
 /**
  * Colours and fonts. The look: a deep violet night behind everything, colourful scenes for the
  * dragons, chunky buttons with a darker lip under the face, and a light board with dark digits so
- * the sudoku itself always reads clearly.
+ * the sudoku itself always reads clearly. The board and number pad colours come from the player's
+ * board theme (boardThemes.ts).
  */
 export const theme = {
   /** Clear colour of the app, under the backdrop. */
@@ -29,27 +30,6 @@ export const theme = {
   buttonSecondaryLip: 0x4330a8,
   buttonAccent: 0x2fb2ff,
   buttonAccentLip: 0x1874bd,
-
-  /** The board: light cells, a violet frame and box lines. */
-  boardFrame: 0x5a3fd0,
-  boardFrameLip: 0x33208c,
-  boxLine: 0x6a52d6,
-  lineThin: 0xd6cbf5,
-  cell: 0xfbf8ff,
-  cellPeer: 0xebe3ff,
-  cellSameDigit: 0xd5c4ff,
-  cellSelected: 0xffd94a,
-  given: 0x2b2156,
-  /** Your digits; also your orbs and your colour in a duel. */
-  placed: 0x2f7de1,
-  /** Digits placed by the opponent in a duel. */
-  opponent: 0xf07a2a,
-
-  /** Number pad keys. */
-  padKey: 0xffffff,
-  padKeyLip: 0xb9a8ee,
-  padDigit: 0x4a32b8,
-  padKeyDone: 0x3a2a86,
 
   error: 0xff4d5e,
   flash: 0xffd94a,

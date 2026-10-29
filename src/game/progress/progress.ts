@@ -1,4 +1,5 @@
 import type { Difficulty } from '../../core/index.ts';
+import { BOARD_THEMES, boardTheme, DEFAULT_BOARD_THEME, type BoardTheme } from '../boardThemes.ts';
 
 /** The solo levels in the order they unlock. */
 export const LEVELS: Difficulty[] = ['easy', 'medium', 'hard'];
@@ -26,6 +27,10 @@ export interface Progress {
   bestCombo: number;
   /** Unlocked achievements: id → when (ms since epoch). */
   achievements: Record<string, number>;
+  /** Board themes bought (the free one is not listed). */
+  boardThemes: string[];
+  /** The board theme in use. */
+  boardTheme: string;
 }
 
 export function emptyProgress(): Progress {
@@ -38,6 +43,8 @@ export function emptyProgress(): Progress {
     flawlessWins: 0,
     bestCombo: 0,
     achievements: {},
+    boardThemes: [],
+    boardTheme: DEFAULT_BOARD_THEME,
   };
 }
 
@@ -65,6 +72,10 @@ export function parseProgress(data: unknown): Progress {
   for (const [id, at] of Object.entries(saved.achievements ?? {})) {
     if (ACHIEVEMENTS.some((achievement) => achievement.id === id)) progress.achievements[id] = count(at);
   }
+  const bought = Array.isArray(saved.boardThemes) ? saved.boardThemes : [];
+  progress.boardThemes = BOARD_THEMES.filter((theme) => theme.price > 0 && bought.includes(theme.id)).map((theme) => theme.id);
+  const chosen = BOARD_THEMES.find((theme) => theme.id === saved.boardTheme);
+  if (chosen && ownsTheme(progress, chosen)) progress.boardTheme = chosen.id;
   return progress;
 }
 
@@ -211,4 +222,33 @@ export function recordDuel(progress: Progress, won: boolean, now = Date.now()): 
   if (won) progress.duels.won++;
   addStars(progress, stars);
   return { stars, goals: [], unlocked: null, achievements: claimAchievements(progress, now) };
+}
+
+/** A board theme is the player's once bought; the free one always is. */
+export function ownsTheme(progress: Progress, theme: BoardTheme): boolean {
+  return theme.price === 0 || progress.boardThemes.includes(theme.id);
+}
+
+/** The board theme in use. */
+export function chosenTheme(progress: Progress): BoardTheme {
+  return boardTheme(progress.boardTheme);
+}
+
+export type Purchase = 'bought' | 'owned' | 'too-few-stars';
+
+/** Buys a board theme with stars and puts it on. Mutates `progress`. */
+export function buyTheme(progress: Progress, theme: BoardTheme): Purchase {
+  if (ownsTheme(progress, theme)) return 'owned';
+  if (progress.stars < theme.price) return 'too-few-stars';
+  progress.stars -= theme.price;
+  progress.boardThemes.push(theme.id);
+  progress.boardTheme = theme.id;
+  return 'bought';
+}
+
+/** Puts on a board theme the player owns. Returns false (and changes nothing) for one not bought yet. */
+export function chooseTheme(progress: Progress, theme: BoardTheme): boolean {
+  if (!ownsTheme(progress, theme)) return false;
+  progress.boardTheme = theme.id;
+  return true;
 }

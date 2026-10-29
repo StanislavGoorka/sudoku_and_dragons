@@ -14,6 +14,8 @@ import {
   type Me,
 } from '../net/online.ts';
 import { DESIGNS } from '../art/dragonArt.ts';
+import { chosenTheme } from '../progress/progress.ts';
+import { progress } from '../progress/store.ts';
 import { theme } from '../theme.ts';
 import { Button } from '../ui/Button.ts';
 import { DragonView } from '../ui/DragonView.ts';
@@ -316,7 +318,7 @@ export class LobbyScreen extends Container {
   }
 
   private addNumberPad(): void {
-    const pad = new NumberPad((digit) => this.typeDigit(digit));
+    const pad = new NumberPad((digit) => this.typeDigit(digit), chosenTheme(progress).colors);
     this.content.addChild(pad);
     this.rows.push({
       height: 52,

@@ -18,6 +18,7 @@ import { GameScreen } from './screens/GameScreen.ts';
 import { LobbyScreen } from './screens/LobbyScreen.ts';
 import { MenuScreen } from './screens/MenuScreen.ts';
 import { ProgressScreen } from './screens/ProgressScreen.ts';
+import { ShopScreen } from './screens/ShopScreen.ts';
 import { emptyProgress } from './progress/progress.ts';
 import { progress, saveProgress } from './progress/store.ts';
 import { theme } from './theme.ts';
@@ -107,8 +108,13 @@ async function boot(): Promise<void> {
         onPick: (difficulty) => startBattle(difficulty),
         onOnline: () => showLobby(),
         onProgress: () => showProgress(),
+        onShop: () => showShop(),
       }),
     );
+  };
+
+  const showShop = () => {
+    show(new ShopScreen({ onBack: showMenu }));
   };
 
   const showProgress = () => {
@@ -184,6 +190,7 @@ async function boot(): Promise<void> {
         menu: showMenu,
         lobby: () => showLobby(),
         progress: () => showProgress(),
+        shop: () => showShop(),
         feedback,
         /** The saved progress object; after changing it, call save(). */
         state: progress,

@@ -1,5 +1,6 @@
 import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.js';
+import type { BoardColors } from '../boardThemes.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 
@@ -13,15 +14,17 @@ interface PadKey {
   done: boolean;
 }
 
-/** Nine chunky keys in a row: white faces on a lavender lip; a finished digit's key goes dark. */
+/** Nine chunky keys in a row, in the board theme's colours; a finished digit's key goes dark. */
 export class NumberPad extends Container {
   private readonly keys: PadKey[] = [];
+  private colors: BoardColors;
   private keyWidth = 0;
   private keyHeight = 0;
   private lipHeight = 0;
 
-  constructor(onDigit: (digit: number) => void) {
+  constructor(onDigit: (digit: number) => void, colors: BoardColors) {
     super();
+    this.colors = colors;
     for (let digit = 1; digit <= 9; digit++) {
       const root = new Container();
       const lip = new Graphics();
@@ -29,7 +32,7 @@ export class NumberPad extends Container {
       const bg = new Graphics();
       const label = new Text({
         text: String(digit),
-        style: { fontFamily: theme.fontFamily, fontWeight: '800', fill: theme.padDigit },
+        style: { fontFamily: theme.fontFamily, fontWeight: '800', fill: colors.padDigit },
       });
       label.anchor.set(0.5);
       face.addChild(bg, label);
@@ -65,6 +68,12 @@ export class NumberPad extends Container {
     });
   }
 
+  /** Repaints the keys in other colours (the shop's preview). */
+  setColors(colors: BoardColors): void {
+    this.colors = colors;
+    if (this.keyWidth > 0) for (const key of this.keys) this.paint(key);
+  }
+
   setDone(digit: number, done: boolean): void {
     const key = this.keys[digit - 1];
     key.done = done;
@@ -80,10 +89,10 @@ export class NumberPad extends Container {
     const w = this.keyWidth;
     const h = this.keyHeight - this.lipHeight;
     const radius = Math.min(12, w * 0.3);
-    key.lip.clear().roundRect(0, this.lipHeight, w, h, radius).fill(key.done ? theme.panelLip : theme.padKeyLip);
-    key.bg.clear().roundRect(0, 0, w, h, radius).fill(key.done ? theme.padKeyDone : theme.padKey);
-    key.label.style.fill = key.done ? theme.textMuted : theme.padDigit;
-    key.label.alpha = key.done ? 0.35 : 1;
+    const c = this.colors;
+    key.lip.clear().roundRect(0, this.lipHeight, w, h, radius).fill(key.done ? c.padKeyDoneLip : c.padKeyLip);
+    key.bg.clear().roundRect(0, 0, w, h, radius).fill(key.done ? c.padKeyDone : c.padKey);
+    key.label.style.fill = key.done ? c.padDigitDone : c.padDigit;
     key.root.cursor = key.done ? 'default' : 'pointer';
   }
 }

@@ -95,6 +95,12 @@ class Feedback {
     this.play((s) => s.tick());
   }
 
+  /** Stars spent in the shop. */
+  purchase(): void {
+    this.play((s) => s.purchase());
+    this.buzz('success');
+  }
+
   dragonFalls(): void {
     this.play((s) => s.dragonFall());
     this.buzz('heavy');

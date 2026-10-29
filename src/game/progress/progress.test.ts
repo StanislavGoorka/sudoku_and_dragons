@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { boardTheme, DEFAULT_BOARD_THEME } from '../boardThemes.ts';
 import {
   ACHIEVEMENTS,
+  buyTheme,
+  chooseTheme,
+  chosenTheme,
   DUEL_WIN_STARS,
   emptyProgress,
+  ownsTheme,
   isUnlocked,
   parseProgress,
   recordBattle,
@@ -106,11 +111,53 @@ describe('achievements', () => {
   });
 });
 
+describe('board themes', () => {
+  const ocean = boardTheme('ocean');
+
+  it('everyone owns the free theme and starts with it', () => {
+    const progress = emptyProgress();
+    expect(chosenTheme(progress).id).toBe(DEFAULT_BOARD_THEME);
+    expect(ownsTheme(progress, boardTheme(DEFAULT_BOARD_THEME))).toBe(true);
+    expect(ownsTheme(progress, ocean)).toBe(false);
+  });
+
+  it('buying takes the stars, keeps the theme and puts it on', () => {
+    const progress = emptyProgress();
+    progress.stars = ocean.price - 1;
+    expect(buyTheme(progress, ocean)).toBe('too-few-stars');
+    expect(progress.stars).toBe(ocean.price - 1);
+    progress.stars = ocean.price + 3;
+    progress.starsEarned = progress.stars;
+    expect(buyTheme(progress, ocean)).toBe('bought');
+    expect(progress.stars).toBe(3);
+    // Spending never lowers what was earned.
+    expect(progress.starsEarned).toBe(ocean.price + 3);
+    expect(chosenTheme(progress).id).toBe('ocean');
+    expect(buyTheme(progress, ocean)).toBe('owned');
+    expect(progress.stars).toBe(3);
+  });
+
+  it('only owned themes can be put on', () => {
+    const progress = emptyProgress();
+    expect(chooseTheme(progress, ocean)).toBe(false);
+    expect(chosenTheme(progress).id).toBe(DEFAULT_BOARD_THEME);
+    progress.stars = 100;
+    buyTheme(progress, ocean);
+    expect(chooseTheme(progress, boardTheme(DEFAULT_BOARD_THEME))).toBe(true);
+    expect(chosenTheme(progress).id).toBe(DEFAULT_BOARD_THEME);
+    expect(chooseTheme(progress, ocean)).toBe(true);
+    expect(chosenTheme(progress).id).toBe('ocean');
+  });
+});
+
 describe('saved data', () => {
   it('survives a save and load', () => {
     const progress = emptyProgress();
     recordBattle(progress, win({ mistakes: 0 }));
     recordDuel(progress, true);
+    progress.stars += 50;
+    progress.starsEarned += 50;
+    buyTheme(progress, boardTheme('meadow'));
     expect(parseProgress(JSON.parse(JSON.stringify(progress)))).toEqual(progress);
   });
 
@@ -121,5 +168,14 @@ describe('saved data', () => {
     expect(parsed.stars).toBe(0);
     expect(parsed.levels.easy).toEqual({ wins: 3, losses: 0, bestStars: 3, bestTime: null });
     expect(parsed.achievements).toEqual({ combo: 5 });
+  });
+
+  it('keeps only known bought themes, and a chosen theme only if owned', () => {
+    expect(parseProgress({ boardThemes: ['ocean', 'gone', 'violet', 'ocean'], boardTheme: 'ocean' })).toMatchObject({
+      boardThemes: ['ocean'],
+      boardTheme: 'ocean',
+    });
+    expect(parseProgress({ boardThemes: [], boardTheme: 'night' }).boardTheme).toBe(DEFAULT_BOARD_THEME);
+    expect(parseProgress({ boardThemes: 'ocean', boardTheme: 'gone' })).toMatchObject({ boardThemes: [], boardTheme: DEFAULT_BOARD_THEME });
   });
 });

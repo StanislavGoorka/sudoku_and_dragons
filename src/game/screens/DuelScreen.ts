@@ -24,7 +24,7 @@ import { Button } from '../ui/Button.ts';
 import { DuelArena } from '../ui/DuelArena.ts';
 import { Modal } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
-import { recordDuel } from '../progress/progress.ts';
+import { chosenTheme, recordDuel } from '../progress/progress.ts';
 import { rewardLines } from '../progress/rewardText.ts';
 import { progress, saveProgress } from '../progress/store.ts';
 import { fightLayout } from './fightLayout.ts';
@@ -135,8 +135,9 @@ export class DuelScreen extends Container {
     this.arena = new DuelArena(me.nickname, this.rivalName, DUEL_RULES.maxHp);
     this.arena.hpBar(true).setHp(this.state.hp[seat]);
     this.arena.hpBar(false).setHp(this.state.hp[otherSeat(seat)]);
-    this.board = new BoardView(row.state.board);
-    this.pad = new NumberPad((digit) => this.handleDigit(digit));
+    const colors = chosenTheme(progress).colors;
+    this.board = new BoardView(row.state.board, colors);
+    this.pad = new NumberPad((digit) => this.handleDigit(digit), colors);
     this.fx.eventMode = 'none';
     this.hurtFlash.eventMode = 'none';
     this.hurtFlash.alpha = 0;
@@ -387,7 +388,7 @@ export class DuelScreen extends Container {
 
   /** Shows `state` without animation: catching up, or taking back predictions. */
   private showState(state: DuelState): void {
-    this.board.sync(state.board, theme.given);
+    this.board.sync(state.board, 'given');
     for (let digit = 1; digit <= 9; digit++) this.pad.setDone(digit, this.board.countOf(digit) === 9);
     this.arena.hpBar(true).setHp(state.hp[this.seat]);
     this.arena.hpBar(false).setHp(state.hp[otherSeat(this.seat)]);
@@ -401,7 +402,7 @@ export class DuelScreen extends Container {
     const mine = event.seat === this.seat;
     switch (event.kind) {
       case 'correct': {
-        this.board.reveal(event.cell, event.digit, event.completed, mine ? theme.placed : theme.opponent);
+        this.board.reveal(event.cell, event.digit, event.completed, mine ? 'mine' : 'rival');
         if (this.board.countOf(event.digit) === 9) this.pad.setDone(event.digit, true);
         feedback.digit(event.digit);
         if (event.completed.length > 0) feedback.unitsCompleted(event.completed.length);
@@ -434,7 +435,7 @@ export class DuelScreen extends Container {
     const epoch = this.epoch;
     const big = completed.length > 0;
     const origins = big ? completed.map((unit) => this.board.unitCenter(unit)) : [this.board.cellCenter(cell)];
-    const color = big ? theme.flash : targetMine ? theme.opponent : theme.placed;
+    const color = big ? theme.flash : targetMine ? this.board.colors.opponent : this.board.colors.placed;
     const to = this.fx.toLocal(this.arena.dragonPoint(targetMine), this.arena);
     let landed = false;
     await Promise.all(

@@ -130,6 +130,16 @@ export class Synth {
     this.tone({ freq: 1320, duration: 0.05, volume: 0.12 });
   }
 
+  /** Something bought with stars: two bright coin notes and a sparkle. */
+  purchase(): void {
+    this.tone({ wave: 'square', freq: hz(83), duration: 0.08, volume: 0.07 });
+    this.tone({ freq: hz(83), duration: 0.12, volume: 0.18 });
+    this.tone({ wave: 'square', freq: hz(88), at: 0.08, duration: 0.1, volume: 0.07 });
+    this.tone({ freq: hz(88), at: 0.08, duration: 0.45, volume: 0.2 });
+    this.tone({ wave: 'triangle', freq: hz(100), at: 0.16, duration: 0.3, volume: 0.06 });
+    this.noise({ filter: 'highpass', freq: 6000, at: 0.1, duration: 0.35, volume: 0.05, attack: 0.05 });
+  }
+
   /** The dragon collapses. */
   dragonFall(): void {
     this.tone({ wave: 'sawtooth', freq: 120, to: 40, duration: 1, volume: 0.12, attack: 0.05 });

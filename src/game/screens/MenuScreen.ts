@@ -2,13 +2,14 @@ import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.js';
 import { CLUES, ENEMIES, type Difficulty } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
+import { BOARD_THEMES } from '../boardThemes.ts';
 import { DIFFICULTIES, DIFFICULTY_INFO, saveDifficulty } from '../difficulty.ts';
 import { designOf } from '../enemies.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 import { Button } from '../ui/Button.ts';
 import { DragonView } from '../ui/DragonView.ts';
-import { isUnlocked, LEVELS } from '../progress/progress.ts';
+import { isUnlocked, LEVELS, ownsTheme } from '../progress/progress.ts';
 import { progress } from '../progress/store.ts';
 import { Modal } from '../ui/Modal.ts';
 import { Scene, SCENES } from '../ui/Scene.ts';
@@ -21,6 +22,7 @@ export interface MenuOptions {
   onOnline: () => void;
   /** The star counter opens the progress screen. */
   onProgress: () => void;
+  onShop: () => void;
 }
 
 const soundLabel = () => `Dźwięk: ${feedback.settings.sound ? 'włączony' : 'wyłączony'}`;
@@ -94,6 +96,9 @@ export class MenuScreen extends Container {
   private readonly playButton: Button;
   private readonly onlineButton: Button;
   private readonly settingsButton: Button;
+  /** Opens the board theme shop; a gold dot on it when the stars buy a theme not owned yet. */
+  private readonly shopButton: Button;
+  private readonly shopDot = new Graphics();
   private modal: Modal | null = null;
   private readonly onPick: (difficulty: Difficulty) => void;
   private index: number;
@@ -124,6 +129,11 @@ export class MenuScreen extends Container {
       onTap: options.onOnline,
     });
     this.settingsButton = new Button({ text: 'Ustawienia', icon: 'gear', onTap: () => this.openSettings() });
+    this.shopButton = new Button({ text: 'Motywy', icon: 'palette', onTap: options.onShop });
+    this.shopDot.visible = BOARD_THEMES.some((t) => !ownsTheme(progress, t) && progress.stars >= t.price);
+    this.shopDot.circle(40, 5, 7).fill(theme.gold).stroke({ width: 2.5, color: theme.panelLip });
+    this.shopDot.eventMode = 'none';
+    this.shopButton.addChild(this.shopDot);
 
     // Swipe the stage left or right to change the level.
     this.stageArea.eventMode = 'static';
@@ -143,6 +153,7 @@ export class MenuScreen extends Container {
       this.playButton,
       this.onlineButton,
       this.settingsButton,
+      this.shopButton,
       this.starCounter,
     );
     this.showLevel(0);
@@ -161,6 +172,8 @@ export class MenuScreen extends Container {
 
     this.settingsButton.position.set(width - margin - 44, 12);
     this.settingsButton.layout(44, 44);
+    this.shopButton.position.set(width - margin - 44 - 10 - 44, 12);
+    this.shopButton.layout(44, 44);
     this.starCounter.layout(42);
     this.starCounter.position.set(margin, 13);
 

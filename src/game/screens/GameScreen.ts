@@ -24,7 +24,7 @@ import { Button } from '../ui/Button.ts';
 import { Modal, type ModalAction } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 import { StarRow } from '../ui/stars.ts';
-import { recordBattle } from '../progress/progress.ts';
+import { chosenTheme, recordBattle } from '../progress/progress.ts';
 import { rewardLines } from '../progress/rewardText.ts';
 import { progress, saveProgress } from '../progress/store.ts';
 import { fightLayout } from './fightLayout.ts';
@@ -80,8 +80,9 @@ export class GameScreen extends Container {
     this.options = options;
     this.pauseButton = new Button({ text: 'Pauza', icon: 'pause', onTap: () => this.requestLeave() });
     this.arena = new BattleArena(this.battle.enemy, this.battle.playerMaxHp);
-    this.board = new BoardView(puzzle.givens);
-    this.pad = new NumberPad((digit) => this.handleDigit(digit));
+    const colors = chosenTheme(progress).colors;
+    this.board = new BoardView(puzzle.givens, colors);
+    this.pad = new NumberPad((digit) => this.handleDigit(digit), colors);
     for (let digit = 1; digit <= 9; digit++) {
       if (this.board.countOf(digit) === 9) this.pad.setDone(digit, true);
     }
@@ -246,7 +247,7 @@ export class GameScreen extends Container {
       if (hit.units > 0 && this.battle.outcome === 'ongoing') {
         const at = this.fx.toLocal(this.arena.chargePoint(), this.arena);
         floatText(this.fx, `+${moveKnockback(hit.units)} s`, { x: at.x + 12, y: at.y - 30 }, {
-          color: theme.placed,
+          color: this.board.colors.placed,
           fontSize: 16,
         });
       }
@@ -267,7 +268,7 @@ export class GameScreen extends Container {
   private async playPlayerAttack(hit: Hit, cell: number, completed: Unit[]): Promise<void> {
     const big = completed.length > 0;
     const origins = big ? completed.map((unit) => this.board.unitCenter(unit)) : [this.board.cellCenter(cell)];
-    const color = big ? theme.flash : theme.placed;
+    const color = big ? theme.flash : this.board.colors.placed;
     let landed = false;
 
     await Promise.all(
