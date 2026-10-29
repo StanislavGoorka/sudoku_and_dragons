@@ -11,13 +11,20 @@ export interface ModalAction {
   onTap: () => void;
 }
 
+/** Something drawn between the title and the message, e.g. the stars a battle won. */
+export interface ModalExtra {
+  view: Container;
+  height: number;
+  layout(width: number): void;
+}
+
 const PADDING = 24;
 const BUTTON_HEIGHT = 56;
 /** The panel's darker lip below it. */
 const LIP = 7;
 const BUTTON_GAP = 10;
 
-/** A dimmed full-screen layer with a panel: title, message and stacked buttons. Blocks input below it. */
+/** A dimmed full-screen layer with a panel: title, optional extra, message and stacked buttons. Blocks input below it. */
 export class Modal extends Container {
   private readonly shade = new Graphics();
   private readonly box = new Container();
@@ -25,11 +32,12 @@ export class Modal extends Container {
   private readonly title: Text;
   private readonly message: Text;
   private readonly buttons: Button[];
+  private readonly extra: ModalExtra | null;
   private screenWidth = 0;
   private screenHeight = 0;
 
   /** `titleColor`: gold for a win, for example. */
-  constructor(title: string, message: string, actions: ModalAction[], titleColor: number = theme.text) {
+  constructor(title: string, message: string, actions: ModalAction[], titleColor: number = theme.text, extra?: ModalExtra) {
     super();
     this.title = new Text({
       text: title,
@@ -59,9 +67,11 @@ export class Modal extends Container {
     this.title.anchor.set(0.5, 0);
     this.message.anchor.set(0.5, 0);
     this.buttons = actions.map((action) => new Button(action));
+    this.extra = extra ?? null;
 
     this.shade.eventMode = 'static';
     this.box.addChild(this.panel, this.title, this.message, ...this.buttons);
+    if (this.extra) this.box.addChild(this.extra.view);
     this.addChild(this.shade, this.box);
   }
 
@@ -81,8 +91,13 @@ export class Modal extends Container {
     let y = PADDING;
     this.title.position.set(width / 2, y);
     y += this.title.height + 10;
+    if (this.extra) {
+      this.extra.view.position.set(PADDING, y);
+      this.extra.layout(inner);
+      y += this.extra.height + 8;
+    }
     this.message.position.set(width / 2, y);
-    y += this.message.height + PADDING;
+    y += this.message.text ? this.message.height + PADDING : PADDING / 2;
     for (const button of this.buttons) {
       button.position.set(PADDING, y);
       button.layout(inner, BUTTON_HEIGHT);

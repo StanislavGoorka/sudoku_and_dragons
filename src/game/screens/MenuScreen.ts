@@ -8,24 +8,40 @@ import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 import { Button } from '../ui/Button.ts';
 import { DragonView } from '../ui/DragonView.ts';
+import { isUnlocked, LEVELS } from '../progress/progress.ts';
+import { progress } from '../progress/store.ts';
 import { Modal } from '../ui/Modal.ts';
 import { Scene, SCENES } from '../ui/Scene.ts';
+import { drawStar, StarCounter } from '../ui/stars.ts';
 
 export interface MenuOptions {
   /** The level shown first: the one played last. */
   selected: Difficulty;
   onPick: (difficulty: Difficulty) => void;
   onOnline: () => void;
+  /** The star counter opens the progress screen. */
+  onProgress: () => void;
 }
 
 const soundLabel = () => `Dźwięk: ${feedback.settings.sound ? 'włączony' : 'wyłączony'}`;
 const hapticsLabel = () => `Wibracje: ${feedback.settings.haptics ? 'włączone' : 'wyłączone'}`;
 
-/** One level on the stage: its scene with its dragon hovering over it. */
+/** One level on the stage: its scene with its dragon hovering over it (a dark shape behind a lock until unlocked). */
 interface Stage {
   root: Container;
   scene: Scene;
   dragon: DragonView;
+  lock: Graphics | null;
+}
+
+/** A gold padlock centred on (cx, cy), `size` tall. */
+function drawLock(g: Graphics, cx: number, cy: number, size: number): Graphics {
+  const edge = theme.buttonPrimaryLip;
+  g.arc(cx, cy - size * 0.12, size * 0.26, Math.PI, 0).stroke({ width: size * 0.13, color: edge, cap: 'round' });
+  g.roundRect(cx - size * 0.38, cy - size * 0.12, size * 0.76, size * 0.6, size * 0.14).fill(theme.gold).stroke({ width: size * 0.06, color: edge });
+  g.circle(cx, cy + size * 0.1, size * 0.08).fill(theme.buttonPrimaryText);
+  g.roundRect(cx - size * 0.03, cy + size * 0.12, size * 0.06, size * 0.16, size * 0.03).fill(theme.buttonPrimaryText);
+  return g;
 }
 
 /**
@@ -71,8 +87,10 @@ export class MenuScreen extends Container {
     text: '',
     style: { fontFamily: theme.fontFamily, fontWeight: '500', fontSize: 16, fill: theme.textMuted },
   });
-  /** Which of the three levels is shown. */
-  private readonly dots = new Graphics();
+  /** The most stars won on the shown level. */
+  private readonly bestStars = new Graphics();
+  /** Stars to spend; tap for the progress screen. */
+  private readonly starCounter: StarCounter;
   private readonly playButton: Button;
   private readonly onlineButton: Button;
   private readonly settingsButton: Button;
@@ -85,16 +103,20 @@ export class MenuScreen extends Container {
   private screenHeight = 0;
   private entered = false;
   private swipeFrom: number | null = null;
+  private starsY = 0;
 
   constructor(options: MenuOptions) {
     super();
     this.onPick = options.onPick;
-    this.index = DIFFICULTIES.indexOf(options.selected);
+    // The level played last, unless it is still locked (then the furthest open one).
+    const open = LEVELS.filter((d) => isUnlocked(progress, d));
+    this.index = DIFFICULTIES.indexOf(open.includes(options.selected) ? options.selected : open[open.length - 1]);
+    this.starCounter = new StarCounter(progress.stars, options.onProgress);
     for (const text of [this.titleTop, this.titleBottom, this.levelName, this.levelInfo]) text.anchor.set(0.5, 0);
 
     this.prevButton = new Button({ text: 'Poprzedni', icon: 'back', onTap: () => this.flip(-1) });
     this.nextButton = new Button({ text: 'Następny', icon: 'back', onTap: () => this.flip(1) });
-    this.playButton = new Button({ text: 'Walcz!', variant: 'primary', onTap: () => this.onPick(this.difficulty) });
+    this.playButton = new Button({ text: 'Walcz!', variant: 'primary', onTap: () => this.play(this.difficulty) });
     this.onlineButton = new Button({
       text: 'Pojedynek online',
       subtitle: 'gracz kontra gracz',
@@ -115,12 +137,13 @@ export class MenuScreen extends Container {
       this.stageArea,
       this.prevButton,
       this.nextButton,
-      this.dots,
+      this.bestStars,
       this.levelName,
       this.levelInfo,
       this.playButton,
       this.onlineButton,
       this.settingsButton,
+      this.starCounter,
     );
     this.showLevel(0);
   }
@@ -138,6 +161,8 @@ export class MenuScreen extends Container {
 
     this.settingsButton.position.set(width - margin - 44, 12);
     this.settingsButton.layout(44, 44);
+    this.starCounter.layout(42);
+    this.starCounter.position.set(margin, 13);
 
     const titleTop = Math.max(18, height * 0.035);
     this.titleTop.position.set(width / 2, titleTop);
@@ -152,15 +177,15 @@ export class MenuScreen extends Container {
     this.onlineButton.layout(column, onlineHeight);
     this.playButton.position.set(left, playY);
     this.playButton.layout(column, playHeight);
-    const infoY = playY - 18 - 22;
-    const nameY = infoY - 34;
+    const infoY = playY - 16 - 22;
+    this.starsY = infoY - 14;
+    const nameY = this.starsY - 14 - 36;
     this.levelInfo.position.set(width / 2, infoY);
     this.levelName.position.set(width / 2, nameY);
-    const dotsY = nameY - 14;
 
     const stageTop = this.titleBottom.y + this.titleBottom.height + 14;
     this.stageWidth = column;
-    this.stageHeight = Math.max(150, Math.min(400, dotsY - 14 - stageTop));
+    this.stageHeight = Math.max(150, Math.min(400, nameY - 12 - stageTop));
     this.stageArea.position.set(left, stageTop);
     this.stageArea.hitArea = new Rectangle(0, 0, this.stageWidth, this.stageHeight);
     if (this.stage) this.layoutStage(this.stage);
@@ -173,7 +198,7 @@ export class MenuScreen extends Container {
     this.nextButton.scale.x = -1;
     this.nextButton.position.set(Math.min(width - 4, left + column + arrow / 2 - 4), arrowY);
     this.nextButton.layout(arrow, arrow);
-    this.drawDots(width / 2, dotsY);
+    this.drawBestStars();
 
     this.modal?.layout(width, height);
     if (!this.entered) {
@@ -188,10 +213,10 @@ export class MenuScreen extends Container {
       return;
     }
     const index = ['1', '2', '3'].indexOf(event.key);
-    if (index >= 0) this.onPick(DIFFICULTIES[index]);
+    if (index >= 0) this.play(DIFFICULTIES[index]);
     else if (event.key === 'ArrowLeft') this.flip(-1);
     else if (event.key === 'ArrowRight') this.flip(1);
-    else if (event.key === 'Enter') this.onPick(this.difficulty);
+    else if (event.key === 'Enter') this.play(this.difficulty);
   }
 
   /** Back closes the settings; otherwise there is nothing to go back to (the app exits). */
@@ -209,6 +234,11 @@ export class MenuScreen extends Container {
 
   private get difficulty(): Difficulty {
     return DIFFICULTIES[this.index];
+  }
+
+  /** Starts a battle, if that level is open. */
+  private play(difficulty: Difficulty): void {
+    if (isUnlocked(progress, difficulty)) this.onPick(difficulty);
   }
 
   private flip(step: number): void {
@@ -231,8 +261,17 @@ export class MenuScreen extends Container {
     const enemy = ENEMIES[this.difficulty];
     const old = this.stage;
     const root = new Container();
-    const stage: Stage = { root, scene: new Scene(SCENES[enemy.id] ?? SCENES.dragon), dragon: new DragonView(designOf(enemy)) };
+    const open = isUnlocked(progress, this.difficulty);
+    const stage: Stage = {
+      root,
+      scene: new Scene(SCENES[enemy.id] ?? SCENES.dragon),
+      dragon: new DragonView(designOf(enemy)),
+      lock: open ? null : new Graphics(),
+    };
+    // A locked dragon is only a dark shape, still hovering.
+    if (!open) stage.dragon.tint = 0x1b1338;
     root.addChild(stage.scene, stage.dragon);
+    if (stage.lock) root.addChild(stage.lock);
     this.stageArea.addChild(root);
     this.stage = stage;
     if (this.stageWidth > 0) this.layoutStage(stage);
@@ -254,9 +293,14 @@ export class MenuScreen extends Container {
     }
 
     this.levelName.text = DIFFICULTY_INFO[this.difficulty].name;
-    this.levelInfo.text = `${enemy.name} · ${CLUES[this.difficulty]} podpowiedzi`;
+    const before = DIFFICULTIES[this.index - 1];
+    this.levelInfo.text = open
+      ? `${enemy.name} · ${CLUES[this.difficulty]} podpowiedzi`
+      : `Wygraj najpierw poziom ${DIFFICULTY_INFO[before].name.toLowerCase()}`;
+    this.playButton.setText(open ? 'Walcz!' : 'Zablokowany');
+    this.playButton.setEnabled(open);
     if (from !== 0) gsap.fromTo(this.levelName.scale, { x: 0.85, y: 0.85 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(3)' });
-    if (this.screenWidth > 0) this.drawDots(this.screenWidth / 2, this.levelName.y - 14);
+    this.drawBestStars();
   }
 
   private layoutStage(stage: Stage): void {
@@ -264,19 +308,15 @@ export class MenuScreen extends Container {
     const ground = stage.scene.groundY() + 4;
     stage.dragon.layout(Math.max(48, Math.min(this.stageWidth * 0.8, (ground - 12) * 1.05)));
     stage.dragon.position.set(this.stageWidth / 2 + this.stageWidth * 0.03, ground - stage.dragon.footOffset());
+    if (stage.lock) drawLock(stage.lock.clear(), this.stageWidth / 2, this.stageHeight * 0.45, Math.min(90, this.stageHeight * 0.3));
   }
 
-  private drawDots(x: number, y: number): void {
-    const spacing = 18;
-    this.dots.clear();
-    DIFFICULTIES.forEach((_, i) => {
-      const at = x + (i - 1) * spacing;
-      if (i === this.index) {
-        this.dots.circle(at, y, 5.5).fill(theme.gold);
-      } else {
-        this.dots.circle(at, y, 4).fill({ color: theme.textMuted, alpha: 0.5 });
-      }
-    });
+  /** Three small stars under the level name: the most it has given (none shown while locked). */
+  private drawBestStars(): void {
+    this.bestStars.clear();
+    if (this.screenWidth === 0 || !isUnlocked(progress, this.difficulty)) return;
+    const best = progress.levels[this.difficulty].bestStars;
+    for (let i = 0; i < 3; i++) drawStar(this.bestStars, this.screenWidth / 2 + (i - 1) * 26, this.starsY, 10, i < best);
   }
 
   private openSettings(): void {

@@ -24,6 +24,9 @@ import { Button } from '../ui/Button.ts';
 import { DuelArena } from '../ui/DuelArena.ts';
 import { Modal } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
+import { recordDuel } from '../progress/progress.ts';
+import { rewardLines } from '../progress/rewardText.ts';
+import { progress, saveProgress } from '../progress/store.ts';
 import { fightLayout } from './fightLayout.ts';
 
 export interface DuelScreenOptions {
@@ -504,6 +507,8 @@ export class DuelScreen extends Container {
             this.closeModal();
             // The rival learns it from the server; nothing here waits for that.
             leaveDuel(this.duelId);
+            recordDuel(progress, false);
+            saveProgress();
             this.options.onMenu();
           },
         },
@@ -548,6 +553,9 @@ export class DuelScreen extends Container {
     if (event?.kind === 'forfeit') {
       this.endMessage = event.seat === this.seat ? 'Poddałeś pojedynek.' : `${this.rivalName} opuścił pojedynek.`;
     }
+    const reward = recordDuel(progress, won);
+    saveProgress();
+    this.endMessage = [this.endMessage, ...rewardLines(reward, progress.stars)].join('\n');
     if (won) {
       feedback.victory();
     } else {

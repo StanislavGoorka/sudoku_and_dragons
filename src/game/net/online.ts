@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Difficulty, DuelEvent, DuelState, Seat } from '../../core/index.ts';
+import { profileSuffix } from '../profile.ts';
 import { SUPABASE_KEY, SUPABASE_URL } from './config.ts';
 
 export interface DuelRow {
@@ -36,9 +37,7 @@ export class OnlineError extends Error {
   }
 }
 
-// In development, ?profile=2 gives a tab its own player, so one browser can play both sides.
-const profile = import.meta.env.DEV ? new URLSearchParams(location.search).get('profile') : null;
-const suffix = profile ? `-${profile}` : '';
+const suffix = profileSuffix;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { storageKey: `sudoku-dragons.auth${suffix}`, persistSession: true, autoRefreshToken: true },

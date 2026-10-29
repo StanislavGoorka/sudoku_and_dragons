@@ -132,6 +132,24 @@ code and comments are English.
     `theme.gold` as the title colour for a win.
   - The menu shows one level at a time: its dragon in its scene, flipped with the arrows or a swipe, then
     one "Walcz!" button and the online button; sound and vibration live in the settings dialog (gear).
+- Player progress (`src/game/progress/`), kept on the device only (localStorage, per dev `?profile`; the anonymous
+  online account is per device too, so nothing is lost that the account would keep):
+  - `progress.ts` is pure and tested: `Progress` (star balance, stars ever earned, per-level wins / losses / best
+    stars / best time, duels played and won, flawless wins, best combo, unlocked achievements), `parseProgress`
+    (saved data of any age made whole), `recordBattle` / `recordDuel` (update it and return the `Reward`).
+  - Stars are the currency (nothing spends them yet). A won battle gives one star per goal met: the win, no
+    mistakes, at least 80% HP left (`HP_GOAL`; slow play lets the dragon's timed attacks through). An online
+    duel win gives `DUEL_WIN_STARS` (2). Each level remembers its best stars.
+  - Levels unlock in order: only the young dragon at first, each win opens the next (`isUnlocked`). Online duels
+    are never locked.
+  - `ACHIEVEMENTS`: ten simple ones (first win, flawless, combos, three stars, under 5 minutes, all dragons,
+    10 wins, first duel win, 10 duel wins), each paying stars once; `progress()` gives [current, target].
+  - `store.ts` holds the loaded progress and `saveProgress()`; `rewardText.ts` the end-dialog lines (with Polish
+    plurals of "gwiazdka").
+  - UI: `ui/stars.ts` (`drawStar`, `StarCounter` pill, `StarRow` that lights a battle's stars one by one in
+    the end dialog via `ModalExtra`), the menu's star counter (opens `ProgressScreen`: balance, numbers,
+    scrolling achievement list), best stars under each level, locked dragons as dark shapes behind a padlock,
+    and "Dalej: {dragon}" as the main button after a win that unlocked it.
 - `src/game/audio/`: `feedback.ts` is the one place for sound and vibration. Screens report events
   (`feedback.digit(d)`, `unitsCompleted(n)`, `playerHit()`, `victory()`…) and it plays a sound from `Synth.ts`
   and a haptic (Capacitor Haptics, native app only), honouring the settings dialog's toggles (`settings.ts`, localStorage).
@@ -170,6 +188,8 @@ code and comments are English.
   `quickMatch()` / `join(code)`; in a duel, `board.select(cell)` + `handleDigit(d)` (correct digits are in
   `screen.sync.solution`; changing one there makes the next prediction wrong, to test a rollback).
   `screen.sync.predictions` lists what the server has not confirmed yet.
+- In dev, `__game.state` is the saved progress (change it, then `__game.save()`), `__game.unlockAll()` opens every
+  level, `__game.resetProgress()` starts over, `__game.progress()` opens the progress screen.
 - In dev, `window.__game.start(difficulty, seed?)`, `__game.menu()` and `__game.lobby()` switch screens, and `__game.screen` is the
   current screen. On a `GameScreen`: `debugFill(n)` fills all but `n` cells,
   `debugMistake()` plays a wrong digit, `battle.charge = 36` jumps the dragon's timer to 4 s before its attack.

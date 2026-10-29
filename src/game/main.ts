@@ -17,6 +17,9 @@ import { DuelScreen } from './screens/DuelScreen.ts';
 import { GameScreen } from './screens/GameScreen.ts';
 import { LobbyScreen } from './screens/LobbyScreen.ts';
 import { MenuScreen } from './screens/MenuScreen.ts';
+import { ProgressScreen } from './screens/ProgressScreen.ts';
+import { emptyProgress } from './progress/progress.ts';
+import { progress, saveProgress } from './progress/store.ts';
 import { theme } from './theme.ts';
 import { Backdrop } from './ui/Backdrop.ts';
 
@@ -90,6 +93,7 @@ async function boot(): Promise<void> {
     show(
       new GameScreen(generatePuzzle(seed, difficulty), {
         onRestart: () => startBattle(difficulty),
+        onPlay: (next) => startBattle(next),
         onMenu: showMenu,
       }),
     );
@@ -102,8 +106,13 @@ async function boot(): Promise<void> {
         selected: loadDifficulty(),
         onPick: (difficulty) => startBattle(difficulty),
         onOnline: () => showLobby(),
+        onProgress: () => showProgress(),
       }),
     );
+  };
+
+  const showProgress = () => {
+    show(new ProgressScreen({ onBack: showMenu }));
   };
 
   const showLobby = () => {
@@ -174,7 +183,20 @@ async function boot(): Promise<void> {
         start: startBattle,
         menu: showMenu,
         lobby: () => showLobby(),
+        progress: () => showProgress(),
         feedback,
+        /** The saved progress object; after changing it, call save(). */
+        state: progress,
+        save: saveProgress,
+        /** Opens every level (as if each had been won once). */
+        unlockAll: () => {
+          for (const level of Object.values(progress.levels)) level.wins = Math.max(1, level.wins);
+          saveProgress();
+        },
+        resetProgress: () => {
+          Object.assign(progress, emptyProgress());
+          saveProgress();
+        },
       },
     });
   }

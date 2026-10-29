@@ -8,6 +8,7 @@ import {
   moveKnockback,
   resolveMove,
   type Battle,
+  type Difficulty,
   type Grid,
   type Hit,
   type Puzzle,
@@ -20,13 +21,19 @@ import { theme } from '../theme.ts';
 import { BattleArena } from '../ui/BattleArena.ts';
 import { BoardView } from '../ui/BoardView.ts';
 import { Button } from '../ui/Button.ts';
-import { Modal } from '../ui/Modal.ts';
+import { Modal, type ModalAction } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
+import { StarRow } from '../ui/stars.ts';
+import { recordBattle } from '../progress/progress.ts';
+import { rewardLines } from '../progress/rewardText.ts';
+import { progress, saveProgress } from '../progress/store.ts';
 import { fightLayout } from './fightLayout.ts';
 
 export interface GameScreenOptions {
   /** A new battle on the same difficulty. */
   onRestart: () => void;
+  /** A battle on another level (the one this win unlocked). */
+  onPlay: (difficulty: Difficulty) => void;
   onMenu: () => void;
 }
 
@@ -55,6 +62,8 @@ export class GameScreen extends Container {
   private modal: Modal | null = null;
 
   private mistakes = 0;
+  /** Most units completed with one digit in this battle (for achievements). */
+  private bestCombo = 0;
   /** Seconds of battle so far, not counting pauses. */
   private elapsed = 0;
   private endShown = false;
@@ -232,6 +241,7 @@ export class GameScreen extends Container {
     const hit = resolveMove(this.battle, result);
     if (!hit) return;
     if (result.kind === 'correct') {
+      this.bestCombo = Math.max(this.bestCombo, hit.units);
       this.play(hit, this.playPlayerAttack(hit, cell, result.completed));
       if (hit.units > 0 && this.battle.outcome === 'ongoing') {
         const at = this.fx.toLocal(this.arena.chargePoint(), this.arena);
@@ -349,16 +359,42 @@ export class GameScreen extends Container {
       finalHit.cause === 'mistake'
         ? `Każdy błąd to cios smoka za ${attack} HP.`
         : 'Szybkie cyfry i ukończone linie odpychają atak smoka.';
+    const reward = recordBattle(progress, {
+      difficulty: this.puzzle.difficulty,
+      won,
+      mistakes: this.mistakes,
+      hpLeft: this.battle.playerHp,
+      maxHp: this.battle.playerMaxHp,
+      seconds: this.elapsed,
+      bestCombo: this.bestCombo,
+    });
+    saveProgress();
     if (won) {
       feedback.victory();
     } else {
       feedback.defeat();
     }
+
+    // A win that opened the next dragon leads straight to it.
+    const { unlocked } = reward;
+    const actions: ModalAction[] = unlocked
+      ? [
+          { text: `Dalej: ${ENEMIES[unlocked].name}`, variant: 'primary', onTap: () => this.options.onPlay(unlocked) },
+          { text: 'Walcz ponownie', onTap: () => this.options.onRestart() },
+        ]
+      : [{ text: 'Walcz ponownie', variant: 'primary', onTap: () => this.options.onRestart() }];
+    actions.push({ text: 'Menu', onTap: () => this.options.onMenu() });
+    const lines = [...(won ? [] : [hint]), stats, ...rewardLines(reward, progress.stars)];
+    const stars = won ? new StarRow(reward.goals) : null;
     this.openModal(
-      new Modal(won ? `${name} pokonany!` : `${name} cię pokonał…`, won ? stats : `${hint}\n${stats}`, [
-        { text: 'Walcz ponownie', variant: 'primary', onTap: () => this.options.onRestart() },
-        { text: 'Menu', onTap: () => this.options.onMenu() },
-      ], won ? theme.gold : theme.text),
+      new Modal(
+        won ? `${name} pokonany!` : `${name} cię pokonał…`,
+        lines.join('\n'),
+        actions,
+        won ? theme.gold : theme.text,
+        stars ? { view: stars, height: StarRow.HEIGHT, layout: (width) => stars.layout(width) } : undefined,
+      ),
     );
+    void stars?.play();
   }
 }
