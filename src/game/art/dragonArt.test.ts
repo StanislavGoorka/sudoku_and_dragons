@@ -2,7 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { DESIGNS, dragonParts, dragonSvg, type PartName } from './dragonArt.ts';
 
 // DragonView animates these by name.
-const ANIMATED: PartName[] = ['shadow', 'wingBack', 'tail', 'wingFront', 'body', 'head', 'mouth', 'jaw', 'skull', 'eye', 'brow'];
+const ANIMATED: PartName[] = [
+  'shadow',
+  'wingBack',
+  'tail',
+  'wingFront',
+  'armBack',
+  'body',
+  'armFront',
+  'head',
+  'mouth',
+  'jaw',
+  'skull',
+  'eye',
+  'brow',
+];
 
 describe('dragon art', () => {
   for (const [id, design] of Object.entries(DESIGNS)) {

@@ -8,7 +8,7 @@ const out = process.argv[2];
 if (!out) throw new Error('Usage: node scripts/preview-dragons.ts out.png [cell]');
 const cell = Number(process.argv[3] ?? 320);
 
-const POSES: Pose[] = [{}, { head: -0.12, jaw: -0.45, wingFront: -0.35, wingBack: -0.25, tail: 0.1 }];
+const POSES: Pose[] = [{}, { head: -0.12, jaw: -0.45, wingFront: -0.35, wingBack: -0.25, tail: 0.1, armFront: 0.5, armBack: 0.4 }];
 const ids = Object.keys(DESIGNS);
 const width = cell * ids.length;
 const rowHeight = Math.round((cell * VIEW.height) / VIEW.width);

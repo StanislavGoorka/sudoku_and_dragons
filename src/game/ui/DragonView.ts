@@ -35,10 +35,14 @@ function buildContext(part: Part, outline: number): GraphicsContext {
   return context;
 }
 
+/** Parts that sway idly in a container of their own, so the action poses can turn the part itself. */
+const IDLE_WRAPPED: PartName[] = ['head', 'armFront', 'armBack'];
+
 /**
  * A dragon from dragonArt, facing left, with its parts animated: it hovers with its wings beating,
- * sways its tail, bobs its head and blinks. `rig` takes the action poses (hurt, attack, death) in
- * pixels; the idle motion runs on the parts inside it, so the two never fight over a property.
+ * paddles its arms, sways its tail, bobs its head and blinks. `rig` takes the action poses (hurt,
+ * attack, death) in pixels; the idle motion runs on the parts inside it (and on the idle wrappers of
+ * the head and arms), so the two never fight over a property.
  */
 export class DragonView extends Container {
   private readonly rig = new Container();
@@ -47,8 +51,8 @@ export class DragonView extends Container {
   private readonly ground = new Container();
   private readonly hover = new Container();
   private readonly parts = new Map<PartName, Container>();
-  /** The head sways idly here; `parts.get('head')` inside it takes the action poses. */
-  private readonly headIdle = new Container();
+  /** The head and arms sway idly here; the parts inside take the action poses. */
+  private readonly idle = new Map<PartName, Container>();
   /** Fire glowing in the mouth as the dragon gets ready to attack. */
   private readonly glow = new Graphics();
   private readonly design: DragonDesign;
@@ -72,12 +76,14 @@ export class DragonView extends Container {
       view.scale.set(part.scale ?? 1);
       this.parts.set(part.name, view);
       let parent = part.parent ? this.parts.get(part.parent)! : part.name === 'shadow' ? this.ground : this.hover;
-      if (part.name === 'head') {
+      if (IDLE_WRAPPED.includes(part.name)) {
         // Every part turns about a point in canvas units, so nesting needs the same pivot again.
-        this.headIdle.pivot.set(...part.pivot);
-        this.headIdle.position.set(...part.pivot);
-        parent.addChild(this.headIdle);
-        parent = this.headIdle;
+        const wrapper = new Container();
+        wrapper.pivot.set(...part.pivot);
+        wrapper.position.set(...part.pivot);
+        parent.addChild(wrapper);
+        this.idle.set(part.name, wrapper);
+        parent = wrapper;
       }
       parent.addChild(view);
     }
@@ -131,8 +137,9 @@ export class DragonView extends Container {
       { x: strength, y: 0, rotation: 0.002 * strength },
       { x: 0, rotation: 0, duration: 0.5, ease: 'elastic.out(1, 0.3)' },
     );
-    // The head snaps back and the eye squints.
+    // The head snaps back, the arms flinch and the eye squints.
     gsap.fromTo(this.part('head'), { rotation: 0.18 }, { rotation: 0, duration: 0.45, ease: 'power2.out' });
+    for (const arm of this.arms()) gsap.fromTo(arm, { rotation: -0.35 }, { rotation: 0, duration: 0.5, ease: 'power2.out' });
     gsap.fromTo(this.part('eye').scale, { y: 0.3 }, { y: 1, duration: 0.3, delay: 0.1, overwrite: 'auto' });
     this.art.tint = 0xff6b6b;
     this.flashing = true;
@@ -150,21 +157,24 @@ export class DragonView extends Container {
     if (!gsap.isTweening(this.part('jaw'))) this.part('jaw').rotation = -0.3 * heat;
   }
 
-  /** Rears back and lunges with its jaws open. Resolves at the peak of the lunge, when the fireball should leave. */
+  /** Rears back and lunges with its jaws open and claws out. Resolves at the peak of the lunge, when the fireball should leave. */
   attack(): Promise<void> {
     killTweens(this.rig, this.rig.scale);
     const head = this.part('head');
     const jaw = this.part('jaw');
+    const arms = this.arms();
     return new Promise((resolve) => {
       gsap
         .timeline()
-        // Rear back: snout up, jaws shut.
+        // Rear back: snout up, jaws shut, arms drawn in.
         .to(head, { rotation: 0.25, duration: 0.14, ease: 'power2.out' }, 0)
         .to(jaw, { rotation: 0, duration: 0.14 }, 0)
+        .to(arms, { rotation: -0.2, duration: 0.14, ease: 'power2.out' }, 0)
         .to(this.rig, { x: 0, y: -this.size * 0.04, rotation: 0, duration: 0.14, ease: 'power2.out' }, 0)
-        // Lunge: snout down, jaws wide, fire.
+        // Lunge: snout down, jaws wide, claws forward, fire.
         .to(head, { rotation: -0.18, duration: 0.16, ease: 'power3.in' })
-        .to(jaw, { rotation: -0.6, duration: 0.16, ease: 'power3.in' }, '<')
+        .to(jaw, { rotation: -0.5, duration: 0.16, ease: 'power3.in' }, '<')
+        .to(arms, { rotation: 0.55, duration: 0.16, ease: 'power3.in' }, '<')
         .to(this.glow, { alpha: 1, duration: 0.16 }, '<')
         .to(this.rig, { y: this.size * 0.12, duration: 0.16, ease: 'power2.in' }, '<')
         .to(this.rig.scale, { x: 1.15, y: 1.15, duration: 0.16, ease: 'power2.in' }, '<')
@@ -173,6 +183,7 @@ export class DragonView extends Container {
         .to(this.rig.scale, { x: 1, y: 1, duration: 0.35, ease: 'power2.out' }, '<')
         .to(head, { rotation: 0, duration: 0.4, ease: 'power2.out' }, '<')
         .to(jaw, { rotation: 0, duration: 0.3 }, '<')
+        .to(arms, { rotation: 0, duration: 0.4, ease: 'power2.out' }, '<')
         .to(this.glow, { alpha: 0, duration: 0.3 }, '<');
     });
   }
@@ -186,8 +197,9 @@ export class DragonView extends Container {
     return new Promise((resolve) => {
       gsap
         .timeline({ onComplete: resolve })
-        // Wings fold, the head droops, the eye shuts, and the dragon drops out of the sky.
+        // Wings fold, the head and arms droop, the eye shuts, and the dragon drops out of the sky.
         .to(this.part('wingFront'), { rotation: 0.7, duration: 0.5, ease: 'power2.out' }, 0)
+        .to(this.arms(), { rotation: -0.4, duration: 0.5, ease: 'power2.out' }, 0)
         .to(this.part('wingBack'), { rotation: 0.6, duration: 0.5, ease: 'power2.out' }, 0)
         .to(this.part('head'), { rotation: -0.45, duration: 0.5, ease: 'power2.out' }, 0)
         .to(this.part('jaw'), { rotation: -0.2, duration: 0.5 }, 0)
@@ -208,9 +220,14 @@ export class DragonView extends Container {
     return this.parts.get(name)!;
   }
 
+  private arms(): Container[] {
+    return [this.part('armFront'), this.part('armBack')];
+  }
+
   /**
-   * Hovering: the body rises on each downbeat of the wings and the shadow shrinks as it does;
-   * the tail and head sway on their own slower rhythms, and the eye blinks now and then.
+   * Hovering: the body rises on each downbeat of the wings and the shadow shrinks as it does, the
+   * arms paddle a beat behind; the tail and head sway on their own slower rhythms, and the eye
+   * blinks now and then.
    */
   private startIdle(): void {
     const beat = 0.55;
@@ -220,7 +237,9 @@ export class DragonView extends Container {
     gsap.fromTo(this.part('wingFront'), { rotation: -0.16 }, { rotation: 0.22, duration: beat, ...loop });
     gsap.fromTo(this.part('wingBack'), { rotation: -0.1 }, { rotation: 0.16, duration: beat, delay: 0.06, ...loop });
     gsap.fromTo(this.part('tail'), { rotation: -0.06 }, { rotation: 0.08, duration: 1.5, ...loop });
-    gsap.fromTo(this.headIdle, { rotation: 0.03 }, { rotation: -0.04, duration: 1.3, ...loop });
+    gsap.fromTo(this.idle.get('head')!, { rotation: 0.03 }, { rotation: -0.04, duration: 1.3, ...loop });
+    gsap.fromTo(this.idle.get('armFront')!, { rotation: -0.06 }, { rotation: 0.1, duration: beat, delay: 0.12, ...loop });
+    gsap.fromTo(this.idle.get('armBack')!, { rotation: -0.04 }, { rotation: 0.08, duration: beat, delay: 0.2, ...loop });
     this.scheduleBlink();
   }
 
@@ -235,7 +254,7 @@ export class DragonView extends Container {
   private stopIdle(): void {
     this.blinkCall?.kill();
     this.blinkCall = null;
-    killTweens(this.hover, this.headIdle, ...this.parts.values(), ...[...this.parts.values()].map((p) => p.scale));
+    killTweens(this.hover, ...this.idle.values(), ...this.parts.values(), ...[...this.parts.values()].map((p) => p.scale));
   }
 
   /** White, warming towards orange as the attack nears. */

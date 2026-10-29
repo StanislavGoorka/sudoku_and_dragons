@@ -114,15 +114,22 @@ code and comments are English.
   The Android back button goes to the screen's `handleBack()`; returning false exits the app.
 - `src/game/art/dragonArt.ts`: the dragons as data, no Pixi: flat cartoon shapes (SVG path strings, cubic curves
   only) on one 400×400 canvas, dragon hovering and facing left, grouped into parts that each turn about a
-  pivot (wings, tail, head with jaw, eye and brow, body, ground shadow). `DESIGNS` holds the three enemies
+  pivot (wings, tail, two arms, body, head with jaw, eye and lid, ground shadow). The head is a rounded skull over a
+  tapering snout (nostril, mouth corner, two fangs over a solid lower jaw), the eye sits inside it under an upper
+  lid in the skin's colour (drawn down at the front for a frowning `brow` design, a sliver over big `cute` eyes),
+  and the front legs are arms held up as a flying dragon does: upper arm from the shoulder, forearm forward,
+  three clawed fingers (the far arm a darker copy, `FAR_ARM` up and ahead, mostly behind the chest; the owner
+  asked for arms, the armless look read as AI-made). `DESIGNS` holds the three enemies
   (green cute young dragon, red dragon, purple-and-gold ancient one with a crown of horns and a beard) and the
   two duel sides (`duel-mine` blue, the free skin, and `duel-rival` orange) and the paid skins (`skin-*`, all
   shaped like the duel dragons, `FIGHTER`, so neither side looks weaker). Outlined shapes
   get one thick outline around their union; shading and lines sit on top. `ui/DragonView` builds one shared
-  GraphicsContext per part and design, and animates: hover with wing beats, tail and head sway, blinking;
+  GraphicsContext per part and design, and animates: hover with wing beats, arms paddling, tail and head sway, blinking;
   `setHeat` reddens it and opens its jaw on a glowing mouth before a timed attack; `attack()` rears back and
-  lunges with jaws wide (the fireball starts at `mouthGlobal()`); `hurt`; `die` folds the wings and drops it.
-  Idle motion and action poses never share a property (`rig` vs parts, `headIdle` vs `head`); `idle: false`
+  lunges with jaws wide and claws forward (the fireball starts at `mouthGlobal()`); `hurt` (the arms flinch);
+  `die` folds the wings, drops the arms and the dragon.
+  Idle motion and action poses never share a property (`rig` vs parts; the head and arms sway in idle wrappers,
+  `IDLE_WRAPPED`, and take the poses on the parts inside); `idle: false`
   keeps one still (shop tiles). In battles and duels the dragon of whoever played a correct digit lunges. Check art
   with `npm run dragons` before the browser.
 - Look (the owner wants it colourful and attractive, yet clear and with few objects on screen):

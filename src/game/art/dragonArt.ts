@@ -47,7 +47,9 @@ export type PartName =
   | 'wingBack'
   | 'tail'
   | 'wingFront'
+  | 'armBack'
   | 'body'
+  | 'armFront'
   | 'head'
   | 'mouth'
   | 'jaw'
@@ -93,9 +95,11 @@ export const PIVOTS = {
   shoulderBack: [236, 180] as [number, number],
   shoulderFront: [216, 192] as [number, number],
   tailBase: [262, 262] as [number, number],
+  /** The near arm's shoulder (the far arm's is a little up and ahead, see FAR_ARM). */
+  shoulder: [180, 218] as [number, number],
   neck: [140, 130] as [number, number],
   jawHinge: [138, 138] as [number, number],
-  eye: [106, 100] as [number, number],
+  eye: [106, 98] as [number, number],
   /** Where fire leaves the mouth. */
   mouth: [52, 140] as [number, number],
   body: [216, 236] as [number, number],
@@ -163,10 +167,85 @@ function backSpikes(design: DragonDesign): { neck: Shape[]; tail: Shape[] } {
   };
 }
 
+/** Moves every point of a path (all paths here use absolute commands, so every number is an x or a y). */
+function shift(d: string, dx: number, dy: number): string {
+  let i = 0;
+  return d.replace(/-?\d+(\.\d+)?/g, (n) => String(Number(n) + (i++ % 2 === 0 ? dx : dy)));
+}
+
+/** The far arm sits a little up and ahead of the near one, mostly behind the chest. */
+const FAR_ARM: [number, number] = [-22, -6];
+
+/**
+ * A front leg held up like an arm, as a flying dragon does: the upper arm hangs from the shoulder,
+ * the forearm reaches forward, and three fingers end in claws. The far one is a darker copy.
+ */
+function armShapes(p: DragonPalette, far: boolean): Shape[] {
+  const [dx, dy] = far ? FAR_ARM : [0, 0];
+  const skin = far ? p.shade : p.body;
+  const at = (d: string) => shift(d, dx, dy);
+  return [
+    // Fingers first, curled down and a little forward; the forearm covers where they join.
+    { d: at('M 152 268 C 143 266 135 270 133 279 C 138 283 146 281 152 277 Z'), fill: skin, outlined: true },
+    { d: at('M 153 276 C 147 281 143 289 145 296 C 151 296 155 290 159 282 Z'), fill: skin, outlined: true },
+    { d: at('M 161 279 C 160 287 161 293 165 297 C 169 293 170 286 169 279 Z'), fill: skin, outlined: true },
+    { d: at('M 135 275 L 125 283 L 136 283 Z M 142 293 L 143 304 L 149 296 Z M 162 295 L 166 305 L 168 295 Z'), fill: p.horn, outlined: true },
+    // Upper arm hanging from the shoulder, forearm reaching forward and down.
+    {
+      d: at('M 198 212 C 203 230 199 248 193 258 C 189 266 183 272 175 276 C 167 280 159 283 151 284 C 142 284 139 273 146 269 C 154 265 162 261 166 255 C 164 243 160 231 164 220 C 170 205 189 203 198 212 Z'),
+      fill: skin,
+      outlined: true,
+    },
+    // Shade along the back of the arm; a highlight on the near shoulder.
+    { d: at('M 197 222 C 199 238 196 252 190 262 C 184 271 172 279 156 283 C 170 274 182 264 188 250 C 192 240 194 230 197 222 Z'), fill: far ? p.outline : p.shade, alpha: far ? 0.3 : 1 },
+    ...(far ? [] : [{ d: 'M 170 214 C 177 207 189 206 194 213 C 186 211 179 214 173 220 Z', fill: p.light, alpha: 0.7 }]),
+  ];
+}
+
+/** The eye inside the head: big and round for a young (cute) dragon, an almond with a slit pupil otherwise. */
+function eyeShapes(design: DragonDesign): Shape[] {
+  const p = design.palette;
+  return design.cute
+    ? [
+        { d: ellipse(106, 97, 14, 15), fill: p.eyeWhite, outlined: true },
+        { d: ellipse(101, 99, 10, 12), fill: p.iris },
+        { d: ellipse(100, 100, 6.5, 8), fill: p.pupil },
+        { d: ellipse(96, 94, 4, 4), fill: 0xffffff },
+        { d: ellipse(104, 105, 2, 2), fill: 0xffffff },
+      ]
+    : [
+        { d: ellipse(106, 98, 11, 10.5), fill: p.eyeWhite, outlined: true },
+        { d: ellipse(102, 99, 7.5, 9), fill: p.iris },
+        { d: ellipse(101, 99, 2.6, 7.5), fill: p.pupil },
+        { d: ellipse(99, 94.5, 2.6, 2.6), fill: 0xffffff },
+      ];
+}
+
+/**
+ * The upper eyelid, in the skin's colour over the top of the eye (it does not close in a blink, the
+ * eye squints under it): drawn down at the front for a frowning dragon, a light lid otherwise, just
+ * a sliver over big young eyes.
+ */
+function lidShapes(design: DragonDesign): Shape[] {
+  const p = design.palette;
+  if (design.cute) {
+    const edge = 'M 122 87 C 113 81 100 82 91 90';
+    return [
+      { d: `M 88 96 C 85 80 100 72 114 73 C 126 74 132 82 122 87 C 113 81 100 82 91 90 Z`, fill: p.body },
+      { d: edge, stroke: { color: p.outline, width: 3.5 } },
+    ];
+  }
+  const edge = design.brow ? 'C 112 89 101 91 92 99' : 'C 112 86 100 87 93 92';
+  const start = design.brow ? 'M 120 92' : 'M 120 89';
+  return [
+    { d: `M 90 100 C 88 86 102 80 114 81 C 124 82 129 88 120 ${design.brow ? 92 : 89} ${edge} Z`, fill: p.body },
+    { d: `${start} ${edge}`, stroke: { color: p.outline, width: 3.5 } },
+  ];
+}
+
 export function dragonParts(design: DragonDesign): Part[] {
   const p = design.palette;
   const spikes = backSpikes(design);
-  const eyeR = design.cute ? 17 : 13;
 
   const parts: Part[] = [
     {
@@ -222,16 +301,15 @@ export function dragonParts(design: DragonDesign): Part[] {
         { d: 'M 287 66 L 290 44 L 300 62 Z', fill: p.horn, outlined: true },
       ],
     },
+    { name: 'armBack', pivot: [PIVOTS.shoulder[0] + FAR_ARM[0], PIVOTS.shoulder[1] + FAR_ARM[1]], shapes: armShapes(p, true) },
     {
       name: 'body',
       pivot: PIVOTS.body,
       shapes: [
         ...spikes.neck,
-        // Hind leg and foot, front arm and hand: behind the torso, which covers where they join.
+        // Hind leg and foot: behind the torso, which covers where they join.
         { d: 'M 240 280 C 236 300 232 312 226 322 L 270 324 C 266 310 270 296 278 280 Z', fill: p.body, outlined: true },
         { d: 'M 226 320 L 214 332 L 234 330 Z M 246 322 L 240 336 L 256 332 Z M 264 322 L 264 336 L 276 328 Z', fill: p.horn, outlined: true },
-        { d: 'M 172 256 C 162 270 156 282 150 296 L 176 298 C 180 286 188 274 196 262 Z', fill: p.body, outlined: true },
-        { d: 'M 150 294 L 140 304 L 158 304 Z M 164 297 L 160 309 L 174 305 Z', fill: p.horn, outlined: true },
         // Neck and torso.
         {
           d: 'M 150 236 C 128 214 112 188 106 160 C 118 134 142 120 166 120 C 170 146 188 166 214 178 C 190 196 168 214 150 236 Z',
@@ -259,12 +337,17 @@ export function dragonParts(design: DragonDesign): Part[] {
         },
       ],
     },
+    { name: 'armFront', pivot: PIVOTS.shoulder, shapes: armShapes(p, false) },
     { name: 'head', pivot: PIVOTS.neck, scale: design.headScale, shapes: [] },
     {
       name: 'mouth',
       parent: 'head',
       pivot: PIVOTS.neck,
-      shapes: [{ d: 'M 136 126 L 52 124 L 56 148 L 138 148 Z', fill: p.mouth }],
+      // Inside of the mouth and the tongue: seen only when the jaw drops.
+      shapes: [
+        { d: 'M 148 126 L 50 122 C 44 132 48 144 60 146 L 148 148 Z', fill: p.mouth },
+        { d: 'M 134 141 C 112 136 86 136 64 141 C 86 146 114 148 134 145 Z', fill: 0xd9506a, alpha: 0.9 },
+      ],
     },
     {
       name: 'jaw',
@@ -273,17 +356,20 @@ export function dragonParts(design: DragonDesign): Part[] {
       shapes: [
         ...(design.beard
           ? [
-              { d: 'M 72 152 L 64 176 L 86 156 Z', fill: p.membrane, outlined: true },
-              { d: 'M 96 156 L 94 182 L 112 156 Z', fill: p.membrane, outlined: true },
+              { d: 'M 66 148 L 58 172 L 82 152 Z', fill: p.membrane, outlined: true },
+              { d: 'M 92 152 L 88 178 L 108 152 Z', fill: p.membrane, outlined: true },
+              { d: 'M 118 150 L 120 170 L 132 148 Z', fill: p.membrane, outlined: true },
             ]
           : []),
+        // The lower jaw: a solid chin, not a stick, so it still looks like a jaw when it drops.
         {
-          d: 'M 144 132 C 122 140 88 142 58 138 C 50 142 52 152 62 155 C 92 160 124 156 146 146 Z',
+          d: 'M 150 129 C 124 132 92 130 62 129 C 49 129 43 138 49 146 C 58 156 84 158 108 156 C 128 155 142 150 152 142 Z',
           fill: p.body,
           outlined: true,
         },
-        { d: 'M 64 142 C 90 147 120 146 140 140 C 122 150 92 153 66 150 Z', fill: p.belly },
-        { d: 'M 70 140 L 74 130 L 79 141 Z M 96 141 L 100 131 L 104 142 Z', fill: p.eyeWhite },
+        { d: 'M 52 148 C 64 154 92 156 114 154 C 130 152 142 148 151 143 C 140 154 116 160 92 160 C 72 160 58 155 52 148 Z', fill: p.belly },
+        // Lower teeth: hidden under the upper lip until the mouth opens.
+        { d: 'M 72 130 L 76 120 L 81 130 Z M 98 131 L 102 121 L 107 131 Z', fill: p.eyeWhite },
       ],
     },
     {
@@ -293,46 +379,28 @@ export function dragonParts(design: DragonDesign): Part[] {
       shapes: [
         ...horns(design),
         // Frill behind the cheek.
-        { d: 'M 148 106 L 188 98 L 166 116 L 194 124 L 158 132 Z', fill: p.membrane, outlined: true },
+        { d: 'M 150 104 L 190 96 L 168 114 L 196 122 L 160 132 Z', fill: p.membrane, outlined: true },
+        // A rounded skull over a snout that tapers to a blunt nose, with a cheek at the back.
         {
-          d: 'M 160 110 C 160 78 128 66 100 72 C 80 76 66 88 54 98 C 42 106 38 122 48 130 C 74 132 110 134 140 138 C 156 134 162 124 160 110 Z',
+          d: 'M 44 108 C 44 96 52 88 64 86 C 76 84 86 80 94 74 C 108 62 132 58 150 66 C 166 74 172 92 168 108 C 166 122 158 132 146 138 C 132 140 120 135 110 132 C 92 130 66 128 50 126 C 44 124 42 116 44 108 Z',
           fill: p.body,
           outlined: true,
         },
-        { d: 'M 66 92 C 84 80 110 74 130 78 C 110 82 90 90 74 100 Z', fill: p.light, alpha: 0.7 },
-        { d: 'M 48 128 C 80 130 112 133 140 137 C 120 140 80 138 50 134 Z', fill: p.shade },
-        { d: ellipse(58, 104, 5, 3), fill: p.outline },
-        // Fangs over the lower jaw.
-        { d: 'M 60 128 L 65 142 L 71 129 Z M 84 130 L 89 142 L 94 131 Z', fill: p.eyeWhite, outlined: true },
+        // A frowning dragon has a heavy brow ridge, part of its outline.
+        ...(design.brow ? [{ d: 'M 86 88 C 94 76 118 70 136 76 C 132 84 120 88 106 90 C 96 92 90 92 86 88 Z', fill: p.body, outlined: true }] : []),
+        // Light along the top of the snout and skull, shade along the upper lip and down the cheek.
+        { d: 'M 58 92 C 70 87 84 83 94 76 C 106 67 122 63 138 64 C 120 68 106 76 97 84 C 85 92 70 95 58 96 Z', fill: p.light, alpha: 0.6 },
+        { d: 'M 46 119 C 70 123 96 127 112 130 L 110 132 C 92 130 66 128 50 126 Z', fill: p.shade },
+        { d: 'M 126 112 C 136 118 143 125 148 133', stroke: { color: p.shade, width: 4 } },
+        // Nostril and the corner of the mouth.
+        { d: 'M 53 97 C 56 92 62 91 66 94', stroke: { color: p.outline, width: 3.5 } },
+        { d: 'M 106 131 C 112 130 116 127 118 122', stroke: { color: p.outline, width: 3.5 } },
+        // Two fangs over the lower lip.
+        { d: 'M 62 126 L 66 138 L 71 127 Z M 86 128 L 90 139 L 95 129 Z', fill: p.eyeWhite, outlined: true },
       ],
     },
-    {
-      name: 'eye',
-      parent: 'head',
-      pivot: PIVOTS.eye,
-      shapes: design.cute
-        ? [
-            { d: ellipse(106, 100, eyeR, eyeR + 2), fill: p.eyeWhite, outlined: true },
-            { d: ellipse(100, 102, 10, 12), fill: p.iris },
-            { d: ellipse(99, 103, 6, 8), fill: p.pupil },
-            { d: ellipse(95, 97, 4, 4), fill: 0xffffff },
-            { d: ellipse(104, 108, 2, 2), fill: 0xffffff },
-          ]
-        : [
-            { d: ellipse(106, 100, eyeR, eyeR), fill: p.eyeWhite, outlined: true },
-            { d: ellipse(101, 101, 9, 11), fill: p.iris },
-            { d: ellipse(100, 101, 3, 9), fill: p.pupil },
-            { d: ellipse(97, 95, 3, 3), fill: 0xffffff },
-          ],
-    },
-    {
-      name: 'brow',
-      parent: 'head',
-      pivot: PIVOTS.eye,
-      shapes: design.brow
-        ? [{ d: 'M 84 86 C 100 78 120 78 134 84 L 128 96 C 114 90 100 92 88 98 Z', fill: p.shade, outlined: true }]
-        : [],
-    },
+    { name: 'eye', parent: 'head', pivot: PIVOTS.eye, shapes: eyeShapes(design) },
+    { name: 'brow', parent: 'head', pivot: PIVOTS.eye, shapes: lidShapes(design) },
   ];
   return parts;
 }
