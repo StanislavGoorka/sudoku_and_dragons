@@ -116,7 +116,8 @@ code and comments are English.
   `setHeat` reddens it and opens its jaw on a glowing mouth before a timed attack; `attack()` rears back and
   lunges with jaws wide (the fireball starts at `mouthGlobal()`); `hurt`; `die` folds the wings and drops it.
   Idle motion and action poses never share a property (`rig` vs parts, `headIdle` vs `head`); `idle: false`
-  keeps one still (shop tiles). In duels the dragon of whoever played a correct digit lunges. Check art with `npm run dragons` before the browser.
+  keeps one still (shop tiles). In battles and duels the dragon of whoever played a correct digit lunges. Check art
+  with `npm run dragons` before the browser.
 - Look (the owner wants it colourful and attractive, yet clear and with few objects on screen):
   - `main.ts` puts `ui/Backdrop` (violet gradient with a glow) under every screen, safe-area margins included,
     and waits for the bundled font **Baloo 2** (`@fontsource/baloo-2`, latin + latin-ext, 500/700/800) before
@@ -127,9 +128,12 @@ code and comments are English.
   - `ui/Scene`: a rounded window onto a sky gradient, a soft light and two rows of hills, one look per dragon
     (morning for the young one, sunset for the red, moonlit night for the ancient) plus a twilight for duels.
     `groundY()` is where dragons stand; `DragonView.footOffset()` puts a dragon's shadow on it.
-  - Fight screens (battle and duel) share `screens/fightLayout.ts`: the arena (scene, dragon, HP bars inside
-    it, a round pause or leave button in its corner) on top, the board as big as fits, the number pad below.
+  - Fight screens (battle and duel) share `screens/fightLayout.ts`: the arena (scene, two dragons facing each
+    other, HP bars inside it, a round pause or leave button in its corner) on top, the board as big as fits, the number pad below.
     The board sits in a tray (`BoardView.BORDER`) and takes its colours from the player's board theme.
+    `ui/BattleArena`: your dragon (your skin, `PLAYER_SCALE` of the enemy's size: the enemy is the boss) on the
+    left, the enemy on the right in its scene, the countdown to its attack low between them. The enemy's
+    fireball hits your dragon; when you lose, your dragon falls.
   - `HpBar`: a thick pill with the name and HP inside it. `Modal`: a violet panel with a lip; pass
     `theme.gold` as the title colour for a win.
   - The menu shows one level at a time: its dragon in its scene, flipped with the arrows or a swipe, then
@@ -144,7 +148,7 @@ code and comments are English.
   `chosenTheme(progress)`; in a duel each player sees their own theme. `boardThemes.test.ts` checks every theme
   stays readable (digit contrast on every cell state, yours and the rival's apart in hue, no red digits since
   red means a mistake); keep it passing when adding one.
-- Dragon skins (`src/game/dragonSkins.ts`): the look of your dragon in duels, also cosmetics. `DRAGON_SKINS`
+- Dragon skins (`src/game/dragonSkins.ts`): the look of your dragon in battles and duels, also cosmetics. `DRAGON_SKINS`
   (Lazur free, then Szmaragd 20, Pianka 30, Szron 40, Cień 55, Magma 70, Król 100) point at designs in
   dragonArt. Rivals see your skin: it is the `dragon` column of your profile (the server keeps any well-formed id,
   so a new skin needs no redeploy; an app that does not know an id shows the default). `net/online.ts` sends the

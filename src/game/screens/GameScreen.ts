@@ -24,7 +24,7 @@ import { Button } from '../ui/Button.ts';
 import { Modal, type ModalAction } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 import { StarRow } from '../ui/stars.ts';
-import { chosenTheme, recordBattle } from '../progress/progress.ts';
+import { chosenSkin, chosenTheme, recordBattle } from '../progress/progress.ts';
 import { rewardLines } from '../progress/rewardText.ts';
 import { progress, saveProgress } from '../progress/store.ts';
 import { fightLayout } from './fightLayout.ts';
@@ -79,7 +79,7 @@ export class GameScreen extends Container {
     this.grid = [...puzzle.givens];
     this.options = options;
     this.pauseButton = new Button({ text: 'Pauza', icon: 'pause', onTap: () => this.requestLeave() });
-    this.arena = new BattleArena(this.battle.enemy, this.battle.playerMaxHp);
+    this.arena = new BattleArena(this.battle.enemy, this.battle.playerMaxHp, chosenSkin(progress).design);
     const colors = chosenTheme(progress).colors;
     this.board = new BoardView(puzzle.givens, colors);
     this.pad = new NumberPad((digit) => this.handleDigit(digit), colors);
@@ -264,8 +264,9 @@ export class GameScreen extends Container {
     });
   }
 
-  /** Orbs fly from the board to the dragon: a small one per digit, a big one per completed unit. */
+  /** Your dragon lunges as orbs fly from the board to the enemy: a small one per digit, a big one per completed unit. */
   private async playPlayerAttack(hit: Hit, cell: number, completed: Unit[]): Promise<void> {
+    void this.arena.playerDragon.attack();
     const big = completed.length > 0;
     const origins = big ? completed.map((unit) => this.board.unitCenter(unit)) : [this.board.cellCenter(cell)];
     const color = big ? theme.flash : this.board.colors.placed;
@@ -308,7 +309,7 @@ export class GameScreen extends Container {
     );
   }
 
-  /** The dragon lunges and spits a fireball at the player's HP bar. */
+  /** The enemy lunges and spits a fireball at your dragon. */
   private async playDragonAttack(hit: Hit): Promise<void> {
     feedback.dragonLunge();
     await this.arena.dragon.attack();
@@ -321,6 +322,7 @@ export class GameScreen extends Container {
 
     feedback.playerHit();
     burst(this.fx, to, theme.fire, 18);
+    this.arena.playerDragon.hurt(14);
     shake(this, 8, 0.35);
     gsap.fromTo(this.hurtFlash, { alpha: 0.3 }, { alpha: 0, duration: 0.45, ease: 'power2.out' });
     this.arena.playerHp.setHp(hit.hpAfter);
@@ -345,13 +347,10 @@ export class GameScreen extends Container {
     this.endShown = true;
     this.closeModal();
 
+    // The loser's dragon falls: the enemy, or yours.
     const won = this.battle.outcome === 'won';
-    if (won) {
-      feedback.dragonFalls();
-      await this.arena.dragon.die();
-    } else {
-      await wait(0.6);
-    }
+    feedback.dragonFalls();
+    await (won ? this.arena.dragon : this.arena.playerDragon).die();
     if (this.destroyed) return;
 
     const { name, attack } = this.battle.enemy;

@@ -39,7 +39,7 @@ export interface ShopOptions {
 /** What each shelf says about the looked-at item. */
 const SHELVES: Record<CosmeticKind, { tab: string; inUse: string; owned: string; toBuy: string }> = {
   board: { tab: 'Plansze', inUse: 'Grasz na tej planszy', owned: 'Masz już ten motyw', toBuy: 'Kup, by grać na tej planszy' },
-  dragon: { tab: 'Smoki', inUse: 'Walczy za Ciebie w pojedynkach', owned: 'Masz już tego smoka', toBuy: 'Rywale zobaczą go w pojedynkach' },
+  dragon: { tab: 'Smoki', inUse: 'Walczy za Ciebie', owned: 'Masz już tego smoka', toBuy: 'Walczy za Ciebie, rywale go widzą' },
 };
 
 /** The shelf the shop opens on next time, for this run of the app. */
