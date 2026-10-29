@@ -7,7 +7,7 @@ import { theme } from '../theme.ts';
 export type ButtonVariant = 'primary' | 'secondary' | 'accent';
 
 /** Icons drawn as shapes (no emoji, so they look the same on every phone). */
-export type ButtonIcon = 'pause' | 'back' | 'gear' | 'palette';
+export type ButtonIcon = 'pause' | 'back' | 'gear' | 'palette' | 'user';
 
 export interface ButtonOptions {
   text: string;
@@ -179,6 +179,14 @@ export class Button extends Container {
         for (const [dx, dy, paint] of dabs) g.circle(cx + dx * r, cy + dy * r, r * 0.24).fill(paint);
         break;
       }
+      case 'user':
+        // A head over rounded shoulders.
+        g.circle(cx, cy - r * 0.42, r * 0.5).fill(color);
+        g.moveTo(cx - r * 1.05, cy + r * 1.05)
+          .bezierCurveTo(cx - r * 1.05, cy + r * 0.05, cx + r * 1.05, cy + r * 0.05, cx + r * 1.05, cy + r * 1.05)
+          .closePath()
+          .fill(color);
+        break;
     }
   }
 

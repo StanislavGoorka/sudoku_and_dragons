@@ -9,11 +9,15 @@ code and comments are English.
 - **PixiJS v8** for rendering, **GSAP** for animation, **TypeScript 7**, **Vite 8**, **Vitest 5**
 - **Capacitor 8** wraps the web build: `android/` is the native Android project (app id
   `com.metrezz.sudokudragons`, portrait only). iOS is not added yet; it needs a Mac or cloud CI.
-- **Supabase** (project `SudokuAndDragons`, ref `wmsngertpctiiermiigz`, eu-central-1) runs online duels:
-  anonymous sign-in (enabled in the dashboard: Authentication → Sign In / Providers), tables `profiles` (nickname and
-  dragon skin, readable by every signed-in player),
-  `duels`, `duel_secrets` (schema in `supabase/migrations/`) and the Edge Function `duel`.
+- **Supabase** (project `SudokuAndDragons`, ref `wmsngertpctiiermiigz`, eu-central-1) runs online duels and accounts:
+  anonymous sign-in (enabled in the dashboard: Authentication → Sign In / Providers) plus e-mail and password,
+  tables `profiles` (nickname and dragon skin, readable by every signed-in player),
+  `duels`, `duel_secrets`, `saves` (schema in `supabase/migrations/`) and the Edge Function `duel`.
   Free plan: it allows two active projects, and this one shares the quota with the owner's other projects.
+  Auth mails: until custom SMTP is set (Authentication → Emails → SMTP), Supabase's own sender allows about two
+  mails an hour for the whole project (`over_email_send_rate_limit`). The "Change email address" and "Reset
+  password" templates must show `{{ .Token }}`: the game asks for the code (`supabase/email-templates/` holds the
+  Polish ones to paste in). A link in a mail opens a browser, not the game.
 
 ## Commands
 
@@ -37,8 +41,8 @@ code and comments are English.
   `duel` function (MCP `deploy_edge_function` with `index.ts` + every `core/**` file, verify_jwt on).
   Redeploy whenever core rules change, or the server judges by old rules.
 - `npm run test:server`: end-to-end check of the deployed function with fresh anonymous players (rooms,
-  matchmaking, moves, forfeits, rematches, a turn running out, and that nobody can read solutions or other
-  players' duels). It waits out one full turn, so it takes about 40 s; run it in the background.
+  matchmaking, moves, forfeits, rematches, a turn running out, and that nobody can read solutions, other
+  players' duels or saves). It waits out one full turn, so it takes about 40 s; run it in the background.
 - `npm run sim:duel`: bots duel each other; reports how duels end, first-mover advantage, strategy edge.
 - The Vite dev server must not watch `android/` (see vite.config.ts): its file handles stop Capacitor and
   Gradle from deleting folders there on Windows. Stop the dev server if `cap add`/Gradle reports a busy folder.
@@ -79,13 +83,16 @@ code and comments are English.
   declines too (`rematch_declined`). After a duel ends, `DuelScreen.applyRow` only reads these fields and never
   replays `last_event`.
 - `src/game/`: PixiJS client. `main.ts` boots the app and swaps full screens (`screens/`: `MenuScreen` for
-  picking a level, `GameScreen` for a battle, `LobbyScreen` and `DuelScreen` for online duels); a screen has `layout`, and optionally `update` (per frame)
+  picking a level, `GameScreen` for a battle, `LobbyScreen` and `DuelScreen` for online duels, `AccountScreen` for
+  the nickname and the account); a screen has `layout`, and optionally `update` (per frame)
   and `handleKey`. `ui/` are reusable views (`Button`, `Modal`, board, arena…), `fx/` holds short-lived effects
   (orbs, particles, floating text, shake) and `killTweens`, `theme.ts` holds colours and fonts (see Look below),
   `difficulty.ts` the Polish difficulty names and the remembered last choice (localStorage),
   `enemies.ts` which design each enemy uses (by enemy id),
   `net/online.ts` the Supabase client (sign-in, the profile, calls to the `duel` function, `watchDuel` for live
-  updates, `serverNow()` for the turn clock), `net/config.ts` the project URL and publishable key (public).
+  updates, `serverNow()` for the turn clock), `net/config.ts` the project URL and publishable key (public),
+  `net/account.ts` and `net/cloudSave.ts` accounts and the cloud save (see Accounts below), `net/nickname.ts`
+  made-up nicknames and the rules for typed ones.
   `BoardView` only shows results (`reveal`, `reject`, `sync`, which can also take digits back); `GameScreen`
   judges solo moves with core.
   `DuelScreen` is optimistic: `net/duelSync.ts` (pure, tested) solves the shared board locally (it has one
@@ -124,7 +131,7 @@ code and comments are English.
     the first screen, because Pixi measures text when it is created. Fredoka was tried and lacks ą, ę, ż.
   - `ui/Button`: chunky casual-game buttons, a coloured face on a darker lip that it sinks into when pressed;
     variants `primary` (gold, the main action), `secondary` (violet), `accent` (blue, online); a square button
-    is round; `icon` (`pause`, `back`, `gear`, `palette`) draws a vector icon instead of the text (no emoji).
+    is round; `icon` (`pause`, `back`, `gear`, `palette`, `user`) draws a vector icon instead of the text (no emoji).
   - `ui/Scene`: a rounded window onto a sky gradient, a soft light and two rows of hills, one look per dragon
     (morning for the young one, sunset for the red, moonlit night for the ancient) plus a twilight for duels.
     `groundY()` is where dragons stand; `DragonView.footOffset()` puts a dragon's shadow on it.
@@ -162,8 +169,26 @@ code and comments are English.
   the looked-at item big (a fixed half-solved board and the pad in the theme's colours, or the dragon over the
   duel scene, which attacks when tapped), a row of swatches (tap, swipe the preview, arrow keys; Tab switches
   shelf), and one button that buys (stars run down, sparks, `feedback.purchase()`) or puts on an owned item.
-- Player progress (`src/game/progress/`), kept on the device only (localStorage, per dev `?profile`; the anonymous
-  online account is per device too, so nothing is lost that the account would keep):
+- Accounts (`net/account.ts`, `screens/AccountScreen`, the person button in the menu): everyone starts as a guest,
+  an anonymous account made at the first online duel. Registering gives that same account an e-mail
+  (`updateUser({ email })`, confirmed with the mailed code: `verifyOtp` type `email_change`, or the link, noticed
+  when the app comes back to the front) and only then the password (Supabase allows a password only on a confirmed
+  e-mail; until then it waits in memory). Logging in elsewhere switches to that account and adds the guest's
+  progress to it; "Nie pamiętam hasła" mails a code (`verifyOtp` type `recovery`), then sets the new password.
+  Logging out first syncs the cloud save (refused offline, so nothing is lost), then starts a fresh guest with
+  empty progress and a new made-up nickname. The nickname (any player, `cleanNickname`: 2–20 characters) is
+  changed on the same screen and sent with the profile. Text is typed into real HTML inputs (`ui/TextField`: Pixi
+  draws the box, an `<input>` sits on it, placed every frame by `syncInput()`), so phones show their own keyboard;
+  the page slides up when the keyboard (`visualViewport`) would cover the box being typed in.
+- Cloud save (`net/cloudSave.ts`, table `saves`: the progress as JSON and a `version`, each player only their own
+  row via RLS): the device plays from its own copy and sends it up 2 s after a save, at start and when the app
+  comes back. A write goes only over the version it read; when another device wrote in between,
+  `mergeProgress(base, local, remote)` (progress.ts, tested) joins the two from the last version both agreed on
+  (the base, stored with the account it belongs to): gains are added up, records and purchases kept, stars paid
+  twice for the same thing counted once. With no base for this account (a guest logging in) the base is empty,
+  so the guest's progress is added to the account's. `replaceProgress` (store.ts) swaps the new progress in; the
+  menu redraws.
+- Player progress (`src/game/progress/`), saved on the device (localStorage, per dev `?profile`) and in the cloud:
   - `progress.ts` is pure and tested: `Progress` (star balance, stars ever earned, per-level wins / losses / best
     stars / best time, duels played and won, flawless wins, best combo, unlocked achievements), `parseProgress`
     (saved data of any age made whole), `recordBattle` / `recordDuel` (update it and return the `Reward`).
@@ -221,8 +246,14 @@ code and comments are English.
   `screen.sync.solution`; changing one there makes the next prediction wrong, to test a rollback).
   `screen.sync.predictions` lists what the server has not confirmed yet.
 - In dev, `__game.state` is the saved progress (change it, then `__game.save()`), `__game.unlockAll()` opens every
-  level, `__game.resetProgress()` starts over, `__game.progress()` and `__game.shop()` (or
+  level, `__game.resetProgress()` starts over, `__game.progress()`, `__game.account()` and `__game.shop()` (or
   `__game.shop('dragon')`) open those screens.
+- Accounts without mail (the hourly mail limit is tiny): make a confirmed test user in SQL (`auth.users` with
+  `extensions.crypt(password, extensions.gen_salt('bf'))`, `email_confirmed_at`, empty strings in the token
+  columns, plus its `auth.identities` row) and log in with it. To try a code, fake the mail-sending request in the
+  page (patch `fetch` for `PUT /auth/v1/user` or `/auth/v1/recover`), then set the token in SQL:
+  `email_change`/`email_change_token_new` (or `recovery_token`) = hex sha224 of e-mail + code, the `*_sent_at`
+  to now(), and a matching `auth.one_time_tokens` row. Delete test users afterwards.
 - In dev, `window.__game.start(difficulty, seed?)`, `__game.menu()` and `__game.lobby()` switch screens, and `__game.screen` is the
   current screen. On a `GameScreen`: `debugFill(n)` fills all but `n` cells,
   `debugMistake()` plays a wrong digit, `battle.charge = 36` jumps the dragon's timer to 4 s before its attack.

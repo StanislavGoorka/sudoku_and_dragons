@@ -13,6 +13,8 @@ import { feedback } from './audio/feedback.ts';
 import { DIFFICULTIES, loadDifficulty, saveDifficulty } from './difficulty.ts';
 import { readSafeArea, type Insets } from './safeArea.ts';
 import type { DuelRow, Me } from './net/online.ts';
+import { startCloudSave } from './net/cloudSave.ts';
+import { AccountScreen } from './screens/AccountScreen.ts';
 import { DuelScreen } from './screens/DuelScreen.ts';
 import { GameScreen } from './screens/GameScreen.ts';
 import { LobbyScreen } from './screens/LobbyScreen.ts';
@@ -20,7 +22,7 @@ import { MenuScreen } from './screens/MenuScreen.ts';
 import { ProgressScreen } from './screens/ProgressScreen.ts';
 import { ShopScreen } from './screens/ShopScreen.ts';
 import { emptyProgress, type CosmeticKind } from './progress/progress.ts';
-import { progress, saveProgress } from './progress/store.ts';
+import { onProgressReplaced, progress, saveProgress } from './progress/store.ts';
 import { theme } from './theme.ts';
 import { Backdrop } from './ui/Backdrop.ts';
 
@@ -109,8 +111,13 @@ async function boot(): Promise<void> {
         onOnline: () => showLobby(),
         onProgress: () => showProgress(),
         onShop: () => showShop(),
+        onAccount: () => showAccount(),
       }),
     );
+  };
+
+  const showAccount = () => {
+    show(new AccountScreen({ onBack: showMenu }));
   };
 
   const showShop = (kind?: CosmeticKind) => {
@@ -180,6 +187,12 @@ async function boot(): Promise<void> {
     });
   }
 
+  // The cloud save can bring in progress from another device; the menu shows stars and unlocked levels.
+  onProgressReplaced(() => {
+    if (screen instanceof MenuScreen) showMenu();
+  });
+  startCloudSave();
+
   if (import.meta.env.DEV) {
     Object.assign(window, {
       __game: {
@@ -191,6 +204,7 @@ async function boot(): Promise<void> {
         lobby: () => showLobby(),
         progress: () => showProgress(),
         shop: (kind?: CosmeticKind) => showShop(kind),
+        account: () => showAccount(),
         feedback,
         /** The saved progress object; after changing it, call save(). */
         state: progress,

@@ -1,0 +1,9 @@
+<!--
+  Supabase → Authentication → Emails → Templates → "Change email address".
+  Sent when a guest registers (their account gets this e-mail). Subject: Twój kod do Sudoku & Dragons
+  The game asks for the code; the link also works, but opens a browser instead of the game.
+-->
+<h2>Potwierdź swój e-mail</h2>
+<p>Wpisz ten kod w grze Sudoku &amp; Dragons:</p>
+<p style="font-size: 32px; font-weight: bold; letter-spacing: 6px">{{ .Token }}</p>
+<p>Jeśli to nie Ty zakładasz konto, zignoruj tę wiadomość.</p>

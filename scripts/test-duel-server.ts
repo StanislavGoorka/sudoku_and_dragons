@@ -1,6 +1,7 @@
 // End-to-end check of the deployed `duel` Edge Function with two fresh anonymous players:
 // room by code, random matchmaking, correct and wrong moves, moving out of turn, forfeiting,
-// rematches and a turn running out (that part waits for a full turn, about 30 s).
+// rematches and a turn running out (that part waits for a full turn, about 30 s), then what players
+// may read and write straight in the database: duels, profiles and cloud saves.
 // The test players find correct digits the way a player would: by solving the board (core solver).
 // Usage: node scripts/test-duel-server.ts
 import { solve, type DuelEvent, type DuelState } from '../src/core/index.ts';
@@ -201,6 +202,26 @@ const write = await fetch(`${SUPABASE_URL}/rest/v1/duels?id=eq.${duel.id}`, {
   body: JSON.stringify({ status: 'playing' }),
 });
 check('players cannot change a duel directly', ((await write.json()) as unknown[]).length === 0);
+
+// Cloud saves: each player reads and writes only their own.
+async function writeSave(player: Player, method: 'POST' | 'PATCH', query: string, row: Record<string, unknown>) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/saves${query}`, {
+    method,
+    headers: { Authorization: `Bearer ${player.token}`, apikey: SUPABASE_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify(row),
+  });
+  return { status: res.status, rows: (await res.json()) as unknown[] };
+}
+const saved = await writeSave(a, 'POST', '', { user_id: a.id, data: { stars: 7 }, version: 1 });
+check('a player saves their progress', saved.status === 201, saved);
+check("a player cannot create someone else's save", (await writeSave(a, 'POST', '', { user_id: b.id, data: { stars: 999 }, version: 1 })).status >= 400);
+check("players cannot read someone else's save", (await select(outsider, `saves?user_id=eq.${a.id}&select=data`)).rows.length === 0);
+const overwrite = await writeSave(outsider, 'PATCH', `?user_id=eq.${a.id}`, { data: { stars: 999 }, version: 2 });
+check("players cannot overwrite someone else's save", Array.isArray(overwrite.rows) && overwrite.rows.length === 0, overwrite);
+const mine = await select(a, `saves?user_id=eq.${a.id}&select=data,version`);
+check('a save is read back unchanged', (mine.rows[0] as { data?: { stars?: number } })?.data?.stars === 7, mine);
+const stale = await writeSave(a, 'PATCH', `?user_id=eq.${a.id}&version=eq.5`, { data: { stars: 1 }, version: 6 });
+check('a write over a version that is not there changes nothing', stale.rows.length === 0, stale);
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);

@@ -22,6 +22,8 @@ export interface MenuOptions {
   /** The star counter opens the progress screen. */
   onProgress: () => void;
   onShop: () => void;
+  /** The nickname and the account (log in, register). */
+  onAccount: () => void;
 }
 
 const soundLabel = () => `Dźwięk: ${feedback.settings.sound ? 'włączony' : 'wyłączony'}`;
@@ -95,6 +97,7 @@ export class MenuScreen extends Container {
   private readonly playButton: Button;
   private readonly onlineButton: Button;
   private readonly settingsButton: Button;
+  private readonly accountButton: Button;
   /** Opens the shop (board themes, dragon skins); a gold dot on it when the stars buy something not owned yet. */
   private readonly shopButton: Button;
   private readonly shopDot = new Graphics();
@@ -129,6 +132,7 @@ export class MenuScreen extends Container {
     });
     this.settingsButton = new Button({ text: 'Ustawienia', icon: 'gear', onTap: () => this.openSettings() });
     this.shopButton = new Button({ text: 'Sklep', icon: 'palette', onTap: options.onShop });
+    this.accountButton = new Button({ text: 'Konto', icon: 'user', onTap: options.onAccount });
     this.shopDot.visible = canBuyNew(progress);
     this.shopDot.circle(40, 5, 7).fill(theme.gold).stroke({ width: 2.5, color: theme.panelLip });
     this.shopDot.eventMode = 'none';
@@ -153,6 +157,7 @@ export class MenuScreen extends Container {
       this.onlineButton,
       this.settingsButton,
       this.shopButton,
+      this.accountButton,
       this.starCounter,
     );
     this.showLevel(0);
@@ -173,10 +178,14 @@ export class MenuScreen extends Container {
     this.settingsButton.layout(44, 44);
     this.shopButton.position.set(width - margin - 44 - 10 - 44, 12);
     this.shopButton.layout(44, 44);
+    this.accountButton.position.set(width - margin - (44 + 10) * 2 - 44, 12);
+    this.accountButton.layout(44, 44);
     this.starCounter.layout(42);
     this.starCounter.position.set(margin, 13);
 
-    const titleTop = Math.max(18, height * 0.035);
+    // The logo sits between the star counter and the round buttons when it fits there, else under them.
+    const besideRow = Math.min(width / 2 - (margin + this.starCounter.pillWidth), this.accountButton.x - width / 2) - 8;
+    const titleTop = this.titleTop.width / 2 <= besideRow ? Math.max(18, height * 0.035) : 12 + 44 + 4;
     this.titleTop.position.set(width / 2, titleTop);
     this.titleBottom.position.set(width / 2, titleTop + this.titleTop.height * 0.78);
 

@@ -76,8 +76,10 @@ export function parseProgress(data: unknown): Progress {
   progress.duels = { played: count(saved.duels?.played), won: count(saved.duels?.won) };
   progress.flawlessWins = count(saved.flawlessWins);
   progress.bestCombo = count(saved.bestCombo);
-  for (const [id, at] of Object.entries(saved.achievements ?? {})) {
-    if (ACHIEVEMENTS.some((achievement) => achievement.id === id)) progress.achievements[id] = count(at);
+  // In the order of ACHIEVEMENTS, like the lists of bought items, so equal progress saves as equal JSON.
+  const unlocked: Record<string, unknown> = saved.achievements ?? {};
+  for (const { id } of ACHIEVEMENTS) {
+    if (unlocked[id] !== undefined) progress.achievements[id] = count(unlocked[id]);
   }
   for (const kind of COSMETIC_KINDS) {
     const { owned, chosen } = SLOTS[kind];
@@ -295,4 +297,65 @@ export function chosenTheme(progress: Progress): BoardTheme {
 /** The skin of your dragon in duels. */
 export function chosenSkin(progress: Progress): DragonSkin {
   return dragonSkin(progress.dragonSkin);
+}
+
+/**
+ * Joins two copies of the progress that both grew from `base`: this device's (`local`) and the
+ * one saved in the cloud by another device (`remote`). What each copy gained since `base` is
+ * added up (wins, stars, duels), the best records and everything bought or unlocked are kept, and
+ * the look in use is this device's if it changed it. Stars paid twice (the same theme bought, the
+ * same achievement unlocked on both) are counted once. With an empty `base`, it adds a guest's
+ * progress to an account's.
+ */
+export function mergeProgress(base: Progress, local: Progress, remote: Progress): Progress {
+  const sum = (b: number, l: number, r: number) => Math.max(0, l + r - b);
+  const merged = emptyProgress();
+  let stars = sum(base.stars, local.stars, remote.stars);
+  let earned = sum(base.starsEarned, local.starsEarned, remote.starsEarned);
+  for (const difficulty of LEVELS) {
+    const [b, l, r] = [base, local, remote].map((p) => p.levels[difficulty]);
+    const times = [l.bestTime, r.bestTime].filter((t): t is number => t !== null);
+    merged.levels[difficulty] = {
+      wins: sum(b.wins, l.wins, r.wins),
+      losses: sum(b.losses, l.losses, r.losses),
+      bestStars: Math.max(l.bestStars, r.bestStars),
+      bestTime: times.length ? Math.min(...times) : null,
+    };
+  }
+  merged.duels = {
+    played: sum(base.duels.played, local.duels.played, remote.duels.played),
+    won: sum(base.duels.won, local.duels.won, remote.duels.won),
+  };
+  merged.flawlessWins = sum(base.flawlessWins, local.flawlessWins, remote.flawlessWins);
+  merged.bestCombo = Math.max(local.bestCombo, remote.bestCombo);
+  for (const achievement of ACHIEVEMENTS) {
+    const { id } = achievement;
+    const times = [local.achievements[id], remote.achievements[id]].filter((t): t is number => t !== undefined);
+    if (times.length === 0) continue;
+    merged.achievements[id] = Math.min(...times);
+    // Unlocked on both sides since base: its reward was paid twice.
+    if (times.length === 2 && base.achievements[id] === undefined) {
+      stars -= achievement.reward;
+      earned -= achievement.reward;
+    }
+  }
+  for (const kind of COSMETIC_KINDS) {
+    const { owned, chosen } = SLOTS[kind];
+    for (const item of COSMETICS[kind]) {
+      const inLocal = local[owned].includes(item.id);
+      const inRemote = remote[owned].includes(item.id);
+      if (inLocal || inRemote) merged[owned].push(item.id);
+      // Bought on both sides since base: paid for twice.
+      if (inLocal && inRemote && !base[owned].includes(item.id)) stars += item.price;
+    }
+    merged[chosen] = local[chosen] !== base[chosen] ? local[chosen] : remote[chosen];
+  }
+  merged.stars = Math.max(0, stars);
+  merged.starsEarned = Math.max(0, earned);
+  return parseProgress(merged);
+}
+
+/** The same progress, whatever order things were bought or unlocked in. */
+export function sameProgress(a: Progress, b: Progress): boolean {
+  return JSON.stringify(parseProgress(a)) === JSON.stringify(parseProgress(b));
 }

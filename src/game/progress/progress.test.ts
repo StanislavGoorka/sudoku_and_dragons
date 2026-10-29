@@ -11,11 +11,14 @@ import {
   DUEL_WIN_STARS,
   emptyProgress,
   isUnlocked,
+  mergeProgress,
   owns,
   parseProgress,
   recordBattle,
   recordDuel,
+  sameProgress,
   type BattleResult,
+  type Progress,
 } from './progress.ts';
 
 const win = (overrides: Partial<BattleResult> = {}): BattleResult => ({
@@ -220,5 +223,106 @@ describe('saved data', () => {
     expect(parseProgress({ dragonSkin: 'magma' }).dragonSkin).toBe(DEFAULT_DRAGON_SKIN);
     // Saves from before skins existed.
     expect(parseProgress({ stars: 3 })).toMatchObject({ dragonSkins: [], dragonSkin: DEFAULT_DRAGON_SKIN });
+  });
+});
+
+describe('merging two copies', () => {
+  const copy = (p: Progress) => parseProgress(JSON.parse(JSON.stringify(p)));
+  const rich = () => {
+    const p = emptyProgress();
+    p.stars = p.starsEarned = 100;
+    return p;
+  };
+
+  it('adds up what each side gained since the base', () => {
+    const base = rich();
+    recordBattle(base, win());
+    const local = copy(base);
+    const remote = copy(base);
+    recordBattle(local, win({ seconds: 400 }));
+    recordBattle(remote, win({ difficulty: 'medium', won: false }));
+    recordDuel(remote, true);
+    const merged = mergeProgress(base, local, remote);
+    expect(merged.levels.easy).toMatchObject({ wins: 2, bestTime: 400 });
+    expect(merged.levels.medium).toMatchObject({ wins: 0, losses: 1 });
+    expect(merged.duels).toEqual({ played: 1, won: 1 });
+    expect(merged.stars).toBe(local.stars + remote.stars - base.stars);
+    expect(merged.starsEarned).toBe(local.starsEarned + remote.starsEarned - base.starsEarned);
+  });
+
+  it('with nothing changed on one side, it is the other side', () => {
+    const base = rich();
+    const local = copy(base);
+    recordBattle(local, win({ mistakes: 0 }));
+    buy(local, 'board', boardTheme('ocean'));
+    expect(sameProgress(mergeProgress(base, local, copy(base)), local)).toBe(true);
+    expect(sameProgress(mergeProgress(base, copy(base), local), local)).toBe(true);
+  });
+
+  it('adds a guest to an account when the base is empty', () => {
+    const guest = emptyProgress();
+    recordBattle(guest, win());
+    const account = rich();
+    buy(account, 'dragon', dragonSkin('king'));
+    const merged = mergeProgress(emptyProgress(), guest, account);
+    expect(merged.levels.easy.wins).toBe(1);
+    expect(merged.stars).toBe(guest.stars + account.stars);
+    expect(merged.dragonSkins).toEqual(['king']);
+    // The guest never picked a skin, so the account's stays on.
+    expect(merged.dragonSkin).toBe('king');
+  });
+
+  it('counts a theme bought or an achievement unlocked on both sides once', () => {
+    const base = rich();
+    const local = copy(base);
+    const remote = copy(base);
+    for (const p of [local, remote]) {
+      buy(p, 'board', boardTheme('ocean'));
+      recordBattle(p, win());
+    }
+    const merged = mergeProgress(base, local, remote);
+    expect(merged.boardThemes).toEqual(['ocean']);
+    // Two battles' worth of stars, one ocean bought, each achievement paid once.
+    const battle = recordBattle(emptyProgress(), win()).stars;
+    const achievements = ACHIEVEMENTS.filter((a) => merged.achievements[a.id] !== undefined).reduce((sum, a) => sum + a.reward, 0);
+    expect(merged.stars).toBe(100 + battle * 2 - boardTheme('ocean').price + achievements);
+  });
+
+  it('keeps the look this device chose, else the other one', () => {
+    const base = rich();
+    buy(base, 'board', boardTheme('ocean'));
+    buy(base, 'board', boardTheme('meadow'));
+    const local = copy(base);
+    const remote = copy(base);
+    choose(remote, 'board', boardTheme('ocean'));
+    expect(mergeProgress(base, local, remote).boardTheme).toBe('ocean');
+    choose(local, 'board', boardTheme(DEFAULT_BOARD_THEME));
+    expect(mergeProgress(base, local, remote).boardTheme).toBe(DEFAULT_BOARD_THEME);
+  });
+
+  it('never goes below zero stars', () => {
+    const base = rich();
+    const local = copy(base);
+    const remote = copy(base);
+    buy(local, 'dragon', dragonSkin('king'));
+    buy(remote, 'board', boardTheme('treasure'));
+    expect(mergeProgress(base, local, remote).stars).toBe(0);
+  });
+});
+
+describe('comparing', () => {
+  it('ignores the order things were bought in', () => {
+    const a = emptyProgress();
+    a.stars = a.starsEarned = 200;
+    const b = parseProgress(JSON.parse(JSON.stringify(a)));
+    buy(a, 'board', boardTheme('ocean'));
+    buy(a, 'board', boardTheme('meadow'));
+    buy(b, 'board', boardTheme('meadow'));
+    buy(b, 'board', boardTheme('ocean'));
+    b.boardTheme = 'meadow';
+    a.boardTheme = 'meadow';
+    expect(sameProgress(a, b)).toBe(true);
+    b.stars++;
+    expect(sameProgress(a, b)).toBe(false);
   });
 });

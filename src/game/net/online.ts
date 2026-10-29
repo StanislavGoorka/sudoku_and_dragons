@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Difficulty, DuelEvent, DuelState, Seat } from '../../core/index.ts';
 import { profileSuffix } from '../profile.ts';
 import { progress } from '../progress/store.ts';
+import { randomNickname } from './nickname.ts';
 import { SUPABASE_KEY, SUPABASE_URL } from './config.ts';
 
 export interface DuelRow {
@@ -26,7 +27,8 @@ export interface DuelRow {
 
 export interface Me {
   id: string;
-  nickname: string;
+  /** Always the current one: the player may change it between duels. */
+  readonly nickname: string;
 }
 
 /** A failed online action; `code` is the server's error code, or 'network' / 'sign-in'. */
@@ -40,7 +42,8 @@ export class OnlineError extends Error {
 
 const suffix = profileSuffix;
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+/** The one Supabase client; account.ts and cloudSave.ts use it too. */
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { storageKey: `sudoku-dragons.auth${suffix}`, persistSession: true, autoRefreshToken: true },
 });
 
@@ -68,12 +71,6 @@ async function call<T>(action: string, payload: Record<string, unknown> = {}): P
   return data as T;
 }
 
-const TITLES = ['Rycerz', 'Mag', 'Łucznik', 'Druid', 'Paladyn', 'Bard', 'Łowca', 'Alchemik', 'Czarodziejka', 'Wojowniczka'];
-
-function randomNickname(): string {
-  return `${TITLES[Math.floor(Math.random() * TITLES.length)]} ${100 + Math.floor(Math.random() * 900)}`;
-}
-
 const NICKNAME_KEY = `sudoku-dragons.nickname${suffix}`;
 /** The profile the server has last confirmed, as JSON. */
 const SYNCED_KEY = `sudoku-dragons.profile-synced${suffix}`;
@@ -86,6 +83,13 @@ export function localNickname(): string {
     localStorage.setItem(NICKNAME_KEY, nickname);
   }
   return nickname;
+}
+
+
+/** Changes the nickname here at once and on the server in the background (rivals see it from their next duel). */
+export function setNickname(nickname: string): void {
+  localStorage.setItem(NICKNAME_KEY, nickname);
+  syncProfile();
 }
 
 /** What rivals see of a player: their nickname and the skin of their dragon (null: unknown, the default). */
@@ -149,7 +153,23 @@ async function signIn(): Promise<Me> {
     data = { session: signIn.data.session };
   }
   await pushProfile();
-  return { id: data.session!.user.id, nickname: localNickname() };
+  return {
+    id: data.session!.user.id,
+    get nickname() {
+      return localNickname();
+    },
+  };
+}
+
+/**
+ * After logging in to an account or out of one: the next connect() starts from the new session and
+ * sends its profile again. `nickname` replaces the one on this device (the account's, or a new
+ * made-up one for the next guest).
+ */
+export function switchedAccount(nickname: string): void {
+  connecting = null;
+  localStorage.setItem(NICKNAME_KEY, nickname);
+  localStorage.removeItem(SYNCED_KEY);
 }
 
 export interface Joined {
