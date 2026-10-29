@@ -4,61 +4,64 @@ import { theme } from '../theme.ts';
 import { ChargeMeter } from './ChargeMeter.ts';
 import { DragonView } from './DragonView.ts';
 import { HpBar } from './HpBar.ts';
+import { Scene, SCENES } from './Scene.ts';
 
 /**
- * The panel above the board in a duel: the rival's HP on top, the two dragons facing each other
- * with the turn countdown between them, your HP at the bottom.
+ * The fight above the board in a duel: two dragons facing each other over a twilight scene, the
+ * rival's HP across the sky, yours along the ground, and whose turn it is between the dragons.
  */
 export class DuelArena extends Container {
-  readonly timer = new ChargeMeter('s');
+  readonly timer = new ChargeMeter('');
   /** Each dragon in the colour of its player's digits: yours blue, the rival's orange. */
   private readonly myDragon = new DragonView(DESIGNS['duel-mine']);
   private readonly rivalDragon = new DragonView(DESIGNS['duel-rival']);
   private readonly myHp: HpBar;
   private readonly rivalHp: HpBar;
+  private readonly scene = new Scene(SCENES.duel);
+  /** A gold pill on your turn, a dark one on the rival's. */
+  private readonly turnPill = new Graphics();
   private readonly turnText = new Text({
     text: '',
-    style: { fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 14, fill: theme.text, align: 'center' },
+    style: { fontFamily: theme.fontFamily, fontWeight: '800', fontSize: 15, fill: theme.text, align: 'center', lineHeight: 17 },
   });
-  private readonly bg = new Graphics();
+  private mine = false;
 
   constructor(myName: string, rivalName: string, maxHp: number) {
     super();
     this.myHp = new HpBar(`Ty · ${myName}`, maxHp, theme.playerHp);
     this.rivalHp = new HpBar(rivalName, maxHp, theme.enemyHp);
-    this.turnText.anchor.set(0.5, 1);
+    this.turnText.anchor.set(0.5, 0.5);
     // Dragons face left: mirror yours so the two face each other.
     this.myDragon.scale.x = -1;
-    this.addChild(this.bg, this.myDragon, this.rivalDragon, this.timer, this.turnText, this.rivalHp, this.myHp);
+    this.addChild(this.scene, this.myDragon, this.rivalDragon, this.turnPill, this.turnText, this.timer, this.rivalHp, this.myHp);
   }
 
-  layout(width: number, height: number): void {
-    const pad = 14;
-    this.bg
-      .clear()
-      .roundRect(0, 0, width, height, 14)
-      .fill(theme.arena)
-      .stroke({ width: 1, color: theme.lineThin });
-
-    this.rivalHp.position.set(pad, pad);
-    this.rivalHp.layout(width - pad * 2);
+  /** `corner` keeps the top-left corner free (for the screen's pause or leave button). */
+  layout(width: number, height: number, corner = 0): void {
+    const pad = 10;
+    this.scene.layout(width, height);
+    this.rivalHp.position.set(pad + corner, pad);
+    this.rivalHp.layout(width - pad * 2 - corner);
     this.myHp.position.set(pad, height - pad - HpBar.HEIGHT);
     this.myHp.layout(width - pad * 2);
 
     const top = pad + HpBar.HEIGHT + 4;
-    const bottom = height - pad - HpBar.HEIGHT - 4;
-    const middle = (top + bottom) / 2;
-    // As big as fits beside the turn text in the middle.
-    const dragonSize = Math.max(32, Math.min(width * 0.32, bottom - top));
-    this.myDragon.position.set(width * 0.17, middle);
-    this.myDragon.layout(dragonSize);
-    this.rivalDragon.position.set(width * 0.83, middle);
-    this.rivalDragon.layout(dragonSize);
+    const ground = this.scene.groundY() + 4;
+    // As big as fits beside the turn pill in the middle.
+    const dragonSize = Math.max(32, Math.min(width * 0.32, (ground - top) * 1.05));
+    for (const [dragon, x] of [
+      [this.myDragon, width * 0.18],
+      [this.rivalDragon, width * 0.82],
+    ] as const) {
+      dragon.layout(dragonSize);
+      dragon.position.set(x, ground - dragon.footOffset());
+    }
 
-    const radius = Math.max(12, Math.min(22, (bottom - top - 40) / 2));
-    this.timer.position.set(width / 2, middle + 6);
+    const radius = Math.max(12, Math.min(22, (ground - top) * 0.15));
+    this.turnText.position.set(width / 2, top + 26);
+    this.timer.position.set(width / 2, this.turnText.y + 26 + radius + 10);
     this.timer.layout(radius);
-    this.turnText.position.set(width / 2, middle + 6 - radius - 6);
+    this.drawPill();
   }
 
   setRivalName(name: string): void {
@@ -67,6 +70,7 @@ export class DuelArena extends Container {
 
   /** Whose turn it is and, on yours, how many digits are left (dots). */
   showTurn(mine: boolean, movesLeft: number, finished: boolean): void {
+    this.mine = mine && !finished;
     if (finished) {
       this.turnText.text = 'Koniec';
     } else if (mine) {
@@ -74,8 +78,9 @@ export class DuelArena extends Container {
     } else {
       this.turnText.text = 'Tura rywala';
     }
-    this.turnText.style.fill = mine && !finished ? theme.flash : theme.textMuted;
+    this.turnText.style.fill = this.mine ? theme.buttonPrimaryText : theme.text;
     this.timer.visible = !finished;
+    this.drawPill();
   }
 
   hpBar(mine: boolean): HpBar {
@@ -90,5 +95,15 @@ export class DuelArena extends Container {
   dragonPoint(mine: boolean): PointData {
     const dragon = this.dragon(mine);
     return { x: dragon.x, y: dragon.y };
+  }
+
+  private drawPill(): void {
+    const w = Math.max(this.turnText.width + 26, 96);
+    const h = this.turnText.height + 10;
+    const { x, y } = this.turnText.position;
+    this.turnPill
+      .clear()
+      .roundRect(x - w / 2, y - h / 2, w, h, h / 2)
+      .fill(this.mine ? { color: theme.gold } : { color: theme.hpTrack, alpha: 0.7 });
   }
 }

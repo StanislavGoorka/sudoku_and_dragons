@@ -10,7 +10,7 @@ class CellView extends Container {
   readonly bg = new Graphics();
   /** White overlay tinted per effect (gold for completed units, red for mistakes). */
   readonly flash = new Graphics();
-  readonly digit = new Text({ text: '', style: { fontFamily: theme.fontFamily, fontWeight: '600' } });
+  readonly digit = new Text({ text: '', style: { fontFamily: theme.fontFamily, fontWeight: '700' } });
   homeX = 0;
   homeY = 0;
 
@@ -33,11 +33,15 @@ function distance(a: number, b: number): number {
  * against the solution, or on the server in a duel) and then tells the board what happened.
  */
 export class BoardView extends Container {
+  /** Width of the tray around the cells; screens leave this much room around the board (plus 5 below for its lip). */
+  static readonly BORDER = 6;
   /** What the board shows: givens plus revealed digits. */
   readonly board: Grid;
   selected: number | null = null;
 
   private readonly cells: CellView[] = [];
+  /** The violet tray the board sits in, with a darker lip below. */
+  private readonly tray = new Graphics();
   private readonly lines = new Graphics();
   private readonly ghosts = new Set<Text>();
   private cellSize = 0;
@@ -45,6 +49,8 @@ export class BoardView extends Container {
   constructor(givens: Grid) {
     super();
     this.board = [...givens];
+    this.tray.eventMode = 'none';
+    this.addChild(this.tray);
 
     for (let cell = 0; cell < CELL_COUNT; cell++) {
       const view = new CellView();
@@ -73,8 +79,9 @@ export class BoardView extends Container {
       view.hitArea = new Rectangle(0, 0, s, s);
       view.bg.clear().rect(0, 0, s, s).fill(0xffffff);
       view.flash.clear().rect(0, 0, s, s).fill(0xffffff);
-      view.digit.position.set(s / 2, s / 2);
-      view.digit.style.fontSize = Math.round(s * 0.58);
+      // Baloo sits a little high in its line box.
+      view.digit.position.set(s / 2, s / 2 + s * 0.04);
+      view.digit.style.fontSize = Math.round(s * 0.62);
     });
     this.drawLines(size);
     this.refresh();
@@ -170,17 +177,23 @@ export class BoardView extends Container {
 
   private drawLines(size: number): void {
     const s = size / 9;
+    const border = BoardView.BORDER;
+    this.tray
+      .clear()
+      .roundRect(-border, -border + 5, size + border * 2, size + border * 2, 16)
+      .fill(theme.boardFrameLip)
+      .roundRect(-border, -border, size + border * 2, size + border * 2, 16)
+      .fill(theme.boardFrame);
     const g = this.lines.clear();
     for (let k = 1; k < 9; k++) {
       if (k % 3 === 0) continue;
       g.moveTo(k * s, 0).lineTo(k * s, size).moveTo(0, k * s).lineTo(size, k * s);
     }
-    g.stroke({ width: 1, color: theme.lineThin });
+    g.stroke({ width: 1.5, color: theme.lineThin });
     for (const k of [3, 6]) {
       g.moveTo(k * s, 0).lineTo(k * s, size).moveTo(0, k * s).lineTo(size, k * s);
     }
-    g.stroke({ width: 3, color: theme.boardFrame });
-    g.roundRect(-2, -2, size + 4, size + 4, 6).stroke({ width: 4, color: theme.boardFrame });
+    g.stroke({ width: 3, color: theme.boxLine });
   }
 
   private animateCorrect(cell: number): void {

@@ -3,61 +3,77 @@ import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.
 import { feedback } from '../audio/feedback.ts';
 import { theme } from '../theme.ts';
 
-export type ButtonVariant = 'primary' | 'secondary';
+/** Gold for the main action, violet for the rest, blue for online play. */
+export type ButtonVariant = 'primary' | 'secondary' | 'accent';
+
+/** Icons drawn as shapes (no emoji, so they look the same on every phone). */
+export type ButtonIcon = 'pause' | 'back' | 'gear';
 
 export interface ButtonOptions {
   text: string;
+  /** Shown instead of the text. */
+  icon?: ButtonIcon;
   /** Optional second, smaller line. */
   subtitle?: string;
   variant?: ButtonVariant;
   onTap: () => void;
 }
 
+const COLORS: Record<ButtonVariant, { face: number; lip: number; text: number; subtitle: number }> = {
+  primary: { face: theme.buttonPrimary, lip: theme.buttonPrimaryLip, text: theme.buttonPrimaryText, subtitle: theme.buttonPrimaryText },
+  secondary: { face: theme.buttonSecondary, lip: theme.buttonSecondaryLip, text: theme.text, subtitle: theme.textMuted },
+  accent: { face: theme.buttonAccent, lip: theme.buttonAccentLip, text: theme.text, subtitle: 0xdff3ff },
+};
+
 /**
- * Rounded button positioned by its top-left corner like any container.
- * The visible `face` is pivoted in the middle so the press animation shrinks it in place.
+ * A chunky game button positioned by its top-left corner: a coloured face standing on a darker lip.
+ * Pressing pushes the face down onto the lip. A square button (width = height) is drawn round.
  */
 export class Button extends Container {
+  private readonly lip = new Graphics();
   private readonly face = new Container();
-  private readonly bg = new Graphics();
+  private readonly faceBg = new Graphics();
   private readonly title: Text;
   private readonly subtitle: Text | null;
-  private readonly variant: ButtonVariant;
+  private readonly icon: Graphics | null;
+  private readonly iconName: ButtonIcon | undefined;
+  private readonly colors: (typeof COLORS)[ButtonVariant];
   private buttonWidth = 0;
   private buttonHeight = 0;
+  private lipHeight = 0;
   private highlighted = false;
   private enabled = true;
 
   constructor(options: ButtonOptions) {
     super();
-    this.variant = options.variant ?? 'secondary';
-    const primary = this.variant === 'primary';
+    this.colors = COLORS[options.variant ?? 'secondary'];
     this.title = new Text({
       text: options.text,
-      style: {
-        fontFamily: theme.fontFamily,
-        fontWeight: '700',
-        fill: primary ? theme.buttonPrimaryText : theme.text,
-      },
+      style: { fontFamily: theme.fontFamily, fontWeight: '800', fill: this.colors.text },
     });
     this.title.anchor.set(0.5);
     this.subtitle = options.subtitle
       ? new Text({
           text: options.subtitle,
-          style: { fontFamily: theme.fontFamily, fill: primary ? theme.buttonPrimaryText : theme.textMuted },
+          style: { fontFamily: theme.fontFamily, fontWeight: '500', fill: this.colors.subtitle },
         })
       : null;
     this.subtitle?.anchor.set(0.5);
+    if (this.subtitle) this.subtitle.alpha = 0.85;
 
-    this.face.addChild(this.bg, this.title);
+    this.iconName = options.icon;
+    this.icon = options.icon ? new Graphics() : null;
+    this.title.visible = !this.icon;
+    this.face.addChild(this.faceBg, this.title);
     if (this.subtitle) this.face.addChild(this.subtitle);
-    this.addChild(this.face);
+    if (this.icon) this.face.addChild(this.icon);
+    this.addChild(this.lip, this.face);
 
     this.eventMode = 'static';
     this.cursor = 'pointer';
-    this.on('pointerdown', () => this.press(0.95));
-    this.on('pointerup', () => this.press(1));
-    this.on('pointerupoutside', () => this.press(1));
+    this.on('pointerdown', () => this.press(true));
+    this.on('pointerup', () => this.press(false));
+    this.on('pointerupoutside', () => this.press(false));
     this.on('pointertap', () => {
       if (!this.enabled) return;
       feedback.tap();
@@ -68,18 +84,19 @@ export class Button extends Container {
   layout(width: number, height: number): void {
     this.buttonWidth = width;
     this.buttonHeight = height;
+    this.lipHeight = Math.max(3, Math.round(Math.min(6, height * 0.1)));
     this.hitArea = new Rectangle(0, 0, width, height);
-    this.face.pivot.set(width / 2, height / 2);
-    this.face.position.set(width / 2, height / 2);
+    const faceHeight = height - this.lipHeight;
 
+    // Baloo sits a little high in its line box, so text is nudged down.
     if (this.subtitle) {
-      this.title.style.fontSize = Math.round(Math.min(22, height * 0.3));
-      this.subtitle.style.fontSize = Math.round(Math.min(15, height * 0.21));
-      this.title.position.set(width / 2, height * 0.37);
-      this.subtitle.position.set(width / 2, height * 0.7);
+      this.title.style.fontSize = Math.round(Math.min(24, faceHeight * 0.36));
+      this.subtitle.style.fontSize = Math.round(Math.min(15, faceHeight * 0.24));
+      this.title.position.set(width / 2, faceHeight * 0.38);
+      this.subtitle.position.set(width / 2, faceHeight * 0.72);
     } else {
-      this.title.style.fontSize = Math.round(Math.min(20, height * 0.38));
-      this.title.position.set(width / 2, height / 2);
+      this.title.style.fontSize = Math.round(Math.min(30, faceHeight * 0.46));
+      this.title.position.set(width / 2, faceHeight / 2 + faceHeight * 0.04);
     }
     this.draw();
   }
@@ -91,33 +108,69 @@ export class Button extends Container {
   /** A disabled button is dimmed and ignores taps. */
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    this.face.alpha = enabled ? 1 : 0.45;
+    this.alpha = enabled ? 1 : 0.45;
     this.cursor = enabled ? 'pointer' : 'default';
   }
 
-  /** A gold outline, e.g. for the option chosen last time. */
+  /** A white ring, e.g. for the option that is on. */
   setHighlighted(highlighted: boolean): void {
     this.highlighted = highlighted;
     this.draw();
   }
 
   override destroy(options?: DestroyOptions): void {
-    gsap.killTweensOf(this.face.scale);
+    gsap.killTweensOf(this.face);
     super.destroy(options);
   }
 
   private draw(): void {
-    const fill = this.variant === 'primary' ? theme.buttonPrimary : theme.buttonSecondary;
-    this.bg
+    const w = this.buttonWidth;
+    const h = this.buttonHeight - this.lipHeight;
+    const round = Math.abs(w - this.buttonHeight) < 1;
+    const radius = round ? h / 2 : Math.min(18, h * 0.32);
+    this.lip.clear().roundRect(0, this.lipHeight, w, h, radius).fill(this.colors.lip);
+    this.faceBg
       .clear()
-      .roundRect(0, 0, this.buttonWidth, this.buttonHeight, 14)
-      .fill(fill)
-      .stroke(
-        this.highlighted ? { width: 3, color: theme.boardFrame } : { width: 1, color: theme.lineThin, alpha: 0.6 },
-      );
+      .roundRect(0, 0, w, h, radius)
+      .fill(this.colors.face)
+      // A soft shine across the top half.
+      .roundRect(3, 2, w - 6, h * 0.46, Math.max(2, radius - 3))
+      .fill({ color: 0xffffff, alpha: 0.16 });
+    if (this.highlighted) this.faceBg.roundRect(0, 0, w, h, radius).stroke({ width: 3, color: 0xffffff });
+    if (this.icon) this.drawIcon(this.icon, w / 2, h / 2, h * 0.24);
   }
 
-  private press(scale: number): void {
-    gsap.to(this.face.scale, { x: scale, y: scale, duration: scale < 1 ? 0.08 : 0.3, ease: 'back.out(3)' });
+  private drawIcon(g: Graphics, cx: number, cy: number, r: number): void {
+    const color = this.colors.text;
+    g.clear();
+    switch (this.iconName) {
+      case 'pause':
+        g.roundRect(cx - r * 0.8, cy - r, r * 0.55, r * 2, r * 0.2).fill(color);
+        g.roundRect(cx + r * 0.25, cy - r, r * 0.55, r * 2, r * 0.2).fill(color);
+        break;
+      case 'back':
+        g.moveTo(cx + r * 0.35, cy - r * 0.9)
+          .lineTo(cx - r * 0.55, cy)
+          .lineTo(cx + r * 0.35, cy + r * 0.9)
+          .stroke({ width: r * 0.5, color, cap: 'round', join: 'round' });
+        break;
+      case 'gear': {
+        const teeth = 8;
+        for (let i = 0; i < teeth; i++) {
+          const angle = (i / teeth) * Math.PI * 2;
+          g.moveTo(cx + Math.cos(angle) * r * 0.6, cy + Math.sin(angle) * r * 0.6)
+            .lineTo(cx + Math.cos(angle) * r * 1.15, cy + Math.sin(angle) * r * 1.15)
+            .stroke({ width: r * 0.42, color, cap: 'round' });
+        }
+        g.circle(cx, cy, r * 0.78).fill(color);
+        g.circle(cx, cy, r * 0.32).fill(this.colors.face);
+        break;
+      }
+    }
+  }
+
+  private press(down: boolean): void {
+    if (!this.enabled) return;
+    gsap.to(this.face, { y: down ? this.lipHeight * 0.7 : 0, duration: down ? 0.05 : 0.15, ease: 'power2.out' });
   }
 }

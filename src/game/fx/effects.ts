@@ -112,7 +112,7 @@ export function floatText(
       fontWeight: '800',
       fontSize: style.fontSize,
       fill: style.color,
-      stroke: { color: 0x000000, width: 4 },
+      stroke: { color: theme.panelLip, width: 5, join: 'round' },
     },
   });
   label.anchor.set(0.5);

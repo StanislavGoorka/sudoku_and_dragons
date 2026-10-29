@@ -12,7 +12,9 @@ export interface ModalAction {
 }
 
 const PADDING = 24;
-const BUTTON_HEIGHT = 52;
+const BUTTON_HEIGHT = 56;
+/** The panel's darker lip below it. */
+const LIP = 7;
 const BUTTON_GAP = 10;
 
 /** A dimmed full-screen layer with a panel: title, message and stacked buttons. Blocks input below it. */
@@ -26,15 +28,18 @@ export class Modal extends Container {
   private screenWidth = 0;
   private screenHeight = 0;
 
-  constructor(title: string, message: string, actions: ModalAction[]) {
+  /** `titleColor`: gold for a win, for example. */
+  constructor(title: string, message: string, actions: ModalAction[], titleColor: number = theme.text) {
     super();
     this.title = new Text({
       text: title,
       style: {
         fontFamily: theme.fontFamily,
         fontWeight: '800',
-        fontSize: 26,
-        fill: theme.text,
+        fontSize: 30,
+        lineHeight: 34,
+        fill: titleColor,
+        stroke: { color: theme.panelLip, width: 4, join: 'round' },
         align: 'center',
         wordWrap: true,
       },
@@ -43,7 +48,8 @@ export class Modal extends Container {
       text: message,
       style: {
         fontFamily: theme.fontFamily,
-        fontSize: 16,
+        fontWeight: '500',
+        fontSize: 17,
         lineHeight: 22,
         fill: theme.textMuted,
         align: 'center',
@@ -65,7 +71,7 @@ export class Modal extends Container {
     this.shade
       .clear()
       .rect(-OVERSCAN, -OVERSCAN, screenWidth + OVERSCAN * 2, screenHeight + OVERSCAN * 2)
-      .fill({ color: 0x000000, alpha: 0.65 });
+      .fill({ color: theme.background, alpha: 0.75 });
 
     const width = Math.min(screenWidth - 32, 360);
     const inner = width - PADDING * 2;
@@ -86,9 +92,11 @@ export class Modal extends Container {
 
     this.panel
       .clear()
-      .roundRect(0, 0, width, height, 18)
+      .roundRect(0, LIP, width, height, 24)
+      .fill(theme.panelLip)
+      .roundRect(0, 0, width, height, 24)
       .fill(theme.panel)
-      .stroke({ width: 2, color: theme.boardFrame, alpha: 0.7 });
+      .stroke({ width: 3, color: theme.panelLight });
     this.box.pivot.set(width / 2, height / 2);
     this.box.position.set(screenWidth / 2, screenHeight / 2);
   }

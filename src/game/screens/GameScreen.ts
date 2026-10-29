@@ -1,5 +1,5 @@
 import gsap from 'gsap';
-import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
+import { Container, Graphics, type DestroyOptions } from 'pixi.js';
 import {
   advanceTime,
   applyMove,
@@ -14,7 +14,6 @@ import {
   type Unit,
 } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
-import { DIFFICULTY_INFO } from '../difficulty.ts';
 import { burst, floatText, launchOrb, shake, stopEffects, wait } from '../fx/effects.ts';
 import { OVERSCAN } from '../safeArea.ts';
 import { theme } from '../theme.ts';
@@ -23,6 +22,7 @@ import { BoardView } from '../ui/BoardView.ts';
 import { Button } from '../ui/Button.ts';
 import { Modal } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
+import { fightLayout } from './fightLayout.ts';
 
 export interface GameScreenOptions {
   /** A new battle on the same difficulty. */
@@ -42,14 +42,6 @@ export class GameScreen extends Container {
   private readonly grid: Grid;
   private readonly options: GameScreenOptions;
 
-  private readonly title = new Text({
-    text: 'Sudoku & Dragons',
-    style: { fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 20, fill: theme.text },
-  });
-  private readonly status = new Text({
-    text: '',
-    style: { fontFamily: theme.fontFamily, fontSize: 14, fill: theme.textMuted },
-  });
   private readonly arena: BattleArena;
   private readonly board: BoardView;
   private readonly pad: NumberPad;
@@ -57,7 +49,8 @@ export class GameScreen extends Container {
   private readonly fx = new Container();
   /** Red full-screen flash when the player is hit. */
   private readonly hurtFlash = new Graphics();
-  private readonly menuButton: Button;
+  /** Round button in the scene's corner: pauses, and leads back to the menu. */
+  private readonly pauseButton: Button;
   /** The leave-battle question or the end-of-battle summary. While it is open the battle is paused. */
   private modal: Modal | null = null;
 
@@ -76,10 +69,7 @@ export class GameScreen extends Container {
     this.battle = createBattle(ENEMIES[puzzle.difficulty]);
     this.grid = [...puzzle.givens];
     this.options = options;
-    this.menuButton = new Button({ text: '‹ Menu', onTap: () => this.requestLeave() });
-
-    this.title.anchor.set(0.5, 0);
-    this.status.anchor.set(0.5, 0);
+    this.pauseButton = new Button({ text: 'Pauza', icon: 'pause', onTap: () => this.requestLeave() });
     this.arena = new BattleArena(this.battle.enemy, this.battle.playerMaxHp);
     this.board = new BoardView(puzzle.givens);
     this.pad = new NumberPad((digit) => this.handleDigit(digit));
@@ -90,50 +80,24 @@ export class GameScreen extends Container {
     this.hurtFlash.eventMode = 'none';
     this.hurtFlash.alpha = 0;
 
-    this.addChild(
-      this.arena,
-      this.title,
-      this.status,
-      this.menuButton,
-      this.board,
-      this.pad,
-      this.hurtFlash,
-      this.fx,
-    );
-    this.updateStatus();
+    this.addChild(this.arena, this.pauseButton, this.board, this.pad, this.hurtFlash, this.fx);
   }
 
   layout(width: number, height: number): void {
     this.screenWidth = width;
     this.screenHeight = height;
 
-    const margin = 16;
-    const gap = 12;
-    const headerHeight = 52;
-    const minArenaHeight = 150;
-
-    let boardSize = Math.min(width - margin * 2, 560);
-    const padHeight = Math.round(Math.min(72, Math.max(48, (boardSize / 9) * 1.3)));
-    const room = height - margin * 2 - headerHeight - minArenaHeight - padHeight - gap * 2;
-    boardSize = Math.max(180, Math.min(boardSize, room));
-
-    const left = (width - boardSize) / 2;
-    const padY = height - margin - padHeight;
-    const boardY = padY - gap - boardSize;
-    const arenaY = margin + headerHeight;
-    const arenaHeight = Math.max(0, boardY - gap - arenaY);
-
-    this.title.position.set(width / 2, margin);
-    this.status.position.set(width / 2, margin + 28);
-    this.menuButton.position.set(left, margin + 2);
-    this.menuButton.layout(64, 30);
+    const { arenaY, arenaHeight, boardY, boardSize, padY, padHeight, left, columnWidth } = fightLayout(width, height);
+    const buttonSize = 36;
+    this.pauseButton.position.set(left + 7, arenaY + 5);
+    this.pauseButton.layout(buttonSize, buttonSize);
 
     this.arena.position.set(left, arenaY);
-    this.arena.layout(boardSize, arenaHeight);
-    this.board.position.set(left, boardY);
+    this.arena.layout(columnWidth, arenaHeight, buttonSize + 4);
+    this.board.position.set((width - boardSize) / 2, boardY);
     this.board.layout(boardSize);
     this.pad.position.set(left, padY);
-    this.pad.layout(boardSize, padHeight);
+    this.pad.layout(columnWidth, padHeight);
 
     // Oversized so the flash also covers the safe-area margins around this screen.
     this.hurtFlash.clear().rect(-OVERSCAN, -OVERSCAN, width + OVERSCAN * 2, height + OVERSCAN * 2).fill(theme.error);
@@ -172,7 +136,7 @@ export class GameScreen extends Container {
   /** The app went to the background: show a pause so the dragon does not strike the moment it returns. */
   pause(): void {
     if (this.modal || this.battle.outcome !== 'ongoing') return;
-    this.openModal(new Modal('Pauza', 'Smok czeka na Twój ruch.', [
+    this.openModal(new Modal('Pauza', 'Smok czeka na Twój ruch.\nWyjście kończy tę walkę.', [
       { text: 'Wróć do walki', variant: 'primary', onTap: () => this.closeModal() },
       { text: 'Wyjdź do menu', onTap: () => this.options.onMenu() },
     ]));
@@ -224,17 +188,14 @@ export class GameScreen extends Container {
     super.destroy(options);
   }
 
-  /** Leaving mid-battle asks first (and pauses); after the battle it just goes to the menu. */
+  /** The pause button and Back pause the battle (leaving is one of the options); after the battle they go to the menu. */
   private requestLeave(): void {
     if (this.modal) return;
     if (this.battle.outcome !== 'ongoing') {
       this.options.onMenu();
       return;
     }
-    this.openModal(new Modal('Opuścić walkę?', 'Postęp tej walki przepadnie.', [
-      { text: 'Zostań', variant: 'primary', onTap: () => this.closeModal() },
-      { text: 'Wyjdź do menu', onTap: () => this.options.onMenu() },
-    ]));
+    this.pause();
   }
 
   private openModal(modal: Modal): void {
@@ -260,7 +221,6 @@ export class GameScreen extends Container {
     if (result.kind === 'wrong') {
       this.board.reject(cell, digit);
       this.mistakes++;
-      this.updateStatus();
       feedback.mistake();
     } else {
       this.board.reveal(cell, digit, result.completed);
@@ -368,11 +328,6 @@ export class GameScreen extends Container {
     feedback.countdownTick();
   }
 
-  private updateStatus(): void {
-    const level = DIFFICULTY_INFO[this.puzzle.difficulty].name.toLowerCase();
-    this.status.text = `Poziom: ${level} · Błędy: ${this.mistakes}`;
-  }
-
   /** `finalHit` is the hit that brought someone to 0 HP. */
   private async showEnd(finalHit: Hit): Promise<void> {
     if (this.endShown) return;
@@ -403,7 +358,7 @@ export class GameScreen extends Container {
       new Modal(won ? `${name} pokonany!` : `${name} cię pokonał…`, won ? stats : `${hint}\n${stats}`, [
         { text: 'Walcz ponownie', variant: 'primary', onTap: () => this.options.onRestart() },
         { text: 'Menu', onTap: () => this.options.onMenu() },
-      ]),
+      ], won ? theme.gold : theme.text),
     );
   }
 }

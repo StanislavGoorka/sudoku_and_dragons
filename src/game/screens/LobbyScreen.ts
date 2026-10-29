@@ -13,8 +13,11 @@ import {
   type Joined,
   type Me,
 } from '../net/online.ts';
+import { DESIGNS } from '../art/dragonArt.ts';
 import { theme } from '../theme.ts';
 import { Button } from '../ui/Button.ts';
+import { DragonView } from '../ui/DragonView.ts';
+import { Scene, SCENES } from '../ui/Scene.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 
 export interface LobbyOptions {
@@ -55,6 +58,8 @@ export class LobbyScreen extends Container {
   private clock = 0;
   /** Bumped by every request and every cancel: an answer that comes back to a newer attempt is let go. */
   private attempt = 0;
+  /** Round button in the top-left corner: the same as Back. */
+  private readonly backButton: Button;
   private stopWatching: (() => void) | null = null;
   private pollTimer: number | null = null;
   private screenWidth = 0;
@@ -63,7 +68,8 @@ export class LobbyScreen extends Container {
   constructor(options: LobbyOptions) {
     super();
     this.options = options;
-    this.addChild(this.content);
+    this.backButton = new Button({ text: 'Wstecz', icon: 'back', onTap: () => this.handleBack() });
+    this.addChild(this.content, this.backButton);
     this.connect();
     this.render();
   }
@@ -71,6 +77,8 @@ export class LobbyScreen extends Container {
   layout(width: number, height: number): void {
     this.screenWidth = width;
     this.screenHeight = height;
+    this.backButton.position.set(16, 12);
+    this.backButton.layout(44, 44);
     const gap = 12;
     const columnWidth = Math.min(width - 48, 380);
     const left = (width - columnWidth) / 2;
@@ -140,12 +148,15 @@ export class LobbyScreen extends Container {
   private render(): void {
     this.content.destroy({ children: true });
     this.content = new Container();
-    this.addChild(this.content);
+    // Under the back button.
+    this.addChildAt(this.content, 0);
     this.waiting = null;
     this.rows = [];
 
-    this.addText('Pojedynek online', 30, theme.text, '800');
     const view = this.view;
+    if (view.kind === 'home' || view.kind === 'searching') this.addHero();
+    const title = this.addText('Pojedynek online', 34, theme.text, '800');
+    title.style.stroke = { color: theme.panelLip, width: 6, join: 'round' };
     switch (view.kind) {
       case 'offline':
         this.addText(view.message, 16, theme.error);
@@ -153,7 +164,6 @@ export class LobbyScreen extends Container {
           this.connect();
           this.show({ kind: 'home' });
         }, { variant: 'primary' });
-        this.addButton('‹ Menu', () => this.options.onMenu());
         break;
 
       case 'home':
@@ -163,7 +173,6 @@ export class LobbyScreen extends Container {
         this.addButton('Stwórz pokój', () => this.createRoom(), { subtitle: 'zaproś znajomego kodem', height: 64 });
         this.addButton('Dołącz kodem', () => this.show({ kind: 'join', code: '' }));
         if (view.message) this.addText(view.message, 15, theme.error);
-        this.addButton('‹ Menu', () => this.options.onMenu());
         break;
 
       case 'searching':
@@ -174,7 +183,7 @@ export class LobbyScreen extends Container {
 
       case 'room':
         this.addText('Kod pokoju', 16, theme.textMuted);
-        this.addText(view.code ? view.code.split('').join(' ') : '· · · ·', 56, theme.boardFrame, '800');
+        this.addText(view.code ? view.code.split('').join(' ') : '· · · ·', 56, theme.gold, '800');
         this.addText(
           view.code ? 'Podaj go znajomemu.\nPojedynek ruszy, gdy dołączy.' : 'Tworzę pokój…\nZaraz pojawi się kod.',
           15,
@@ -186,7 +195,7 @@ export class LobbyScreen extends Container {
       case 'join': {
         this.addText('Wpisz kod pokoju', 16, theme.textMuted);
         const slots = view.code.padEnd(4, '_').split('').join(' ');
-        this.addText(slots, 52, theme.boardFrame, '800');
+        this.addText(slots, 52, theme.gold, '800');
         this.addNumberPad();
         if (view.message) this.addText(view.message, 15, theme.error);
         this.addButton('Dołącz', () => this.join(view.code), { variant: 'primary', enabled: view.code.length === 4 });
@@ -197,11 +206,38 @@ export class LobbyScreen extends Container {
 
       case 'joining':
         this.addText('Kod pokoju', 16, theme.textMuted);
-        this.addText(view.code.split('').join(' '), 52, theme.boardFrame, '800');
+        this.addText(view.code.split('').join(' '), 52, theme.gold, '800');
         this.addWaiting('Dołączam');
         this.addButton('Anuluj', () => this.cancelJoin(view.code));
         break;
     }
+  }
+
+  /** The two duel dragons facing each other over the duel scene. */
+  private addHero(): void {
+    const hero = new Container();
+    const scene = new Scene(SCENES.duel);
+    const mine = new DragonView(DESIGNS['duel-mine']);
+    const rival = new DragonView(DESIGNS['duel-rival']);
+    mine.scale.x = -1;
+    hero.addChild(scene, mine, rival);
+    this.content.addChild(hero);
+    const height = Math.round(Math.min(190, Math.max(120, this.screenHeight * 0.22)));
+    this.rows.push({
+      height,
+      place: (left, top, width) => {
+        hero.position.set(left, top);
+        scene.layout(width, height, 22);
+        const ground = scene.groundY() + 4;
+        for (const [dragon, x] of [
+          [mine, width * 0.25],
+          [rival, width * 0.75],
+        ] as const) {
+          dragon.layout(Math.min(width * 0.42, (ground - 8) * 1.05));
+          dragon.position.set(x, ground - dragon.footOffset());
+        }
+      },
+    });
   }
 
   private addText(text: string, fontSize: number, fill: number, fontWeight: '400' | '700' | '800' = '400'): Text {

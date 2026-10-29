@@ -2,15 +2,30 @@ import gsap from 'gsap';
 import { Container, Graphics, Text, type DestroyOptions, type PointData } from 'pixi.js';
 import { theme } from '../theme.ts';
 
-const TEXT_HEIGHT = 18;
-const BAR_HEIGHT = 10;
+const BAR_HEIGHT = 24;
+
+/** White label with a dark edge, readable over any fill or sky. */
+function barText(text: string, align: 'left' | 'right'): Text {
+  const label = new Text({
+    text,
+    style: {
+      fontFamily: theme.fontFamily,
+      fontWeight: '800',
+      fontSize: 14,
+      fill: theme.text,
+      stroke: { color: theme.hpTrack, width: 3, join: 'round' },
+    },
+  });
+  label.anchor.set(align === 'left' ? 0 : 1, 0.5);
+  return label;
+}
 
 /**
- * Name, HP numbers and a bar. On damage the coloured fill drops at once and a
- * pale trail follows a moment later, so the size of the hit stays readable.
+ * A thick pill with the name on the left and HP on the right, inside the bar. On damage the
+ * coloured fill drops at once and a pale trail follows a moment later, so the size of the hit stays readable.
  */
 export class HpBar extends Container {
-  static readonly HEIGHT = TEXT_HEIGHT + BAR_HEIGHT;
+  static readonly HEIGHT = BAR_HEIGHT;
 
   private readonly track = new Graphics();
   private readonly trail = new Graphics();
@@ -27,22 +42,21 @@ export class HpBar extends Container {
     super();
     this.maxHp = maxHp;
     this.color = color;
-    this.nameText = new Text({
-      text: name,
-      style: { fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 13, fill: theme.text },
-    });
-    this.valueText = new Text({
-      text: `${maxHp}/${maxHp}`,
-      style: { fontFamily: theme.fontFamily, fontWeight: '600', fontSize: 13, fill: theme.textMuted },
-    });
-    this.valueText.anchor.set(1, 0);
-    this.addChild(this.nameText, this.valueText, this.track, this.trail, this.fill);
+    this.nameText = barText(name, 'left');
+    this.valueText = barText(String(maxHp), 'right');
+    this.addChild(this.track, this.trail, this.fill, this.nameText, this.valueText);
   }
 
   layout(width: number): void {
     this.barWidth = width;
-    this.valueText.position.set(width, 0);
-    this.track.clear().roundRect(0, TEXT_HEIGHT, width, BAR_HEIGHT, BAR_HEIGHT / 2).fill(theme.hpTrack);
+    const middle = BAR_HEIGHT / 2 + 1;
+    this.nameText.position.set(12, middle);
+    this.valueText.position.set(width - 12, middle);
+    this.track
+      .clear()
+      .roundRect(0, 0, width, BAR_HEIGHT, BAR_HEIGHT / 2)
+      .fill({ color: theme.hpTrack, alpha: 0.85 })
+      .stroke({ width: 2, color: theme.hpTrack });
     this.redraw();
   }
 
@@ -52,7 +66,7 @@ export class HpBar extends Container {
 
   setHp(hp: number): void {
     const ratio = Math.max(0, hp) / this.maxHp;
-    this.valueText.text = `${hp}/${this.maxHp}`;
+    this.valueText.text = String(Math.max(0, hp));
     gsap.killTweensOf(this.shown);
     gsap.to(this.shown, { fill: ratio, duration: 0.25, ease: 'power2.out', onUpdate: () => this.redraw() });
     gsap.to(this.shown, {
@@ -66,7 +80,7 @@ export class HpBar extends Container {
 
   /** Middle of the bar, in this container's coordinates. */
   barCenter(): PointData {
-    return { x: this.barWidth / 2, y: TEXT_HEIGHT + BAR_HEIGHT / 2 };
+    return { x: this.barWidth / 2, y: BAR_HEIGHT / 2 };
   }
 
   override destroy(options?: DestroyOptions): void {
@@ -76,14 +90,20 @@ export class HpBar extends Container {
 
   private redraw(): void {
     if (this.destroyed) return;
-    this.drawSegment(this.trail, this.shown.trail, theme.hpTrail);
-    this.drawSegment(this.fill, this.shown.fill, this.color);
+    this.drawSegment(this.trail, this.shown.trail, theme.hpTrail, false);
+    this.drawSegment(this.fill, this.shown.fill, this.color, true);
   }
 
-  private drawSegment(g: Graphics, ratio: number, color: number): void {
+  private drawSegment(g: Graphics, ratio: number, color: number, shine: boolean): void {
     g.clear();
-    const width = this.barWidth * ratio;
+    const inset = 3;
+    const height = BAR_HEIGHT - inset * 2;
+    const width = (this.barWidth - inset * 2) * ratio;
     if (width < 1) return;
-    g.roundRect(0, TEXT_HEIGHT, width, BAR_HEIGHT, Math.min(BAR_HEIGHT, width) / 2).fill(color);
+    const radius = Math.min(height, width) / 2;
+    g.roundRect(inset, inset, width, height, radius).fill(color);
+    if (shine && width > 8) {
+      g.roundRect(inset + 3, inset + 2, width - 6, height * 0.35, radius / 2).fill({ color: 0xffffff, alpha: 0.3 });
+    }
   }
 }

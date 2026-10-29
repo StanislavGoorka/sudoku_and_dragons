@@ -1,3 +1,9 @@
+import '@fontsource/baloo-2/latin-500.css';
+import '@fontsource/baloo-2/latin-700.css';
+import '@fontsource/baloo-2/latin-800.css';
+import '@fontsource/baloo-2/latin-ext-500.css';
+import '@fontsource/baloo-2/latin-ext-700.css';
+import '@fontsource/baloo-2/latin-ext-800.css';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import gsap from 'gsap';
@@ -12,6 +18,7 @@ import { GameScreen } from './screens/GameScreen.ts';
 import { LobbyScreen } from './screens/LobbyScreen.ts';
 import { MenuScreen } from './screens/MenuScreen.ts';
 import { theme } from './theme.ts';
+import { Backdrop } from './ui/Backdrop.ts';
 
 /**
  * What every full screen offers to the app shell. A screen is placed inside the safe area,
@@ -35,6 +42,11 @@ async function boot(): Promise<void> {
   // No deferred (lazy) first renders: a tween killed before the next tick would otherwise still
   // render once from GSAP's lazy queue, on an object that may already be destroyed.
   gsap.defaults({ lazy: false });
+  // Pixi measures text when it is created, so the bundled font must be ready before any screen.
+  // The sample has Polish letters to pull in the latin-ext files too.
+  await Promise.all(['500', '700', '800'].map((weight) => document.fonts.load(`${weight} 20px "Baloo 2"`, 'Aąż'))).catch(
+    () => {},
+  );
 
   const app = new Application();
   await app.init({
@@ -48,8 +60,12 @@ async function boot(): Promise<void> {
 
   let screen: Screen | null = null;
   let insets: Insets = readSafeArea();
+  // Covers the whole display, safe-area margins included; screens draw on top of it.
+  const backdrop = new Backdrop();
+  app.stage.addChild(backdrop);
 
   const layoutScreen = () => {
+    backdrop.layout(app.screen.width, app.screen.height);
     if (!screen) return;
     screen.position.set(insets.left, insets.top);
     screen.layout(

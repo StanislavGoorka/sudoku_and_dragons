@@ -111,6 +111,11 @@ export class DragonView extends Container {
     }
   }
 
+  /** How far below the view's position the shadow lies: place the view this far above the ground. */
+  footOffset(): number {
+    return (PIVOTS.shadow[1] - (VIEW.y + VIEW.height / 2)) * this.art.scale.y;
+  }
+
   /** Where fire leaves the mouth, in global coordinates. */
   mouthGlobal(): PointData {
     return this.part('jaw').toGlobal({ x: PIVOTS.mouth[0], y: PIVOTS.mouth[1] });

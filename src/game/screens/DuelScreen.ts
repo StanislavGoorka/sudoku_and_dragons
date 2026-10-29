@@ -2,7 +2,6 @@ import gsap from 'gsap';
 import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
 import { DUEL_RULES, otherSeat, solve, type DuelEvent, type DuelState, type Seat, type Unit } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
-import { DIFFICULTY_INFO } from '../difficulty.ts';
 import { burst, floatText, launchOrb, shake, stopEffects, wait } from '../fx/effects.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { DuelSync, type Prediction, type Snapshot } from '../net/duelSync.ts';
@@ -25,6 +24,7 @@ import { Button } from '../ui/Button.ts';
 import { DuelArena } from '../ui/DuelArena.ts';
 import { Modal } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
+import { fightLayout } from './fightLayout.ts';
 
 export interface DuelScreenOptions {
   /** Back to the online lobby for another duel. */
@@ -71,26 +71,18 @@ export class DuelScreen extends Container {
   private readonly me: Me;
   private readonly seat: Seat;
   private readonly options: DuelScreenOptions;
-  private readonly difficultyName: string;
   private readonly sync: DuelSync;
   /** The event behind the last confirmed version. */
   private lastEvent: DuelEvent | null;
   private rivalName = 'Rywal';
 
-  private readonly title = new Text({
-    text: 'Pojedynek',
-    style: { fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 20, fill: theme.text },
-  });
-  private readonly status = new Text({
-    text: '',
-    style: { fontFamily: theme.fontFamily, fontSize: 14, fill: theme.textMuted },
-  });
   private readonly arena: DuelArena;
   private readonly board: BoardView;
   private readonly pad: NumberPad;
   private readonly fx = new Container();
   private readonly hurtFlash = new Graphics();
-  private readonly menuButton: Button;
+  /** Round button in the scene's corner: give up (asks first), or leave a finished duel. */
+  private readonly leaveButton: Button;
   private modal: Modal | null = null;
   private rematch: RematchState;
   /** We asked for a rematch and wait for the rival. */
@@ -128,7 +120,6 @@ export class DuelScreen extends Container {
     this.me = me;
     this.seat = seat;
     this.options = options;
-    this.difficultyName = DIFFICULTY_INFO[row.difficulty].name;
     // The board has one solution, so the client finds it too; it only predicts with it.
     const solution = solve(row.state.board);
     if (!solution) throw new Error(`Duel ${row.id} has an unsolvable board`);
@@ -137,9 +128,7 @@ export class DuelScreen extends Container {
     this.announcedTurn = this.sync.confirmed.turnStartedAt;
     this.rematch = { by: row.rematch_by, declined: row.rematch_declined, next: row.next_duel };
 
-    this.menuButton = new Button({ text: '‹ Menu', onTap: () => this.requestLeave() });
-    this.title.anchor.set(0.5, 0);
-    this.status.anchor.set(0.5, 0);
+    this.leaveButton = new Button({ text: 'Wyjdź', icon: 'back', onTap: () => this.requestLeave() });
     this.arena = new DuelArena(me.nickname, this.rivalName, DUEL_RULES.maxHp);
     this.arena.hpBar(true).setHp(this.state.hp[seat]);
     this.arena.hpBar(false).setHp(this.state.hp[otherSeat(seat)]);
@@ -148,7 +137,7 @@ export class DuelScreen extends Container {
     this.fx.eventMode = 'none';
     this.hurtFlash.eventMode = 'none';
     this.hurtFlash.alpha = 0;
-    this.addChild(this.arena, this.title, this.status, this.menuButton, this.board, this.pad, this.hurtFlash, this.fx);
+    this.addChild(this.arena, this.leaveButton, this.board, this.pad, this.hurtFlash, this.fx);
 
     this.stopWatching = watchDuel(this.duelId, (next) => this.applyRow(next));
     // A safety net for missed live updates: during the duel, and after it while a rematch is still possible.
@@ -162,10 +151,8 @@ export class DuelScreen extends Container {
         if (this.destroyed) return;
         this.rivalName = name;
         this.arena.setRivalName(name);
-        this.updateStatus();
       });
     }
-    this.updateStatus();
     this.updateTurn(false);
   }
 
@@ -173,31 +160,16 @@ export class DuelScreen extends Container {
     this.screenWidth = width;
     this.screenHeight = height;
 
-    const margin = 16;
-    const gap = 12;
-    const headerHeight = 52;
-    const minArenaHeight = 150;
-
-    let boardSize = Math.min(width - margin * 2, 560);
-    const padHeight = Math.round(Math.min(72, Math.max(48, (boardSize / 9) * 1.3)));
-    const room = height - margin * 2 - headerHeight - minArenaHeight - padHeight - gap * 2;
-    boardSize = Math.max(180, Math.min(boardSize, room));
-
-    const left = (width - boardSize) / 2;
-    const padY = height - margin - padHeight;
-    const boardY = padY - gap - boardSize;
-    const arenaY = margin + headerHeight;
-
-    this.title.position.set(width / 2, margin);
-    this.status.position.set(width / 2, margin + 28);
-    this.menuButton.position.set(left, margin + 2);
-    this.menuButton.layout(64, 30);
+    const { arenaY, arenaHeight, boardY, boardSize, padY, padHeight, left, columnWidth } = fightLayout(width, height);
+    const buttonSize = 36;
+    this.leaveButton.position.set(left + 7, arenaY + 5);
+    this.leaveButton.layout(buttonSize, buttonSize);
     this.arena.position.set(left, arenaY);
-    this.arena.layout(boardSize, Math.max(0, boardY - gap - arenaY));
-    this.board.position.set(left, boardY);
+    this.arena.layout(columnWidth, arenaHeight, buttonSize + 4);
+    this.board.position.set((width - boardSize) / 2, boardY);
     this.board.layout(boardSize);
     this.pad.position.set(left, padY);
-    this.pad.layout(boardSize, padHeight);
+    this.pad.layout(columnWidth, padHeight);
     this.intro?.position.copyFrom(this.toLocal(this.board.cellCenter(40), this.board));
 
     this.hurtFlash.clear().rect(-OVERSCAN, -OVERSCAN, width + OVERSCAN * 2, height + OVERSCAN * 2).fill(theme.error);
@@ -412,7 +384,7 @@ export class DuelScreen extends Container {
 
   /** Shows `state` without animation: catching up, or taking back predictions. */
   private showState(state: DuelState): void {
-    this.board.sync(state.board, theme.text);
+    this.board.sync(state.board, theme.given);
     for (let digit = 1; digit <= 9; digit++) this.pad.setDone(digit, this.board.countOf(digit) === 9);
     this.arena.hpBar(true).setHp(state.hp[this.seat]);
     this.arena.hpBar(false).setHp(state.hp[otherSeat(this.seat)]);
@@ -511,10 +483,6 @@ export class DuelScreen extends Container {
     }
   }
 
-  private updateStatus(): void {
-    this.status.text = `${this.difficultyName} · ${this.me.nickname} vs ${this.rivalName}`;
-  }
-
   /** A short message floating up from the middle of the board. */
   private toast(text: string, color: number): void {
     const at = this.fx.toLocal(this.board.cellCenter(40), this.board);
@@ -595,7 +563,7 @@ export class DuelScreen extends Container {
         { text: 'Rewanż', variant: 'primary', onTap: () => this.requestRematch() },
         { text: 'Nowy pojedynek', onTap: () => this.leaveEnd(this.options.onLobby) },
         { text: 'Menu', onTap: () => this.leaveEnd(this.options.onMenu) },
-      ]),
+      ], this.sync.confirmed.state.winner === this.seat ? theme.gold : theme.text),
     );
     this.updateRematch();
   }
@@ -687,11 +655,23 @@ export class DuelScreen extends Container {
     const intro = new Container();
     const title = new Text({
       text: 'Rewanż!',
-      style: { fontFamily: theme.fontFamily, fontWeight: '800', fontSize: 46, fill: theme.flash },
+      style: {
+        fontFamily: theme.fontFamily,
+        fontWeight: '800',
+        fontSize: 50,
+        fill: theme.gold,
+        stroke: { color: theme.panelLip, width: 7, join: 'round' },
+      },
     });
     const subtitle = new Text({
       text: 'Nowa plansza…',
-      style: { fontFamily: theme.fontFamily, fontSize: 16, fill: theme.textMuted },
+      style: {
+        fontFamily: theme.fontFamily,
+        fontWeight: '700',
+        fontSize: 18,
+        fill: theme.text,
+        stroke: { color: theme.panelLip, width: 4, join: 'round' },
+      },
     });
     title.anchor.set(0.5, 1);
     subtitle.anchor.set(0.5, 0);

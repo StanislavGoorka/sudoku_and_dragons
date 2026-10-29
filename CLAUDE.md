@@ -78,9 +78,9 @@ code and comments are English.
   declines too (`rematch_declined`). After a duel ends, `DuelScreen.applyRow` only reads these fields and never
   replays `last_event`.
 - `src/game/`: PixiJS client. `main.ts` boots the app and swaps full screens (`screens/`: `MenuScreen` for
-  picking a difficulty, `GameScreen` for a battle, `LobbyScreen` and `DuelScreen` for online duels); a screen has `layout`, and optionally `update` (per frame)
+  picking a level, `GameScreen` for a battle, `LobbyScreen` and `DuelScreen` for online duels); a screen has `layout`, and optionally `update` (per frame)
   and `handleKey`. `ui/` are reusable views (`Button`, `Modal`, board, arena…), `fx/` holds short-lived effects
-  (orbs, particles, floating text, shake) and `killTweens`, `theme.ts` holds colours and fonts,
+  (orbs, particles, floating text, shake) and `killTweens`, `theme.ts` holds colours and fonts (see Look below),
   `difficulty.ts` the Polish difficulty names and the remembered last choice (localStorage),
   `enemies.ts` which design each enemy uses (by enemy id),
   `net/online.ts` the Supabase client (sign-in, nickname, calls to the `duel` function, `watchDuel` for live
@@ -115,9 +115,26 @@ code and comments are English.
   lunges with jaws wide (the fireball starts at `mouthGlobal()`); `hurt`; `die` folds the wings and drops it.
   Idle motion and action poses never share a property (`rig` vs parts, `headIdle` vs `head`). In duels the
   dragon of whoever played a correct digit lunges. Check art with `npm run dragons` before the browser.
+- Look (the owner wants it colourful and attractive, yet clear and with few objects on screen):
+  - `main.ts` puts `ui/Backdrop` (violet gradient with a glow) under every screen, safe-area margins included,
+    and waits for the bundled font **Baloo 2** (`@fontsource/baloo-2`, latin + latin-ext, 500/700/800) before
+    the first screen, because Pixi measures text when it is created. Fredoka was tried and lacks ą, ę, ż.
+  - `ui/Button`: chunky casual-game buttons, a coloured face on a darker lip that it sinks into when pressed;
+    variants `primary` (gold, the main action), `secondary` (violet), `accent` (blue, online); a square button
+    is round; `icon` (`pause`, `back`, `gear`) draws a vector icon instead of the text (no emoji).
+  - `ui/Scene`: a rounded window onto a sky gradient, a soft light and two rows of hills, one look per dragon
+    (morning for the young one, sunset for the red, moonlit night for the ancient) plus a twilight for duels.
+    `groundY()` is where dragons stand; `DragonView.footOffset()` puts a dragon's shadow on it.
+  - Fight screens (battle and duel) share `screens/fightLayout.ts`: the arena (scene, dragon, HP bars inside
+    it, a round pause or leave button in its corner) on top, the board as big as fits, the number pad below.
+    The board is light with dark digits in a violet tray (`BoardView.BORDER`); yours are blue, the rival's orange.
+  - `HpBar`: a thick pill with the name and HP inside it. `Modal`: a violet panel with a lip; pass
+    `theme.gold` as the title colour for a win.
+  - The menu shows one level at a time: its dragon in its scene, flipped with the arrows or a swipe, then
+    one "Walcz!" button and the online button; sound and vibration live in the settings dialog (gear).
 - `src/game/audio/`: `feedback.ts` is the one place for sound and vibration. Screens report events
   (`feedback.digit(d)`, `unitsCompleted(n)`, `playerHit()`, `victory()`…) and it plays a sound from `Synth.ts`
-  and a haptic (Capacitor Haptics, native app only), honouring the menu toggles (`settings.ts`, localStorage).
+  and a haptic (Capacitor Haptics, native app only), honouring the settings dialog's toggles (`settings.ts`, localStorage).
   `Synth.ts` synthesises every effect with Web Audio (no sample files); each digit plays a note of the
   C major pentatonic. Audio starts on the first tap (`feedback.unlock()` in main.ts) and is suspended in the
   background. To check sounds without ears, render them in an `OfflineAudioContext` (`new Synth(offlineCtx)`)
@@ -145,8 +162,9 @@ code and comments are English.
 
 - Without URL parameters the game opens on the menu. `?seed=123&difficulty=easy|medium|hard` skips it and
   reproduces a board.
-- Menu: keys 1–3 pick a difficulty. Battle: arrow keys move the selection, keys 1–9 place digits, Escape asks
-  to leave.
+- Menu: arrow keys flip the level, Enter fights, keys 1–3 start a level at once. Battle: arrow keys move the
+  selection, keys 1–9 place digits, Escape pauses.
+- Check new UI at phone size (`resize_window` mobile, 375×812) and on a small phone (360×640).
 - Two players in one browser: open `?profile=1` and `?profile=2` in two tabs; each gets its own anonymous
   account (dev only). Drive them with `__game.lobby()`, then `__game.screen.createRoom()` /
   `quickMatch()` / `join(code)`; in a duel, `board.select(cell)` + `handleDigit(d)` (correct digits are in

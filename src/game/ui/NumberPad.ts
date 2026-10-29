@@ -3,70 +3,87 @@ import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.
 import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 
-interface PadButton {
+interface PadKey {
   root: Container;
+  lip: Graphics;
+  face: Container;
   bg: Graphics;
   label: Text;
   /** All nine copies of this digit are on the board. */
   done: boolean;
 }
 
+/** Nine chunky keys in a row: white faces on a lavender lip; a finished digit's key goes dark. */
 export class NumberPad extends Container {
-  private readonly buttons: PadButton[] = [];
+  private readonly keys: PadKey[] = [];
+  private keyWidth = 0;
+  private keyHeight = 0;
+  private lipHeight = 0;
 
   constructor(onDigit: (digit: number) => void) {
     super();
     for (let digit = 1; digit <= 9; digit++) {
       const root = new Container();
+      const lip = new Graphics();
+      const face = new Container();
       const bg = new Graphics();
       const label = new Text({
         text: String(digit),
-        style: { fontFamily: theme.fontFamily, fontWeight: '700', fill: theme.text },
+        style: { fontFamily: theme.fontFamily, fontWeight: '800', fill: theme.padDigit },
       });
       label.anchor.set(0.5);
-      root.addChild(bg, label);
+      face.addChild(bg, label);
+      root.addChild(lip, face);
       root.eventMode = 'static';
 
-      const button: PadButton = { root, bg, label, done: false };
-      root.on('pointertap', () => {
-        if (button.done) return;
-        gsap.fromTo(root.scale, { x: 0.85, y: 0.85 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(3)' });
-        onDigit(digit);
+      const key: PadKey = { root, lip, face, bg, label, done: false };
+      root.on('pointerdown', () => {
+        if (!key.done) gsap.to(face, { y: this.lipHeight * 0.75, duration: 0.05 });
       });
-      this.buttons.push(button);
+      const release = () => gsap.to(face, { y: 0, duration: 0.15, ease: 'power2.out' });
+      root.on('pointerup', release);
+      root.on('pointerupoutside', release);
+      root.on('pointertap', () => {
+        if (!key.done) onDigit(digit);
+      });
+      this.keys.push(key);
       this.addChild(root);
     }
   }
 
   layout(width: number, height: number): void {
-    const gap = 6;
-    const w = (width - gap * 8) / 9;
-    this.buttons.forEach((button, i) => {
-      // Pivot in the centre so the press animation scales around it.
-      button.root.pivot.set(w / 2, height / 2);
-      button.root.position.set(i * (w + gap) + w / 2, height / 2);
-      button.root.hitArea = new Rectangle(0, 0, w, height);
-      button.bg.clear().roundRect(0, 0, w, height, 10).fill(0xffffff);
-      button.label.position.set(w / 2, height / 2);
-      button.label.style.fontSize = Math.round(Math.min(w, height) * 0.55);
-      this.paint(button);
+    const gap = 5;
+    this.keyWidth = (width - gap * 8) / 9;
+    this.keyHeight = height;
+    this.lipHeight = Math.max(3, Math.round(height * 0.08));
+    this.keys.forEach((key, i) => {
+      key.root.position.set(i * (this.keyWidth + gap), 0);
+      key.root.hitArea = new Rectangle(0, 0, this.keyWidth, height);
+      key.label.position.set(this.keyWidth / 2, (height - this.lipHeight) / 2 + 2);
+      key.label.style.fontSize = Math.round(Math.min(this.keyWidth * 0.75, height * 0.55));
+      this.paint(key);
     });
   }
 
   setDone(digit: number, done: boolean): void {
-    const button = this.buttons[digit - 1];
-    button.done = done;
-    this.paint(button);
+    const key = this.keys[digit - 1];
+    key.done = done;
+    this.paint(key);
   }
 
   override destroy(options?: DestroyOptions): void {
-    killTweens(...this.buttons.map((button) => button.root.scale));
+    killTweens(...this.keys.map((key) => key.face));
     super.destroy(options);
   }
 
-  private paint(button: PadButton): void {
-    button.bg.tint = button.done ? theme.padButtonDone : theme.padButton;
-    button.label.alpha = button.done ? 0.25 : 1;
-    button.root.cursor = button.done ? 'default' : 'pointer';
+  private paint(key: PadKey): void {
+    const w = this.keyWidth;
+    const h = this.keyHeight - this.lipHeight;
+    const radius = Math.min(12, w * 0.3);
+    key.lip.clear().roundRect(0, this.lipHeight, w, h, radius).fill(key.done ? theme.panelLip : theme.padKeyLip);
+    key.bg.clear().roundRect(0, 0, w, h, radius).fill(key.done ? theme.padKeyDone : theme.padKey);
+    key.label.style.fill = key.done ? theme.textMuted : theme.padDigit;
+    key.label.alpha = key.done ? 0.35 : 1;
+    key.root.cursor = key.done ? 'default' : 'pointer';
   }
 }
