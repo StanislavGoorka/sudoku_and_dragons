@@ -65,6 +65,11 @@ code and comments are English.
   `version` (updates only the version it read: concurrent writes get 409 `conflict`). Clients only read
   `duels` (their own, via RLS) and follow them live through Supabase Realtime. Note: a bot that solves the
   sudoku itself can still play perfectly; hiding the solution stops reading answers, not solving.
+  Rematch: after the end a player calls `rematch`; the first is recorded in `rematch_by` and waits, the second
+  makes the function create the next duel (same players, seats and difficulty, fresh board) and link it in
+  `next_duel`, which the first player picks up live. Leaving the end screen calls `decline-rematch`; giving up
+  declines too (`rematch_declined`). After a duel ends, `DuelScreen.applyRow` only reads these fields and never
+  replays `last_event`.
 - `src/game/`: PixiJS client. `main.ts` boots the app and swaps full screens (`screens/`: `MenuScreen` for
   picking a difficulty, `GameScreen` for a battle, `LobbyScreen` and `DuelScreen` for online duels); a screen has `layout`, and optionally `update` (per frame)
   and `handleKey`. `ui/` are reusable views (`Button`, `Modal`, board, arena…), `fx/` holds short-lived effects

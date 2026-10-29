@@ -27,6 +27,17 @@ export interface DuelScreenOptions {
   /** Back to the online lobby for another duel. */
   onLobby: () => void;
   onMenu: () => void;
+  /** Both players asked for a rematch: open the new duel. */
+  onRematch: (duel: DuelRow, seat: Seat) => void;
+}
+
+/** What the server says about a rematch once the duel is over. */
+interface RematchState {
+  /** Seat that asked first. */
+  by: Seat | null;
+  declined: boolean;
+  /** The new duel, once both asked. */
+  next: string | null;
 }
 
 /**
@@ -59,6 +70,15 @@ export class DuelScreen extends Container {
   private readonly hurtFlash = new Graphics();
   private readonly menuButton: Button;
   private modal: Modal | null = null;
+  private rematch: RematchState;
+  /** We asked for a rematch and wait for the rival. */
+  private rematchAsked = false;
+  /** On the way to the rematch duel: ignore further updates. */
+  private switching = false;
+  /** The end dialog's message before any rematch news is added. */
+  private endMessage = '';
+  /** The rival gave up, so the end message already says they left. */
+  private rivalLeft = false;
 
   /** A move is on its way to the server; further input waits for the answer. */
   private pending = false;
@@ -81,6 +101,7 @@ export class DuelScreen extends Container {
     this.state = row.state;
     this.version = row.version;
     this.turnStartedAt = row.turn_started_at ? Date.parse(row.turn_started_at) : null;
+    this.rematch = { by: row.rematch_by, declined: row.rematch_declined, next: row.next_duel };
 
     this.menuButton = new Button({ text: '‹ Menu', onTap: () => this.requestLeave() });
     this.title.anchor.set(0.5, 0);
@@ -96,9 +117,10 @@ export class DuelScreen extends Container {
     this.addChild(this.arena, this.title, this.status, this.menuButton, this.board, this.pad, this.hurtFlash, this.fx);
 
     this.stopWatching = watchDuel(this.duelId, (next) => this.applyRow(next));
-    // A safety net for missed live updates.
+    // A safety net for missed live updates: during the duel, and after it while a rematch is still possible.
     this.pollTimer = window.setInterval(() => {
-      if (!this.pending && !this.state.finished) void fetchDuel(this.duelId).then((next) => this.applyRow(next), () => {});
+      if (this.pending || this.switching || this.rematch.declined) return;
+      void fetchDuel(this.duelId).then((next) => this.applyRow(next), () => {});
     }, 4000);
     const rivalId = seat === 0 ? row.player1 : row.player0;
     if (rivalId) {
@@ -174,7 +196,7 @@ export class DuelScreen extends Container {
 
   handleBack(): boolean {
     if (this.endShown) {
-      this.options.onMenu();
+      this.leaveEnd(this.options.onMenu);
     } else if (this.modal) {
       this.closeModal();
     } else {
@@ -240,7 +262,15 @@ export class DuelScreen extends Container {
 
   /** Takes a newer version of the duel: animates it if it is the next one, otherwise just catches up. */
   private applyRow(row: DuelRow): void {
-    if (this.destroyed || row.version <= this.version) return;
+    if (this.destroyed || this.switching || row.version <= this.version) return;
+    const wasFinished = this.state.finished;
+    this.rematch = { by: row.rematch_by, declined: row.rematch_declined, next: row.next_duel };
+    if (wasFinished) {
+      // After the end only the rematch fields change; the last event is not played again.
+      this.version = row.version;
+      this.updateRematch();
+      return;
+    }
     const next = row.version === this.version + 1;
     const turnBefore = this.state.turn;
     this.state = row.state;
@@ -351,7 +381,7 @@ export class DuelScreen extends Container {
   private requestLeave(): void {
     if (this.modal) return;
     if (this.state.finished) {
-      this.options.onMenu();
+      this.leaveEnd(this.options.onMenu);
       return;
     }
     this.openModal(
@@ -398,9 +428,10 @@ export class DuelScreen extends Container {
       if (this.destroyed) return;
     }
 
-    let message = `Twoje HP: ${this.state.hp[this.seat]} · ${this.rivalName}: ${this.state.hp[1 - this.seat]}`;
+    this.endMessage = `Twoje HP: ${this.state.hp[this.seat]} · ${this.rivalName}: ${this.state.hp[1 - this.seat]}`;
+    this.rivalLeft = event?.kind === 'forfeit' && event.seat !== this.seat;
     if (event?.kind === 'forfeit') {
-      message = event.seat === this.seat ? 'Poddałeś pojedynek.' : `${this.rivalName} opuścił pojedynek.`;
+      this.endMessage = event.seat === this.seat ? 'Poddałeś pojedynek.' : `${this.rivalName} opuścił pojedynek.`;
     }
     if (won) {
       feedback.victory();
@@ -408,10 +439,84 @@ export class DuelScreen extends Container {
       feedback.defeat();
     }
     this.openModal(
-      new Modal(won ? 'Wygrana!' : draw ? 'Remis' : 'Porażka', message, [
-        { text: 'Nowy pojedynek', variant: 'primary', onTap: () => this.options.onLobby() },
-        { text: 'Menu', onTap: () => this.options.onMenu() },
+      new Modal(won ? 'Wygrana!' : draw ? 'Remis' : 'Porażka', this.endMessage, [
+        { text: 'Rewanż', variant: 'primary', onTap: () => this.requestRematch() },
+        { text: 'Nowy pojedynek', onTap: () => this.leaveEnd(this.options.onLobby) },
+        { text: 'Menu', onTap: () => this.leaveEnd(this.options.onMenu) },
       ]),
     );
+    this.updateRematch();
+  }
+
+  /** Shows the rematch situation in the end dialog, or opens the rematch once both asked. */
+  private updateRematch(): void {
+    const { by, declined, next } = this.rematch;
+    if (next) {
+      void this.openRematch(next);
+      return;
+    }
+    if (!this.endShown || !this.modal) return;
+    const button = this.modal.button(0);
+    if (declined) {
+      button.setText('Rewanż');
+      button.setEnabled(false);
+      const gone = this.rivalLeft ? '' : `\n${this.rivalName} wyszedł z pojedynku.`;
+      this.modal.setMessage(this.endMessage + gone);
+    } else if (this.rematchAsked || by === this.seat) {
+      button.setText('Czekam na rywala…');
+      button.setEnabled(false);
+      this.modal.setMessage(`${this.endMessage}\nWysłano prośbę o rewanż.`);
+    } else if (by !== null) {
+      button.setText('Przyjmij rewanż');
+      button.setEnabled(true);
+      this.modal.setMessage(`${this.endMessage}\n${this.rivalName} chce rewanżu!`);
+      feedback.yourTurn();
+    }
+  }
+
+  private requestRematch(): void {
+    if (this.rematchAsked || this.switching) return;
+    this.rematchAsked = true;
+    this.updateRematch();
+    online
+      .rematch(this.duelId)
+      .then((result) => {
+        if (result.duel && result.seat !== undefined) this.startRematch(result.duel, result.seat);
+      })
+      .catch((error) => {
+        this.rematchAsked = false;
+        if (error instanceof OnlineError && error.code === 'rival-left') {
+          this.rematch.declined = true;
+        } else {
+          this.toast(errorMessage(error), theme.error);
+        }
+        this.updateRematch();
+      });
+  }
+
+  /** The rival accepted (we learnt it from the old duel's row): load the new duel and switch to it. */
+  private async openRematch(nextId: string): Promise<void> {
+    if (this.switching) return;
+    this.switching = true;
+    try {
+      this.startRematch(await fetchDuel(nextId), this.seat);
+    } catch {
+      this.switching = false;
+      this.toast(errorMessage(null), theme.error);
+    }
+  }
+
+  private startRematch(duel: DuelRow, seat: Seat): void {
+    if (this.destroyed) return;
+    this.switching = true;
+    this.options.onRematch(duel, seat);
+  }
+
+  /** Leaving the end screen tells the rival not to wait for a rematch. */
+  private leaveEnd(go: () => void): void {
+    if (!this.switching && !this.rematch.declined && !this.rematch.next) {
+      void online.declineRematch(this.duelId).catch(() => {});
+    }
+    go();
   }
 }

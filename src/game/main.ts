@@ -95,7 +95,13 @@ async function boot(): Promise<void> {
   };
 
   const startDuel = (duel: DuelRow, seat: Seat, me: Me) => {
-    show(new DuelScreen(duel, me, seat, { onLobby: showLobby, onMenu: showMenu }));
+    show(
+      new DuelScreen(duel, me, seat, {
+        onLobby: showLobby,
+        onMenu: showMenu,
+        onRematch: (next, nextSeat) => startDuel(next, nextSeat, me),
+      }),
+    );
   };
 
   // resizeTo applies the new size on the next frame, so lay out when the size actually changes.

@@ -14,6 +14,12 @@ export interface DuelRow {
   last_event: DuelEvent | null;
   version: number;
   turn_started_at: string | null;
+  /** After the end: the seat that asked for a rematch first. */
+  rematch_by: Seat | null;
+  /** A player left the end screen (or gave up): no rematch. */
+  rematch_declined: boolean;
+  /** The rematch duel, once both players asked. */
+  next_duel: string | null;
 }
 
 export interface Me {
@@ -100,6 +106,9 @@ export const online = {
     call<{ duel: DuelRow; event: DuelEvent }>('move', { duelId, cell, digit }),
   claimTimeout: (duelId: string) => call<{ duel: DuelRow }>('timeout', { duelId }),
   leave: (duelId: string) => call<{ duel?: DuelRow }>('leave', { duelId }),
+  /** Asks for a rematch: { waiting } until the rival asks too, then the new duel. */
+  rematch: (duelId: string) => call<{ waiting?: true; duel?: DuelRow; seat?: Seat }>('rematch', { duelId }),
+  declineRematch: (duelId: string) => call<{ declined: true }>('decline-rematch', { duelId }),
 };
 
 export async function fetchDuel(id: string): Promise<DuelRow> {
@@ -139,6 +148,7 @@ export function errorMessage(error: unknown): string {
     'bad-code': 'Kod ma cztery cyfry.',
     'sign-in': 'Nie udało się zalogować.',
     'too-late': 'Za późno: czas tury minął.',
+    'rival-left': 'Rywal wyszedł z pojedynku.',
   };
   return messages[code] ?? 'Brak połączenia z serwerem.';
 }

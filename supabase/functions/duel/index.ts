@@ -5,6 +5,7 @@
 // POST { action, ... } with the player's Supabase session as Bearer token:
 //   profile {nickname} | create {difficulty} | join {code} | queue {difficulty}
 //   move {duelId, cell, digit} | timeout {duelId} | leave {duelId}
+//   rematch {duelId} | decline-rematch {duelId}   (after a finished duel)
 // Responses are JSON; failures are { error: <code> } with a 4xx/5xx status.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
@@ -53,6 +54,11 @@ interface DuelRow {
   last_event: DuelEvent | null;
   version: number;
   turn_started_at: string | null;
+  /** Seat that asked for a rematch first. */
+  rematch_by: Seat | null;
+  rematch_declined: boolean;
+  /** The rematch duel, once both players asked. */
+  next_duel: string | null;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -93,6 +99,10 @@ async function handle(uid: string, body: any): Promise<Record<string, unknown>> 
       return claimTimeout(uid, String(body.duelId));
     case 'leave':
       return leave(uid, String(body.duelId));
+    case 'rematch':
+      return rematch(uid, String(body.duelId));
+    case 'decline-rematch':
+      return declineRematch(uid, String(body.duelId));
     default:
       throw new HttpError(400, 'unknown-action');
   }
@@ -116,14 +126,23 @@ async function setProfile(uid: string, nickname: string) {
   return { nickname: name };
 }
 
-/** A waiting duel with a fresh secret board. `code` is null for random matchmaking. */
-async function newDuel(uid: string, mode: 'room' | 'random', difficulty: Difficulty, code: string | null) {
+/**
+ * A duel with a fresh secret board: waiting for a second player, unless `extra` already seats one.
+ * `code` is null for random matchmaking and rematches.
+ */
+async function newDuel(
+  uid: string,
+  mode: 'room' | 'random',
+  difficulty: Difficulty,
+  code: string | null,
+  extra: Record<string, unknown> = {},
+) {
   const seed = randomInt(2 ** 32);
   const puzzle = generatePuzzle(seed, difficulty);
   const firstTurn: Seat = randomInt(2) === 0 ? 0 : 1;
   const { data, error } = await admin
     .from('duels')
-    .insert({ mode, code, difficulty, player0: uid, state: createDuel(puzzle.givens, firstTurn) })
+    .insert({ mode, code, difficulty, player0: uid, state: createDuel(puzzle.givens, firstTurn), ...extra })
     .select()
     .single();
   if (error) throw error;
@@ -210,8 +229,27 @@ function turnExpired(duel: DuelRow, graceSeconds: number): boolean {
   return Date.now() > deadline;
 }
 
+/** Changes `fields` if nobody changed the duel since it was read. Returns false otherwise. */
+async function bump(duel: DuelRow, fields: Record<string, unknown>): Promise<boolean> {
+  const { data, error } = await admin
+    .from('duels')
+    .update({ ...fields, version: duel.version + 1, updated_at: new Date().toISOString() })
+    .eq('id', duel.id)
+    .eq('version', duel.version)
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  return data !== null;
+}
+
 /** Writes a new state if nobody changed the duel since it was read; otherwise 409. */
-async function save(duel: DuelRow, state: DuelState, event: DuelEvent, turnPassed: boolean) {
+async function save(
+  duel: DuelRow,
+  state: DuelState,
+  event: DuelEvent,
+  turnPassed: boolean,
+  extra: Record<string, unknown> = {},
+) {
   const now = new Date().toISOString();
   const { data, error } = await admin
     .from('duels')
@@ -222,6 +260,7 @@ async function save(duel: DuelRow, state: DuelState, event: DuelEvent, turnPasse
       version: duel.version + 1,
       turn_started_at: turnPassed ? now : duel.turn_started_at,
       updated_at: now,
+      ...extra,
     })
     .eq('id', duel.id)
     .eq('version', duel.version)
@@ -268,5 +307,46 @@ async function leave(uid: string, duelId: string) {
   if (duel.status !== 'playing') return { cancelled: false };
   const event = forfeit(duel.state, seat);
   if (!event) return { cancelled: false };
-  return { duel: await save(duel, duel.state, event, false), event };
+  // Whoever gives up does not want a rematch either.
+  return { duel: await save(duel, duel.state, event, false, { rematch_declined: true }), event };
+}
+
+/**
+ * After a finished duel. The first player to ask waits ({ waiting: true }); when the other asks too,
+ * a new duel with the same players and difficulty starts and both get it ({ duel, seat }).
+ */
+async function rematch(uid: string, duelId: string) {
+  // Retries when both players ask at the same moment and one write loses the race.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const duel = await loadDuel(duelId);
+    const seat = seatOf(duel, uid);
+    if (duel.status !== 'finished') throw new HttpError(409, 'not-finished');
+    if (duel.next_duel) return { duel: await loadDuel(duel.next_duel), seat };
+    if (duel.rematch_declined) throw new HttpError(409, 'rival-left');
+    if (duel.rematch_by === seat) return { waiting: true };
+    if (duel.rematch_by === null) {
+      if (await bump(duel, { rematch_by: seat })) return { waiting: true };
+      continue;
+    }
+
+    // The rival asked first: start the rematch, keeping both players in their seats.
+    const next = await newDuel(duel.player0, duel.mode, duel.difficulty, null, {
+      player1: duel.player1,
+      status: 'playing',
+      turn_started_at: new Date().toISOString(),
+    });
+    if (await bump(duel, { next_duel: next.id })) return { duel: next, seat };
+    await admin.from('duels').delete().eq('id', next.id);
+  }
+  throw new HttpError(409, 'conflict');
+}
+
+/** A player left the end screen: the rival's rematch request will not be answered. */
+async function declineRematch(uid: string, duelId: string) {
+  const duel = await loadDuel(duelId);
+  seatOf(duel, uid);
+  if (duel.status === 'finished' && !duel.next_duel && !duel.rematch_declined) {
+    await bump(duel, { rematch_declined: true });
+  }
+  return { declined: true };
 }

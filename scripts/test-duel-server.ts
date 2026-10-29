@@ -97,6 +97,43 @@ check('timeout before the deadline is refused', (await call(a, 'timeout', { duel
 const left = await call(a, 'leave', { duelId: duel.id });
 check('leaving forfeits: the other player wins', left.body.duel?.state.winner === 1 && left.body.duel?.status === 'finished', left.body);
 check('no moves after the end', (await call(b, 'move', { duelId: duel.id, cell: emptyCell(), digit: 1 })).status === 409);
+check('no rematch with a player who gave up', (await call(b, 'rematch', { duelId: duel.id })).body.error === 'rival-left');
+
+// Rematch: play a duel to a knockout, then both ask.
+async function playToKnockout(start: Duel): Promise<Duel> {
+  let current = start;
+  const answer = solve(current.state.board)!;
+  while (!current.state.finished) {
+    const cell = current.state.board.findIndex((v) => v === 0);
+    const result = await call(players[current.state.turn], 'move', { duelId: current.id, cell, digit: answer[cell] });
+    if (result.status !== 200) throw new Error(`move failed: ${JSON.stringify(result.body)}`);
+    current = result.body.duel;
+  }
+  return current;
+}
+const roomForRematch = await call(a, 'create', { difficulty: 'easy' });
+const fought = await playToKnockout((await call(b, 'join', { code: roomForRematch.body.duel.code })).body.duel);
+check('a duel can be played to the end', fought.state.finished && fought.state.winner !== null);
+const asked = await call(a, 'rematch', { duelId: fought.id });
+check('the first to ask for a rematch waits', asked.body.waiting === true, asked.body);
+check('asking twice still waits', (await call(a, 'rematch', { duelId: fought.id })).body.waiting === true);
+const accepted = await call(b, 'rematch', { duelId: fought.id });
+const next: Duel = accepted.body.duel;
+check(
+  'when both ask, a new duel starts with the same players in the same seats',
+  next?.status === 'playing' && next.id !== fought.id && next.player0 === fought.player0 && next.player1 === fought.player1 && accepted.body.seat === 1,
+  accepted.body,
+);
+check('the new duel has a fresh board', next?.state.board.join('') !== fought.state.board.join(''));
+check('no rematch before the duel ends', (await call(a, 'rematch', { duelId: next.id })).body.error === 'not-finished');
+const late = await call(a, 'rematch', { duelId: fought.id });
+check('the first player gets the same new duel', late.body.duel?.id === next.id && late.body.seat === 0, late.body);
+
+// Declining: the rival leaves the end screen without answering.
+const fought2 = await playToKnockout(next);
+await call(b, 'rematch', { duelId: fought2.id });
+await call(a, 'decline-rematch', { duelId: fought2.id });
+check('a declined rematch is refused', (await call(b, 'rematch', { duelId: fought2.id })).body.error === 'rival-left');
 
 // Random matchmaking.
 const waiting = await call(a, 'queue', { difficulty: 'medium' });

@@ -26,6 +26,7 @@ export class Button extends Container {
   private buttonWidth = 0;
   private buttonHeight = 0;
   private highlighted = false;
+  private enabled = true;
 
   constructor(options: ButtonOptions) {
     super();
@@ -58,6 +59,7 @@ export class Button extends Container {
     this.on('pointerup', () => this.press(1));
     this.on('pointerupoutside', () => this.press(1));
     this.on('pointertap', () => {
+      if (!this.enabled) return;
       feedback.tap();
       options.onTap();
     });
@@ -84,6 +86,13 @@ export class Button extends Container {
 
   setText(text: string): void {
     this.title.text = text;
+  }
+
+  /** A disabled button is dimmed and ignores taps. */
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    this.face.alpha = enabled ? 1 : 0.45;
+    this.cursor = enabled ? 'pointer' : 'default';
   }
 
   /** A gold outline, e.g. for the option chosen last time. */

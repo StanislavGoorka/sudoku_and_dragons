@@ -23,6 +23,8 @@ export class Modal extends Container {
   private readonly title: Text;
   private readonly message: Text;
   private readonly buttons: Button[];
+  private screenWidth = 0;
+  private screenHeight = 0;
 
   constructor(title: string, message: string, actions: ModalAction[]) {
     super();
@@ -58,6 +60,8 @@ export class Modal extends Container {
   }
 
   layout(screenWidth: number, screenHeight: number): void {
+    this.screenWidth = screenWidth;
+    this.screenHeight = screenHeight;
     this.shade
       .clear()
       .rect(-OVERSCAN, -OVERSCAN, screenWidth + OVERSCAN * 2, screenHeight + OVERSCAN * 2)
@@ -87,6 +91,17 @@ export class Modal extends Container {
       .stroke({ width: 2, color: theme.boardFrame, alpha: 0.7 });
     this.box.pivot.set(width / 2, height / 2);
     this.box.position.set(screenWidth / 2, screenHeight / 2);
+  }
+
+  /** Replaces the message, e.g. when the rival answers while the dialog is open. */
+  setMessage(message: string): void {
+    this.message.text = message;
+    this.layout(this.screenWidth, this.screenHeight);
+  }
+
+  /** The button made from `actions[index]`, to relabel or disable it. */
+  button(index: number): Button {
+    return this.buttons[index];
   }
 
   /** Fades the shade in and pops the panel. */
