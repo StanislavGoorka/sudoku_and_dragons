@@ -1,6 +1,5 @@
 import { Container, Graphics, Text, type PointData } from 'pixi.js';
-import { ENEMIES } from '../../core/index.ts';
-import { lookOf } from '../enemies.ts';
+import { DESIGNS } from '../art/dragonArt.ts';
 import { theme } from '../theme.ts';
 import { ChargeMeter } from './ChargeMeter.ts';
 import { DragonView } from './DragonView.ts';
@@ -12,8 +11,9 @@ import { HpBar } from './HpBar.ts';
  */
 export class DuelArena extends Container {
   readonly timer = new ChargeMeter('s');
-  private readonly myDragon = new DragonView(lookOf(ENEMIES.easy));
-  private readonly rivalDragon = new DragonView(lookOf(ENEMIES.medium));
+  /** Each dragon in the colour of its player's digits: yours blue, the rival's orange. */
+  private readonly myDragon = new DragonView(DESIGNS['duel-mine']);
+  private readonly rivalDragon = new DragonView(DESIGNS['duel-rival']);
   private readonly myHp: HpBar;
   private readonly rivalHp: HpBar;
   private readonly turnText = new Text({
@@ -27,7 +27,7 @@ export class DuelArena extends Container {
     this.myHp = new HpBar(`Ty · ${myName}`, maxHp, theme.playerHp);
     this.rivalHp = new HpBar(rivalName, maxHp, theme.enemyHp);
     this.turnText.anchor.set(0.5, 1);
-    // The emoji dragon faces left: mirror yours so the two face each other.
+    // Dragons face left: mirror yours so the two face each other.
     this.myDragon.scale.x = -1;
     this.addChild(this.bg, this.myDragon, this.rivalDragon, this.timer, this.turnText, this.rivalHp, this.myHp);
   }
@@ -48,10 +48,11 @@ export class DuelArena extends Container {
     const top = pad + HpBar.HEIGHT + 4;
     const bottom = height - pad - HpBar.HEIGHT - 4;
     const middle = (top + bottom) / 2;
-    const dragonSize = Math.max(32, Math.min(width * 0.3, bottom - top));
-    this.myDragon.position.set(width * 0.2, middle);
+    // As big as fits beside the turn text in the middle.
+    const dragonSize = Math.max(32, Math.min(width * 0.32, bottom - top));
+    this.myDragon.position.set(width * 0.17, middle);
     this.myDragon.layout(dragonSize);
-    this.rivalDragon.position.set(width * 0.8, middle);
+    this.rivalDragon.position.set(width * 0.83, middle);
     this.rivalDragon.layout(dragonSize);
 
     const radius = Math.max(12, Math.min(22, (bottom - top - 40) / 2));

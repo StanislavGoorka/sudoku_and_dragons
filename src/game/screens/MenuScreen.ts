@@ -3,7 +3,7 @@ import { Container, Text, type DestroyOptions } from 'pixi.js';
 import { CLUES, ENEMIES, type Difficulty } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
 import { DIFFICULTIES, DIFFICULTY_INFO } from '../difficulty.ts';
-import { lookOf } from '../enemies.ts';
+import { designOf } from '../enemies.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 import { Button } from '../ui/Button.ts';
@@ -52,7 +52,7 @@ export class MenuScreen extends Container {
     super();
     this.onPick = options.onPick;
     // The dragon of the difficulty picked last time.
-    this.dragon = new DragonView(lookOf(ENEMIES[options.selected]));
+    this.dragon = new DragonView(designOf(ENEMIES[options.selected]));
     this.title.anchor.set(0.5, 0);
     this.tagline.anchor.set(0.5, 0);
     this.prompt.anchor.set(0.5, 0);

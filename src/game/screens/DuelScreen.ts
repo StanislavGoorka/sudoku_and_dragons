@@ -430,6 +430,8 @@ export class DuelScreen extends Container {
         if (this.board.countOf(event.digit) === 9) this.pad.setDone(event.digit, true);
         feedback.digit(event.digit);
         if (event.completed.length > 0) feedback.unitsCompleted(event.completed.length);
+        // The mover's dragon lunges as the hit flies at the other one.
+        void this.arena.dragon(mine).attack();
         void this.playHit(event.cell, event.completed, !mine, event.damage, after.hp[otherSeat(event.seat)]);
         if (mine && event.extraMove && !after.finished) this.toast('Dodatkowy ruch!', theme.flash);
         break;

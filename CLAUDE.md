@@ -23,6 +23,8 @@ code and comments are English.
 - `npm run android:sync`: build and copy the game into `android/` (run after every web change you want on the device)
 - `npm run android:run`: sync, then build and install on a connected phone or running emulator
 - `npm run android:open`: open `android/` in Android Studio
+- `npm run dragons out.png`: draw every dragon design at rest and in the attack pose into one image (sharp),
+  to look at art changes without starting the game.
 - `npm run icons`: render the app icon from `assets/src/icon-{background,foreground}.svg` (drawn on the full
   108 dp adaptive canvas, 1024 px; keep the artwork within ~320 px of the centre) into every Android
   mipmap density plus `assets/icon-1024.png` / `icon-512.png` for the stores. `--preview out.png` draws
@@ -80,7 +82,7 @@ code and comments are English.
   and `handleKey`. `ui/` are reusable views (`Button`, `Modal`, board, arena…), `fx/` holds short-lived effects
   (orbs, particles, floating text, shake) and `killTweens`, `theme.ts` holds colours and fonts,
   `difficulty.ts` the Polish difficulty names and the remembered last choice (localStorage),
-  `enemies.ts` each dragon's placeholder look (emoji, tint, size) keyed by enemy id,
+  `enemies.ts` which design each enemy uses (by enemy id),
   `net/online.ts` the Supabase client (sign-in, nickname, calls to the `duel` function, `watchDuel` for live
   updates, `serverNow()` for the turn clock), `net/config.ts` the project URL and publishable key (public).
   `BoardView` only shows results (`reveal`, `reject`, `sync`, which can also take digits back); `GameScreen`
@@ -102,6 +104,17 @@ code and comments are English.
   pauses itself when the app goes to the background. Screens are laid out inside the safe area
   (`safeArea.ts` reads CSS env(safe-area-inset-*)); full-screen layers they draw extend by `OVERSCAN`.
   The Android back button goes to the screen's `handleBack()`; returning false exits the app.
+- `src/game/art/dragonArt.ts`: the dragons as data, no Pixi: flat cartoon shapes (SVG path strings, cubic curves
+  only) on one 400×400 canvas, dragon hovering and facing left, grouped into parts that each turn about a
+  pivot (wings, tail, head with jaw, eye and brow, body, ground shadow). `DESIGNS` holds the three enemies
+  (green cute young dragon, red dragon, purple-and-gold ancient one with a crown of horns and a beard) and the
+  two duel sides (`duel-mine` blue and `duel-rival` orange, the colours of each player's digits). Outlined shapes
+  get one thick outline around their union; shading and lines sit on top. `ui/DragonView` builds one shared
+  GraphicsContext per part and design, and animates: hover with wing beats, tail and head sway, blinking;
+  `setHeat` reddens it and opens its jaw on a glowing mouth before a timed attack; `attack()` rears back and
+  lunges with jaws wide (the fireball starts at `mouthGlobal()`); `hurt`; `die` folds the wings and drops it.
+  Idle motion and action poses never share a property (`rig` vs parts, `headIdle` vs `head`). In duels the
+  dragon of whoever played a correct digit lunges. Check art with `npm run dragons` before the browser.
 - `src/game/audio/`: `feedback.ts` is the one place for sound and vibration. Screens report events
   (`feedback.digit(d)`, `unitsCompleted(n)`, `playerHit()`, `victory()`…) and it plays a sound from `Synth.ts`
   and a haptic (Capacitor Haptics, native app only), honouring the menu toggles (`settings.ts`, localStorage).

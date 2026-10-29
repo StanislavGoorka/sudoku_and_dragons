@@ -343,7 +343,7 @@ export class GameScreen extends Container {
     await this.arena.dragon.attack();
     if (this.destroyed) return;
     feedback.fireball();
-    const from = this.fx.toLocal(this.arena.enemyTarget(), this.arena);
+    const from = this.fx.toLocal(this.arena.fireOrigin(), this.arena);
     const to = this.fx.toLocal(this.arena.playerTarget(), this.arena);
     await launchOrb(this.fx, from, to, { color: theme.fire, radius: 12, duration: 0.4, arc: 30 });
     if (this.destroyed) return;

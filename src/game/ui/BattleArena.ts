@@ -1,6 +1,6 @@
 import { Container, Graphics, type PointData } from 'pixi.js';
 import type { EnemyDef } from '../../core/index.ts';
-import { lookOf } from '../enemies.ts';
+import { designOf } from '../enemies.ts';
 import { theme } from '../theme.ts';
 import { ChargeMeter } from './ChargeMeter.ts';
 import { DragonView } from './DragonView.ts';
@@ -19,7 +19,7 @@ export class BattleArena extends Container {
 
   constructor(enemy: EnemyDef, playerMaxHp: number) {
     super();
-    this.dragon = new DragonView(lookOf(enemy));
+    this.dragon = new DragonView(designOf(enemy));
     this.enemyHp = new HpBar(enemy.name, enemy.maxHp, theme.enemyHp);
     this.playerHp = new HpBar('Ty', playerMaxHp, theme.playerHp);
     this.addChild(this.bg, this.dragon, this.charge, this.enemyHp, this.playerHp);
@@ -42,7 +42,7 @@ export class BattleArena extends Container {
     const bottom = height - pad - HpBar.HEIGHT - 4;
     const middle = (top + bottom) / 2;
     this.dragon.position.set(width / 2, middle);
-    this.dragon.layout(Math.max(32, Math.min(width * 0.5, bottom - top)));
+    this.dragon.layout(Math.max(32, Math.min(width * 0.6, bottom - top)));
 
     // The caption under the ring needs ~16 px, so the dial sits a little above the middle.
     const radius = Math.max(12, Math.min(24, (bottom - top - 20) / 2));
@@ -53,6 +53,11 @@ export class BattleArena extends Container {
   /** Where player attacks land, in arena coordinates. */
   enemyTarget(): PointData {
     return { x: this.dragon.x, y: this.dragon.y };
+  }
+
+  /** Where the dragon's fireball starts: its mouth, in arena coordinates. */
+  fireOrigin(): PointData {
+    return this.toLocal(this.dragon.mouthGlobal());
   }
 
   /** Where dragon attacks land, in arena coordinates. */
