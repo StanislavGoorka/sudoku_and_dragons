@@ -92,14 +92,15 @@ export function setNickname(nickname: string): void {
   syncProfile();
 }
 
-/** What rivals see of a player: their nickname and the skin of their dragon (null: unknown, the default). */
+/** What rivals see of a player: their nickname, the skin of their dragon and their hit effect (null: unknown, the default). */
 export interface Profile {
   nickname: string;
   dragon: string | null;
+  effect: string | null;
 }
 
 function localProfile(): Profile {
-  return { nickname: localNickname(), dragon: progress.dragonSkin };
+  return { nickname: localNickname(), dragon: progress.dragonSkin, effect: progress.hitEffect };
 }
 
 let pushing: Promise<void> = Promise.resolve();
@@ -119,7 +120,7 @@ function pushProfile(): Promise<void> {
 }
 
 /**
- * Tells the server about a changed profile (a new dragon skin), in the background. Before sign-in
+ * Tells the server about a changed profile (a new nickname, dragon skin or hit effect), in the background. Before sign-in
  * there is nothing to do: signing in sends it.
  */
 export function syncProfile(): void {
@@ -210,7 +211,7 @@ export async function fetchDuel(id: string): Promise<DuelRow> {
   return data as DuelRow;
 }
 
-/** Profiles read this session, so a rematch shows the rival's name and dragon at once. */
+/** Profiles read this session, so a rematch shows the rival's name, dragon and effect at once. */
 const knownProfiles = new Map<string, Profile>();
 
 export function knownProfile(playerId: string): Profile | undefined {
@@ -218,9 +219,13 @@ export function knownProfile(playerId: string): Profile | undefined {
 }
 
 export async function fetchProfile(playerId: string): Promise<Profile> {
-  const { data } = await supabase.from('profiles').select('nickname, dragon').eq('id', playerId).maybeSingle();
-  if (!data) return { nickname: 'Rywal', dragon: null };
-  const profile: Profile = { nickname: data.nickname as string, dragon: (data.dragon as string | undefined) ?? null };
+  const { data } = await supabase.from('profiles').select('nickname, dragon, effect').eq('id', playerId).maybeSingle();
+  if (!data) return { nickname: 'Rywal', dragon: null, effect: null };
+  const profile: Profile = {
+    nickname: data.nickname as string,
+    dragon: (data.dragon as string | undefined) ?? null,
+    effect: (data.effect as string | undefined) ?? null,
+  };
   knownProfiles.set(playerId, profile);
   return profile;
 }

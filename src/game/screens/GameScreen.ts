@@ -16,6 +16,7 @@ import {
 } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
 import { burst, floatText, launchOrb, shake, stopEffects, wait } from '../fx/effects.ts';
+import { fireShot } from '../fx/hitEffects.ts';
 import { OVERSCAN } from '../safeArea.ts';
 import { theme } from '../theme.ts';
 import { BattleArena } from '../ui/BattleArena.ts';
@@ -24,7 +25,7 @@ import { Button } from '../ui/Button.ts';
 import { Modal, type ModalAction } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 import { StarRow } from '../ui/stars.ts';
-import { chosenSkin, chosenTheme, recordBattle } from '../progress/progress.ts';
+import { chosenEffect, chosenSkin, chosenTheme, recordBattle } from '../progress/progress.ts';
 import { rewardLines } from '../progress/rewardText.ts';
 import { progress, saveProgress } from '../progress/store.ts';
 import { fightLayout } from './fightLayout.ts';
@@ -264,7 +265,7 @@ export class GameScreen extends Container {
     });
   }
 
-  /** Your dragon lunges as orbs fly from the board to the enemy: a small one per digit, a big one per completed unit. */
+  /** Your dragon lunges as your hit effect flies from the board to the enemy: a small shot per digit, a big one per completed unit. */
   private async playPlayerAttack(hit: Hit, cell: number, completed: Unit[]): Promise<void> {
     void this.arena.playerDragon.attack();
     const big = completed.length > 0;
@@ -279,15 +280,8 @@ export class GameScreen extends Container {
         const from = this.fx.toLocal(origin, this.board);
         const to = this.fx.toLocal(this.arena.enemyTarget(), this.arena);
         const side = Math.random() < 0.5 ? -1 : 1;
-        await launchOrb(this.fx, from, to, {
-          color,
-          radius: big ? 9 : 5,
-          duration: big ? 0.5 : 0.35,
-          arc: side * (30 + Math.random() * 50),
-        });
-        if (this.destroyed) return;
-        burst(this.fx, to, color, big ? 14 : 6);
-        if (landed) return;
+        await fireShot(this.fx, chosenEffect(progress).id, { from, to, big, color, side });
+        if (this.destroyed || landed) return;
 
         // The first orb to land carries the whole hit.
         landed = true;

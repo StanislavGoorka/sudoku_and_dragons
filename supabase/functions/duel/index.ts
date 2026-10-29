@@ -3,7 +3,7 @@
 // `core/` next to this file is a copy of src/core made by `npm run function:bundle`.
 //
 // POST { action, ... } with the player's Supabase session as Bearer token:
-//   profile {nickname, dragon?} | create {difficulty} | join {code} | queue {difficulty}
+//   profile {nickname, dragon?, effect?} | create {difficulty} | join {code} | queue {difficulty}
 //   move {duelId, cell, digit} | timeout {duelId} | leave {duelId}
 //   rematch {duelId} | decline-rematch {duelId}   (after a finished duel)
 // Responses are JSON; failures are { error: <code> } with a 4xx/5xx status.
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
 async function handle(uid: string, body: any): Promise<Record<string, unknown>> {
   switch (body?.action) {
     case 'profile':
-      return setProfile(uid, String(body.nickname ?? ''), body.dragon === undefined ? undefined : String(body.dragon));
+      return setProfile(uid, String(body.nickname ?? ''), optional(body.dragon), optional(body.effect));
     case 'create':
       return createRoom(uid, difficultyOf(body.difficulty));
     case 'join':
@@ -110,6 +110,10 @@ async function handle(uid: string, body: any): Promise<Record<string, unknown>> 
   }
 }
 
+function optional(value: unknown): string | undefined {
+  return value === undefined ? undefined : String(value);
+}
+
 function difficultyOf(value: unknown): Difficulty {
   const difficulty = DIFFICULTIES.find((d) => d === value);
   if (!difficulty) throw new HttpError(400, 'bad-difficulty');
@@ -120,15 +124,22 @@ function randomInt(maxExclusive: number): number {
   return crypto.getRandomValues(new Uint32Array(1))[0] % maxExclusive;
 }
 
-/** `dragon` is the id of the player's dragon skin; any well-formed id, so new skins need no redeploy. */
-async function setProfile(uid: string, nickname: string, dragon?: string) {
+const COSMETIC_ID = /^[a-z0-9-]{1,24}$/;
+
+/**
+ * `dragon` and `effect` are the ids of the player's dragon skin and hit effect; any well-formed id, so
+ * new cosmetics need no redeploy. One left out (by an app older than it) keeps the stored one.
+ */
+async function setProfile(uid: string, nickname: string, dragon?: string, effect?: string) {
   const name = nickname.trim().slice(0, 24);
   if (name.length < 2) throw new HttpError(400, 'bad-nickname');
-  if (dragon !== undefined && !/^[a-z0-9-]{1,24}$/.test(dragon)) throw new HttpError(400, 'bad-dragon');
-  // Without a dragon (older apps) the stored one stays.
-  const { error } = await admin.from('profiles').upsert({ id: uid, nickname: name, ...(dragon === undefined ? {} : { dragon }) });
+  if (dragon !== undefined && !COSMETIC_ID.test(dragon)) throw new HttpError(400, 'bad-dragon');
+  if (effect !== undefined && !COSMETIC_ID.test(effect)) throw new HttpError(400, 'bad-effect');
+  const { error } = await admin
+    .from('profiles')
+    .upsert({ id: uid, nickname: name, ...(dragon === undefined ? {} : { dragon }), ...(effect === undefined ? {} : { effect }) });
   if (error) throw error;
-  return { nickname: name, dragon };
+  return { nickname: name, dragon, effect };
 }
 
 /**

@@ -1,17 +1,20 @@
 import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions, type FillInput } from 'pixi.js';
-import { generatePuzzle } from '../../core/index.ts';
+import { ENEMIES, generatePuzzle } from '../../core/index.ts';
 import type { DragonDesign } from '../art/dragonArt.ts';
 import { feedback } from '../audio/feedback.ts';
-import { boardTheme } from '../boardThemes.ts';
+import { boardTheme, type BoardColors } from '../boardThemes.ts';
 import { dragonSkin } from '../dragonSkins.ts';
+import { designOf } from '../enemies.ts';
 import { burst, stopEffects } from '../fx/effects.ts';
+import { drawEffectIcon, fireShot } from '../fx/hitEffects.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { syncProfile } from '../net/online.ts';
 import {
   buy,
   canBuyNew,
   choose,
+  chosenTheme,
   COSMETIC_KINDS,
   COSMETICS,
   isChosen,
@@ -40,6 +43,7 @@ export interface ShopOptions {
 const SHELVES: Record<CosmeticKind, { tab: string; inUse: string; owned: string; toBuy: string }> = {
   board: { tab: 'Plansze', inUse: 'Grasz na tej planszy', owned: 'Masz już ten motyw', toBuy: 'Kup, by grać na tej planszy' },
   dragon: { tab: 'Smoki', inUse: 'Walczy za Ciebie', owned: 'Masz już tego smoka', toBuy: 'Walczy za Ciebie, rywale go widzą' },
+  effect: { tab: 'Efekty', inUse: 'Tak lecą Twoje ciosy', owned: 'Masz już ten efekt', toBuy: 'Twoje ciosy, rywale też je widzą' },
 };
 
 /** The shelf the shop opens on next time, for this run of the app. */
@@ -113,6 +117,24 @@ function skinLook(item: Cosmetic): SwatchLook {
   };
 }
 
+/** A hit effect: its head and trail flying up to the right, against the duel sky. */
+function effectLook(item: Cosmetic): SwatchLook {
+  const picture = new Container();
+  const color = chosenTheme(progress).colors.placed;
+  return {
+    lip: theme.panelLip,
+    face: SKY,
+    accent: theme.gold,
+    picture,
+    layout(size) {
+      picture.removeChildren().forEach((child) => child.destroy({ children: true }));
+      picture.addChild(drawEffectIcon(item.id, size, color));
+    },
+  };
+}
+
+const LOOKS: Record<CosmeticKind, (item: Cosmetic) => SwatchLook> = { board: themeLook, dragon: skinLook, effect: effectLook };
+
 /** A small tile for one item, with its price under it (or a tick once it is in use). */
 class Swatch extends Container {
   readonly item: Cosmetic;
@@ -134,7 +156,7 @@ class Swatch extends Container {
     super();
     this.kind = kind;
     this.item = item;
-    this.look = kind === 'board' ? themeLook(item) : skinLook(item);
+    this.look = LOOKS[kind](item);
     this.look.picture.mask = this.clip;
     this.price = new Text({
       text: String(item.price),
@@ -196,7 +218,7 @@ class Swatch extends Container {
   }
 }
 
-/** The two shelves as one pill split in halves, the open one gold; a dot on the other when the stars buy something there. */
+/** The shelves as one pill split in equal parts, the open one gold; a dot on another when the stars buy something there. */
 class ShelfTabs extends Container {
   private readonly track = new Graphics();
   private readonly tabs: { kind: CosmeticKind; tab: Container; face: Graphics; text: Text; dot: Graphics }[];
@@ -240,8 +262,10 @@ class ShelfTabs extends Container {
   refresh(): void {
     const w = this.tabsWidth;
     const h = this.tabsHeight;
-    const half = w / 2;
+    const half = w / this.tabs.length;
     const inset = 4;
+    // Smaller letters when three tabs share a narrow pill.
+    const fontSize = half < 80 ? 15 : 17;
     this.track.clear().roundRect(0, 0, w, h, h / 2).fill({ color: theme.panelLip, alpha: 0.85 });
     this.tabs.forEach(({ kind, tab, face, text, dot }, i) => {
       const open = kind === this.selected;
@@ -250,6 +274,7 @@ class ShelfTabs extends Container {
       face.clear();
       if (open) face.roundRect(inset, inset, half - inset * 2, h - inset * 2, (h - inset * 2) / 2).fill(theme.gold);
       text.style.fill = open ? theme.buttonPrimaryText : theme.text;
+      text.style.fontSize = fontSize;
       text.position.set(half / 2, h / 2);
       dot.clear();
       if (!open && canBuyNew(progress, kind)) {
@@ -309,8 +334,103 @@ class DragonPreview extends Container {
 }
 
 /**
- * The shop: board themes and dragon skins, bought with stars. Each shelf shows the looked-at item
- * big (the board and number pad in its colours, or the dragon over the duel scene), a row of items
+ * The effect shelf's preview: a board cell on the left shoots the looked-at effect at a dragon on the
+ * right, again and again (every third shot a big one, as for a completed row), and at once on a tap.
+ */
+class EffectPreview extends Container {
+  private readonly scene = new Scene(SCENES.dragon);
+  private readonly target = new DragonView(designOf(ENEMIES.medium));
+  private readonly tile = new Graphics();
+  private readonly digit: Text;
+  private readonly fx = new Container();
+  private readonly colors: BoardColors;
+  private effect: string;
+  private timer: gsap.core.Tween | null = null;
+  private shots = 0;
+  private tileSize = 0;
+
+  constructor(effect: string, colors: BoardColors) {
+    super();
+    this.effect = effect;
+    this.colors = colors;
+    this.digit = new Text({ text: '5', style: { fontFamily: theme.fontFamily, fontWeight: '800', fill: colors.placed } });
+    this.digit.anchor.set(0.5);
+    this.fx.eventMode = 'none';
+    this.addChild(this.scene, this.target, this.tile, this.digit, this.fx);
+  }
+
+  layout(width: number, height: number): void {
+    this.scene.layout(width, height, 22);
+    const ground = this.scene.groundY() + 4;
+    this.target.layout(Math.min(height * 0.62, width * 0.52));
+    this.target.position.set(width * 0.7, ground - this.target.footOffset());
+    const size = Math.max(36, Math.min(58, width * 0.15));
+    this.tileSize = size;
+    this.tile.position.set(width * 0.2, height - size * 0.75 - 18);
+    this.tile
+      .clear()
+      .roundRect(-size / 2, -size / 2 + 4, size, size, 12)
+      .fill(this.colors.frameLip)
+      .roundRect(-size / 2, -size / 2, size, size, 12)
+      .fill(this.colors.frame)
+      .roundRect(-size / 2 + 6, -size / 2 + 6, size - 12, size - 12, 8)
+      .fill(this.colors.cell);
+    this.digit.style.fontSize = Math.round(size * 0.48);
+    this.digit.position.set(this.tile.x, this.tile.y + size * 0.03);
+  }
+
+  show(effect: string): void {
+    this.effect = effect;
+    this.shots = 0;
+    if (this.timer) this.fire(false);
+  }
+
+  /** Shoots on its own while the shelf is open. */
+  start(): void {
+    if (this.timer) return;
+    this.fire(false);
+    this.schedule();
+  }
+
+  stop(): void {
+    this.timer?.kill();
+    this.timer = null;
+  }
+
+  /** One shot of the looked-at effect; the dragon flinches when it lands. */
+  fire(big: boolean, loud = false): void {
+    if (this.destroyed || this.tileSize === 0) return;
+    gsap.fromTo(this.digit.scale, { x: 1.35, y: 1.35 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(3)' });
+    const from = { x: this.tile.x, y: this.tile.y };
+    const to = { x: this.target.x, y: this.target.y };
+    const side = Math.random() < 0.5 ? -1 : 1;
+    void fireShot(this.fx, this.effect, { from, to, big, color: big ? theme.flash : this.colors.placed, side }).then(() => {
+      if (this.destroyed) return;
+      this.target.hurt(big ? 18 : 8);
+      if (loud) feedback.enemyHit(big);
+    });
+  }
+
+  override destroy(options?: DestroyOptions): void {
+    this.stop();
+    killTweens(this.digit.scale);
+    stopEffects(this.fx);
+    super.destroy(options);
+  }
+
+  private schedule(): void {
+    this.timer = gsap.delayedCall(1.4, () => {
+      this.shots++;
+      this.fire(this.shots % 3 === 0);
+      this.schedule();
+    });
+  }
+}
+
+/**
+ * The shop: board themes, dragon skins and hit effects, bought with stars. Each shelf shows the looked-at item
+ * big (the board and number pad in its colours, the dragon over the duel scene, or the effect flying
+ * at a dragon), a row of items
  * to pick from (tap, swipe the preview, or the arrow keys), and one button that buys the item or
  * puts on one already bought.
  */
@@ -318,6 +438,16 @@ export class ShopScreen extends Container {
   private readonly options: ShopOptions;
   private readonly backButton: Button;
   private readonly tabs: ShelfTabs;
+  private readonly title = new Text({
+    text: 'Sklep',
+    style: {
+      fontFamily: theme.fontFamily,
+      fontWeight: '800',
+      fontSize: 34,
+      fill: theme.text,
+      stroke: { color: theme.panelLip, width: 6, join: 'round' },
+    },
+  });
   private readonly stars = new StarCounter(progress.stars);
   /** The looked-at item, big; it takes no taps but a swipe (and on the dragon shelf a tap, to see it attack). */
   private readonly preview = new Container();
@@ -325,6 +455,7 @@ export class ShopScreen extends Container {
   private readonly board: BoardView;
   private readonly pad: NumberPad;
   private readonly dragonPreview: DragonPreview;
+  private readonly effectPreview: EffectPreview;
   private swatches: Swatch[] = [];
   private readonly itemName = new Text({
     text: '',
@@ -367,7 +498,8 @@ export class ShopScreen extends Container {
     for (let digit = 1; digit <= 9; digit++) this.pad.setDone(digit, this.board.countOf(digit) === 9);
     this.boardPreview.addChild(this.board, this.pad);
     this.dragonPreview = new DragonPreview(dragonSkin(progress.dragonSkin).design);
-    this.preview.addChild(this.boardPreview, this.dragonPreview);
+    this.effectPreview = new EffectPreview(progress.hitEffect, colors);
+    this.preview.addChild(this.boardPreview, this.dragonPreview, this.effectPreview);
     this.preview.interactiveChildren = false;
     this.preview.eventMode = 'static';
     this.preview.cursor = 'pointer';
@@ -378,7 +510,8 @@ export class ShopScreen extends Container {
     this.actionButton = new Button({ text: '', variant: 'primary', onTap: () => this.act() });
     this.fx.eventMode = 'none';
 
-    this.addChild(this.preview, this.itemName, this.status, this.actionButton, this.tabs, this.stars, this.backButton, this.fx);
+    this.title.anchor.set(0.5, 0);
+    this.addChild(this.preview, this.itemName, this.status, this.actionButton, this.title, this.tabs, this.stars, this.backButton, this.fx);
     this.fillShelf();
   }
 
@@ -392,12 +525,11 @@ export class ShopScreen extends Container {
     this.backButton.layout(44, 44);
     this.stars.layout(42);
     this.stars.position.set(width - margin - this.stars.pillWidth, 13);
-    // The tabs in the middle of the screen, if the back button and the stars leave room.
-    const tabsLeft = margin + 44 + 10;
-    const tabsRight = width - margin - this.stars.pillWidth - 10;
-    const tabsWidth = Math.min(260, tabsRight - tabsLeft);
-    this.tabs.position.set(Math.max(tabsLeft, Math.min(tabsRight - tabsWidth, width / 2 - tabsWidth / 2)), 12);
-    this.tabs.layout(tabsWidth, 44);
+    this.title.position.set(width / 2, 14);
+    // The shelves on a row of their own under the header.
+    const tabsWidth = Math.min(column, 360);
+    this.tabs.position.set((width - tabsWidth) / 2, 66);
+    this.tabs.layout(tabsWidth, 42);
 
     // From the bottom up: the button, the item's name and status, the swatches; the preview gets the rest.
     const buttonHeight = 66;
@@ -419,7 +551,7 @@ export class ShopScreen extends Container {
       view.layout(swatch);
     });
 
-    const top = 70;
+    const top = 66 + 42 + 14;
     const room = swatchY - 22 - top;
     let previewWidth: number;
     let previewHeight: number;
@@ -436,6 +568,7 @@ export class ShopScreen extends Container {
       previewWidth = column;
       previewHeight = Math.max(160, Math.min(room, column * 1.05));
       this.dragonPreview.layout(previewWidth, previewHeight);
+      this.effectPreview.layout(previewWidth, previewHeight);
     }
     // Pivot in the middle, so the preview pops in place after a purchase.
     this.preview.pivot.set(previewWidth / 2, previewHeight / 2);
@@ -451,7 +584,7 @@ export class ShopScreen extends Container {
     else if (event.key === 'Enter') this.act();
     else if (event.key === 'Tab') {
       event.preventDefault();
-      this.openShelf(this.kind === 'board' ? 'dragon' : 'board');
+      this.openShelf(COSMETIC_KINDS[(COSMETIC_KINDS.indexOf(this.kind) + 1) % COSMETIC_KINDS.length]);
     }
   }
 
@@ -491,6 +624,9 @@ export class ShopScreen extends Container {
     this.index = Math.max(0, this.items.findIndex((item) => isChosen(progress, this.kind, item)));
     this.boardPreview.visible = this.kind === 'board';
     this.dragonPreview.visible = this.kind === 'dragon';
+    this.effectPreview.visible = this.kind === 'effect';
+    if (this.kind === 'effect') this.effectPreview.start();
+    else this.effectPreview.stop();
     this.tabs.select(this.kind);
     this.showItem();
   }
@@ -514,6 +650,8 @@ export class ShopScreen extends Container {
       // A tap on the dragon: it shows off its attack.
       feedback.dragonLunge();
       this.dragonPreview.attack();
+    } else if (Math.abs(dx) < 10 && this.kind === 'effect') {
+      this.effectPreview.fire(true, true);
     }
   }
 
@@ -524,8 +662,10 @@ export class ShopScreen extends Container {
       const colors = boardTheme(item.id).colors;
       this.board.setColors(colors);
       this.pad.setColors(colors);
-    } else {
+    } else if (this.kind === 'dragon') {
       this.dragonPreview.show(dragonSkin(item.id).design);
+    } else {
+      this.effectPreview.show(item.id);
     }
     this.itemName.text = item.name;
     const shelf = SHELVES[this.kind];
@@ -584,15 +724,16 @@ export class ShopScreen extends Container {
     burst(this.fx, swatch.center(), swatch.accent, 10);
   }
 
-  /** Saves what was bought or put on; a new dragon skin also goes to the server, for rivals to see. */
+  /** Saves what was bought or put on; a new dragon skin or hit effect also goes to the server, for rivals to see. */
   private saveChange(): void {
     saveProgress();
-    if (this.kind === 'dragon') syncProfile();
+    if (this.kind !== 'board') syncProfile();
   }
 
-  /** The preview pops; a dragon also lunges, proud of its new look. */
+  /** The preview pops; a dragon also lunges, proud of its new look, and a new effect fires a big shot. */
   private pop(): void {
     gsap.fromTo(this.preview.scale, { x: 0.94, y: 0.94 }, { x: 1, y: 1, duration: 0.45, ease: 'back.out(3)' });
     if (this.kind === 'dragon') this.dragonPreview.attack();
+    if (this.kind === 'effect') this.effectPreview.fire(true);
   }
 }

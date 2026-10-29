@@ -53,8 +53,9 @@ const a = await signUp('A');
 const b = await signUp('B');
 check('two anonymous players signed up', Boolean(a.token && b.token));
 check('profile', (await call(a, 'profile', { nickname: 'Tester A' })).body.nickname === 'Tester A');
-await call(b, 'profile', { nickname: 'Tester B', dragon: 'king' });
+await call(b, 'profile', { nickname: 'Tester B', dragon: 'king', effect: 'meteor' });
 check('a malformed dragon skin is refused', (await call(b, 'profile', { nickname: 'Tester B', dragon: 'Król!' })).body.error === 'bad-dragon');
+check('a malformed hit effect is refused', (await call(b, 'profile', { nickname: 'Tester B', effect: 'Ogień!' })).body.error === 'bad-effect');
 
 // Room by code.
 const created = await call(a, 'create', { difficulty: 'easy' });
@@ -190,12 +191,14 @@ const peek = await select(outsider, `duels?id=eq.${duel.id}&select=id`);
 check("players cannot read other players' duels", peek.rows.length === 0, peek);
 const own = await select(a, `duels?id=eq.${duel.id}&select=id`);
 check('players can read their own duels', own.rows.length === 1, own);
-const profiles = await select(a, `profiles?id=in.(${a.id},${b.id})&select=id,nickname,dragon`);
-const dragonOf = (p: Player) => (profiles.rows as { id: string; dragon: string }[]).find((row) => row.id === p.id)?.dragon;
-check("players see their rival's dragon skin, the default without one", dragonOf(b) === 'king' && dragonOf(a) === 'azure', profiles);
+const profiles = await select(a, `profiles?id=in.(${a.id},${b.id})&select=id,nickname,dragon,effect`);
+const profileOf = (p: Player) => (profiles.rows as { id: string; dragon: string; effect: string }[]).find((row) => row.id === p.id);
+check("players see their rival's dragon skin, the default without one", profileOf(b)?.dragon === 'king' && profileOf(a)?.dragon === 'azure', profiles);
+check("players see their rival's hit effect, the default without one", profileOf(b)?.effect === 'meteor' && profileOf(a)?.effect === 'sparks', profiles);
 await call(b, 'profile', { nickname: 'Tester B 2' });
-const renamed = await select(a, `profiles?id=eq.${b.id}&select=dragon`);
-check('a profile update without a skin keeps the skin', (renamed.rows[0] as { dragon?: string })?.dragon === 'king', renamed);
+const renamed = await select(a, `profiles?id=eq.${b.id}&select=dragon,effect`);
+const kept = renamed.rows[0] as { dragon?: string; effect?: string } | undefined;
+check('a profile update without cosmetics keeps them', kept?.dragon === 'king' && kept?.effect === 'meteor', renamed);
 const write = await fetch(`${SUPABASE_URL}/rest/v1/duels?id=eq.${duel.id}`, {
   method: 'PATCH',
   headers: { Authorization: `Bearer ${a.token}`, apikey: SUPABASE_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' },

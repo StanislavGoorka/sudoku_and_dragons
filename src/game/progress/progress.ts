@@ -1,6 +1,7 @@
 import type { Difficulty } from '../../core/index.ts';
 import { BOARD_THEMES, boardTheme, DEFAULT_BOARD_THEME, type BoardTheme } from '../boardThemes.ts';
 import { DEFAULT_DRAGON_SKIN, DRAGON_SKINS, dragonSkin, type DragonSkin } from '../dragonSkins.ts';
+import { DEFAULT_HIT_EFFECT, HIT_EFFECTS, hitEffect, type HitEffect } from '../hitEffects.ts';
 
 /** The solo levels in the order they unlock. */
 export const LEVELS: Difficulty[] = ['easy', 'medium', 'hard'];
@@ -36,6 +37,10 @@ export interface Progress {
   dragonSkins: string[];
   /** The skin of your dragon in duels. */
   dragonSkin: string;
+  /** Hit effects bought (the free one is not listed). */
+  hitEffects: string[];
+  /** How your hits fly to the dragon you attack. */
+  hitEffect: string;
 }
 
 export function emptyProgress(): Progress {
@@ -52,6 +57,8 @@ export function emptyProgress(): Progress {
     boardTheme: DEFAULT_BOARD_THEME,
     dragonSkins: [],
     dragonSkin: DEFAULT_DRAGON_SKIN,
+    hitEffects: [],
+    hitEffect: DEFAULT_HIT_EFFECT,
   };
 }
 
@@ -244,14 +251,15 @@ export interface Cosmetic {
   price: number;
 }
 
-/** The shop's shelves: board themes and dragon skins. */
-export type CosmeticKind = 'board' | 'dragon';
-export const COSMETIC_KINDS: CosmeticKind[] = ['board', 'dragon'];
-export const COSMETICS: Record<CosmeticKind, readonly Cosmetic[]> = { board: BOARD_THEMES, dragon: DRAGON_SKINS };
+/** The shop's shelves: board themes, dragon skins and hit effects. */
+export type CosmeticKind = 'board' | 'dragon' | 'effect';
+export const COSMETIC_KINDS: CosmeticKind[] = ['board', 'dragon', 'effect'];
+export const COSMETICS: Record<CosmeticKind, readonly Cosmetic[]> = { board: BOARD_THEMES, dragon: DRAGON_SKINS, effect: HIT_EFFECTS };
 /** Where Progress keeps each kind: the ones bought, and the one in use. */
 const SLOTS = {
   board: { owned: 'boardThemes', chosen: 'boardTheme' },
   dragon: { owned: 'dragonSkins', chosen: 'dragonSkin' },
+  effect: { owned: 'hitEffects', chosen: 'hitEffect' },
 } as const satisfies Record<CosmeticKind, { owned: keyof Progress; chosen: keyof Progress }>;
 
 /** A cosmetic is the player's once bought; the free one of each kind always is. */
@@ -297,6 +305,11 @@ export function chosenTheme(progress: Progress): BoardTheme {
 /** The skin of your dragon in duels. */
 export function chosenSkin(progress: Progress): DragonSkin {
   return dragonSkin(progress.dragonSkin);
+}
+
+/** How your hits fly. */
+export function chosenEffect(progress: Progress): HitEffect {
+  return hitEffect(progress.hitEffect);
 }
 
 /**

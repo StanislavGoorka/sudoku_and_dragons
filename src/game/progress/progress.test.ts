@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { boardTheme, DEFAULT_BOARD_THEME } from '../boardThemes.ts';
 import { DEFAULT_DRAGON_SKIN, dragonSkin } from '../dragonSkins.ts';
+import { DEFAULT_HIT_EFFECT, hitEffect } from '../hitEffects.ts';
 import {
   ACHIEVEMENTS,
   buy,
   canBuyNew,
   choose,
+  chosenEffect,
   chosenSkin,
   chosenTheme,
   DUEL_WIN_STARS,
@@ -182,6 +184,19 @@ describe('cosmetics', () => {
     progress.stars = 15;
     expect(canBuyNew(progress, 'board')).toBe(true);
     expect(canBuyNew(progress, 'dragon')).toBe(false);
+    expect(canBuyNew(progress, 'effect')).toBe(true);
+  });
+
+  it('a hit effect is bought and used apart from the rest', () => {
+    const progress = emptyProgress();
+    expect(chosenEffect(progress).id).toBe(DEFAULT_HIT_EFFECT);
+    const fire = hitEffect('fire');
+    progress.stars = fire.price;
+    expect(buy(progress, 'effect', fire)).toBe('bought');
+    expect(chosenEffect(progress).id).toBe('fire');
+    expect(chosenSkin(progress).id).toBe(DEFAULT_DRAGON_SKIN);
+    expect(choose(progress, 'effect', hitEffect('meteor'))).toBe(false);
+    expect(choose(progress, 'effect', hitEffect(DEFAULT_HIT_EFFECT))).toBe(true);
   });
 });
 
@@ -194,6 +209,7 @@ describe('saved data', () => {
     progress.starsEarned += 50;
     buy(progress, 'board', boardTheme('meadow'));
     buy(progress, 'dragon', dragonSkin('emerald'));
+    buy(progress, 'effect', hitEffect('stars'));
     expect(parseProgress(JSON.parse(JSON.stringify(progress)))).toEqual(progress);
   });
 
@@ -223,6 +239,12 @@ describe('saved data', () => {
     expect(parseProgress({ dragonSkin: 'magma' }).dragonSkin).toBe(DEFAULT_DRAGON_SKIN);
     // Saves from before skins existed.
     expect(parseProgress({ stars: 3 })).toMatchObject({ dragonSkins: [], dragonSkin: DEFAULT_DRAGON_SKIN });
+  });
+
+  it('keeps only known bought hit effects, and a chosen one only if owned', () => {
+    expect(parseProgress({ hitEffects: ['fire', 'gone'], hitEffect: 'fire' })).toMatchObject({ hitEffects: ['fire'], hitEffect: 'fire' });
+    expect(parseProgress({ hitEffect: 'rainbow' }).hitEffect).toBe(DEFAULT_HIT_EFFECT);
+    expect(parseProgress({ stars: 3 })).toMatchObject({ hitEffects: [], hitEffect: DEFAULT_HIT_EFFECT });
   });
 });
 

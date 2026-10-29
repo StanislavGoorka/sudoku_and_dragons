@@ -3,7 +3,8 @@ import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
 import { DUEL_RULES, otherSeat, solve, type DuelEvent, type DuelState, type Seat, type Unit } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
 import { rivalDesign } from '../dragonSkins.ts';
-import { burst, floatText, launchOrb, shake, stopEffects, wait } from '../fx/effects.ts';
+import { floatText, shake, stopEffects, wait } from '../fx/effects.ts';
+import { fireShot } from '../fx/hitEffects.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { DuelSync, type Prediction, type Snapshot } from '../net/duelSync.ts';
 import {
@@ -26,7 +27,7 @@ import { Button } from '../ui/Button.ts';
 import { DuelArena } from '../ui/DuelArena.ts';
 import { Modal } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
-import { chosenSkin, chosenTheme, recordDuel } from '../progress/progress.ts';
+import { chosenEffect, chosenSkin, chosenTheme, recordDuel } from '../progress/progress.ts';
 import { rewardLines } from '../progress/rewardText.ts';
 import { progress, saveProgress } from '../progress/store.ts';
 import { fightLayout } from './fightLayout.ts';
@@ -82,6 +83,8 @@ export class DuelScreen extends Container {
   /** The event behind the last confirmed version. */
   private lastEvent: DuelEvent | null;
   private rivalName = 'Rywal';
+  /** How the rival's hits fly (their profile's effect; the default until it is read). */
+  private rivalEffect: string | null = null;
 
   private readonly arena: DuelArena;
   private readonly board: BoardView;
@@ -140,7 +143,10 @@ export class DuelScreen extends Container {
     // The rival as last seen this session (a rematch), until their profile is read again.
     const rivalId = seat === 0 ? row.player1 : row.player0;
     const known = rivalId ? knownProfile(rivalId) : undefined;
-    if (known) this.rivalName = known.nickname;
+    if (known) {
+      this.rivalName = known.nickname;
+      this.rivalEffect = known.effect;
+    }
     this.arena = new DuelArena(me.nickname, this.rivalName, DUEL_RULES.maxHp, chosenSkin(progress).design);
     if (known) this.arena.showRival(rivalDesign(known.dragon));
     this.arena.hpBar(true).setHp(this.state.hp[seat]);
@@ -163,6 +169,7 @@ export class DuelScreen extends Container {
       void fetchProfile(rivalId).then((profile) => {
         if (this.destroyed) return;
         this.rivalName = profile.nickname;
+        this.rivalEffect = profile.effect;
         this.arena.setRivalName(profile.nickname);
         this.showRivalDragon(profile.dragon);
       });
@@ -455,7 +462,10 @@ export class DuelScreen extends Container {
     }
   }
 
-  /** Orbs fly from the board to the dragon of the player who was hit (`targetMine`: you), whose HP drops to `hp`. */
+  /**
+   * The hitter's effect flies from the board to the dragon of the player who was hit (`targetMine`: you),
+   * whose HP drops to `hp`: your effect at the rival, theirs at you.
+   */
   private async playHit(cell: number, completed: Unit[], targetMine: boolean, damage: number, hp: number): Promise<void> {
     const epoch = this.epoch;
     const big = completed.length > 0;
@@ -468,15 +478,9 @@ export class DuelScreen extends Container {
         await wait(0.1 + i * 0.12);
         if (this.destroyed) return;
         const from = this.fx.toLocal(origin, this.board);
-        await launchOrb(this.fx, from, to, {
-          color,
-          radius: big ? 9 : 5,
-          duration: big ? 0.5 : 0.35,
-          arc: (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 50),
-        });
-        if (this.destroyed) return;
-        burst(this.fx, to, color, big ? 14 : 6);
-        if (landed) return;
+        const effect = targetMine ? (this.rivalEffect ?? '') : chosenEffect(progress).id;
+        await fireShot(this.fx, effect, { from, to, big, color, side: Math.random() < 0.5 ? -1 : 1 });
+        if (this.destroyed || landed) return;
         landed = true;
         // Predictions taken back meanwhile: show the HP as it is now.
         this.hurtPlayer(targetMine, damage, big, epoch === this.epoch ? hp : null);

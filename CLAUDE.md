@@ -11,7 +11,7 @@ code and comments are English.
   `com.metrezz.sudokudragons`, portrait only). iOS is not added yet; it needs a Mac or cloud CI.
 - **Supabase** (project `SudokuAndDragons`, ref `wmsngertpctiiermiigz`, eu-central-1) runs online duels and accounts:
   anonymous sign-in (enabled in the dashboard: Authentication → Sign In / Providers) plus e-mail and password,
-  tables `profiles` (nickname and dragon skin, readable by every signed-in player),
+  tables `profiles` (nickname, dragon skin and hit effect, readable by every signed-in player),
   `duels`, `duel_secrets`, `saves` (schema in `supabase/migrations/`) and the Edge Function `duel`.
   Free plan: it allows two active projects, and this one shares the quota with the owner's other projects.
   Auth mails: until custom SMTP is set (Authentication → Emails → SMTP), Supabase's own sender allows about two
@@ -86,7 +86,7 @@ code and comments are English.
   picking a level, `GameScreen` for a battle, `LobbyScreen` and `DuelScreen` for online duels, `AccountScreen` for
   the nickname and the account); a screen has `layout`, and optionally `update` (per frame)
   and `handleKey`. `ui/` are reusable views (`Button`, `Modal`, board, arena…), `fx/` holds short-lived effects
-  (orbs, particles, floating text, shake) and `killTweens`, `theme.ts` holds colours and fonts (see Look below),
+  (orbs, particles, floating text, shake), the hit effects (`fx/hitEffects.ts`) and `killTweens`, `theme.ts` holds colours and fonts (see Look below),
   `difficulty.ts` the Polish difficulty names and the remembered last choice (localStorage),
   `enemies.ts` which design each enemy uses (by enemy id),
   `net/online.ts` the Supabase client (sign-in, the profile, calls to the `duel` function, `watchDuel` for live
@@ -145,7 +145,7 @@ code and comments are English.
     `theme.gold` as the title colour for a win.
   - The menu shows one level at a time: its dragon in its scene, flipped with the arrows or a swipe, then
     one "Walcz!" button and the online button; sound and vibration live in the settings dialog (gear), board
-    themes and dragon skins in the shop (palette, with a gold dot when the stars buy something not owned yet).
+    themes, dragon skins and hit effects in the shop (palette, with a gold dot when the stars buy something not owned yet).
 - Board themes (`src/game/boardThemes.ts`): cosmetics bought with stars, never gameplay help (the owner's call).
   `BOARD_THEMES` (Fiołek free, then Łąka 15, Ocean 25, Cukierek 35, Wulkan 50, Noc 65, Skarbiec 90) each give
   `BoardColors`: tray, lines, cells (`cellAlt` paints every other box for a checker), highlights, digit colours
@@ -165,10 +165,20 @@ code and comments are English.
   default look. `rivalDesign()`: a rival on the free skin is shown orange, so two players who bought nothing
   still tell their dragons apart; two players with the same paid skin do look alike (mirrored). The lobby's
   picture shows your skin too.
-- `screens/ShopScreen` has two shelves (tabs "Plansze" / "Smoki", the one opened last remembered for the run):
-  the looked-at item big (a fixed half-solved board and the pad in the theme's colours, or the dragon over the
-  duel scene, which attacks when tapped), a row of swatches (tap, swipe the preview, arrow keys; Tab switches
-  shelf), and one button that buys (stars run down, sparks, `feedback.purchase()`) or puts on an owned item.
+- Hit effects (`src/game/hitEffects.ts`, drawn by `fx/hitEffects.ts`): what flies from the board to the dragon you
+  hit, and what happens where it lands; cosmetics too, plainest cheapest: Iskry (free: the old orb in your digit
+  colour), Gwiazdki 15 (a spinning star), Szron 30 (an ice shard, frost ring), Ogień 45 (a fireball, explosion and
+  smoke), Piorun 60 (a lightning bolt that strikes at once), Meteor 80 (a burning rock thrown high, shockwave and
+  debris), Tęcza 110 (a comet changing colour, rainbow ribbon, firework). `fireShot(layer, id, shot)` plays one and
+  resolves at impact, so screens time the damage from it; `big` (a completed unit) makes it bigger. Battles use
+  yours, duels yours for your hits and the rival's (the `effect` column of their profile, sent and read like the
+  skin) for theirs; an unknown id plays the default. `drawEffectIcon` draws the shop swatch.
+- `screens/ShopScreen` has three shelves (tabs "Plansze" / "Smoki" / "Efekty" on a row under the "Sklep" header, the
+  one opened last remembered for the run): the looked-at item big (a fixed half-solved board and the pad in the
+  theme's colours, the dragon over the duel scene, which attacks when tapped, or a board cell shooting the effect
+  at the red dragon every 1.4 s, a big shot every third and on a tap), a row of swatches (tap, swipe the preview,
+  arrow keys; Tab switches shelf), and one button that buys (stars run down, sparks, `feedback.purchase()`) or puts
+  on an owned item.
 - Accounts (`net/account.ts`, `screens/AccountScreen`, the person button in the menu): everyone starts as a guest,
   an anonymous account made at the first online duel. Registering gives that same account an e-mail
   (`updateUser({ email })`, confirmed with the mailed code: `verifyOtp` type `email_change`, or the link, noticed
@@ -192,9 +202,9 @@ code and comments are English.
   - `progress.ts` is pure and tested: `Progress` (star balance, stars ever earned, per-level wins / losses / best
     stars / best time, duels played and won, flawless wins, best combo, unlocked achievements), `parseProgress`
     (saved data of any age made whole), `recordBattle` / `recordDuel` (update it and return the `Reward`).
-  - Stars are the currency, spent on cosmetics: `COSMETICS` by kind ('board', 'dragon'), and `buy`, `choose`,
-    `owns`, `isChosen`, `canBuyNew` for either kind (`boardThemes` / `dragonSkins` list the bought ones,
-    `boardTheme` / `dragonSkin` the ones in use; `chosenTheme`, `chosenSkin` look them up). A won battle gives one star per goal met: the win, no
+  - Stars are the currency, spent on cosmetics: `COSMETICS` by kind ('board', 'dragon', 'effect'), and `buy`, `choose`,
+    `owns`, `isChosen`, `canBuyNew` for any kind (`boardThemes` / `dragonSkins` / `hitEffects` list the bought ones,
+    `boardTheme` / `dragonSkin` / `hitEffect` the ones in use; `chosenTheme`, `chosenSkin`, `chosenEffect` look them up). A won battle gives one star per goal met: the win, no
     mistakes, at least 80% HP left (`HP_GOAL`; slow play lets the dragon's timed attacks through). An online
     duel win gives `DUEL_WIN_STARS` (2). Each level remembers its best stars.
   - Levels unlock in order: only the young dragon at first, each win opens the next (`isUnlocked`). Online duels
@@ -247,7 +257,8 @@ code and comments are English.
   `screen.sync.predictions` lists what the server has not confirmed yet.
 - In dev, `__game.state` is the saved progress (change it, then `__game.save()`), `__game.unlockAll()` opens every
   level, `__game.resetProgress()` starts over, `__game.progress()`, `__game.account()` and `__game.shop()` (or
-  `__game.shop('dragon')`) open those screens.
+  `__game.shop('dragon')`, `__game.shop('effect')`) open those screens. To see an effect frozen mid-flight, fire it
+  in the shop (`screen.effectPreview.fire(true)`), wait, then `gsap.globalTimeline.timeScale(0)`, screenshot, set 1.
 - Accounts without mail (the hourly mail limit is tiny): make a confirmed test user in SQL (`auth.users` with
   `extensions.crypt(password, extensions.gen_salt('bf'))`, `email_confirmed_at`, empty strings in the token
   columns, plus its `auth.identities` row) and log in with it. To try a code, fake the mail-sending request in the
