@@ -44,6 +44,11 @@ code and comments are English.
   matchmaking, moves, forfeits, rematches, a turn running out, and that nobody can read solutions, other
   players' duels or saves). It waits out one full turn, so it takes about 40 s; run it in the background.
 - `npm run sim:duel`: bots duel each other; reports how duels end, first-mover advantage, strategy edge.
+- `npm run deploy:web`: build and publish the web version to Cloudflare Pages, project `sudoku-dragons`, at
+  https://sudoku-dragons.pages.dev (wrangler, signed in with the owner's Cloudflare account through `wrangler
+  login`). The project was created once with `wrangler pages project create --force` on classic Pages (newer
+  wranglers otherwise hand Pages commands to Workers, which fails without a wrangler config); never pass
+  `--force` again. Online duels work from there as from the app: the `duel` function allows any origin.
 - The Vite dev server must not watch `android/` (see vite.config.ts): its file handles stop Capacitor and
   Gradle from deleting folders there on Windows. Stop the dev server if `cap add`/Gradle reports a busy folder.
 
