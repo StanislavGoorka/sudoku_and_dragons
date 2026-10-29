@@ -69,10 +69,12 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
     const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-    const { data, error } = await admin.auth.getUser(token);
-    if (error || !data.user) throw new HttpError(401, 'not-signed-in');
+    // Checks the token's signature against the project's cached signing keys: no round trip to Auth.
+    const { data, error } = await admin.auth.getClaims(token);
+    const uid = data?.claims.sub;
+    if (error || !uid) throw new HttpError(401, 'not-signed-in');
     const body = await req.json().catch(() => ({}));
-    const result = await handle(data.user.id, body);
+    const result = await handle(uid, body);
     // serverTime lets clients correct their clock for the turn countdown.
     return json({ ...result, serverTime: Date.now() });
   } catch (e) {
@@ -247,10 +249,9 @@ async function save(
   duel: DuelRow,
   state: DuelState,
   event: DuelEvent,
-  turnPassed: boolean,
+  turnStartedAt: string | null,
   extra: Record<string, unknown> = {},
 ) {
-  const now = new Date().toISOString();
   const { data, error } = await admin
     .from('duels')
     .update({
@@ -258,8 +259,8 @@ async function save(
       last_event: event,
       status: state.finished ? 'finished' : 'playing',
       version: duel.version + 1,
-      turn_started_at: turnPassed ? now : duel.turn_started_at,
-      updated_at: now,
+      turn_started_at: turnStartedAt,
+      updated_at: new Date().toISOString(),
       ...extra,
     })
     .eq('id', duel.id)
@@ -272,18 +273,21 @@ async function save(
 }
 
 async function move(uid: string, duelId: string, cell: number, digit: number) {
-  const duel = await loadDuel(duelId);
+  // The duel and its solution in one query.
+  const { data, error } = await admin.from('duels').select('*, duel_secrets(solution)').eq('id', duelId).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new HttpError(404, 'no-such-duel');
+  const { duel_secrets: secret, ...duel } = data as DuelRow & { duel_secrets: { solution: number[] } };
   const seat = seatOf(duel, uid);
   if (duel.status !== 'playing') throw new HttpError(409, 'not-playing');
   if (turnExpired(duel, GRACE_SECONDS)) throw new HttpError(409, 'too-late');
 
-  const { data: secret, error } = await admin.from('duel_secrets').select('solution').eq('duel_id', duelId).single();
-  if (error) throw error;
   const state = duel.state;
   const turnBefore = state.turn;
-  const result = playDuelMove(state, secret.solution as number[], seat, cell, digit);
+  const result = playDuelMove(state, secret.solution, seat, cell, digit);
   if (!result.ok) throw new HttpError(409, result.error);
-  const saved = await save(duel, state, result.event, state.turn !== turnBefore);
+  const turnStartedAt = state.turn !== turnBefore ? new Date().toISOString() : duel.turn_started_at;
+  const saved = await save(duel, state, result.event, turnStartedAt);
   return { duel: saved, event: result.event };
 }
 
@@ -294,21 +298,33 @@ async function claimTimeout(uid: string, duelId: string) {
   if (!turnExpired(duel, 0)) throw new HttpError(409, 'not-yet');
   const event = timeoutTurn(duel.state);
   if (!event) throw new HttpError(409, 'not-playing');
-  return { duel: await save(duel, duel.state, event, true), event };
+  // Clients show the next turn from the deadline on, before anyone claims it, so it starts there
+  // (unless the claim comes so late that the deadline is long gone).
+  const deadline = Date.parse(duel.turn_started_at!) + DUEL_RULES.turnSeconds * 1000;
+  const startsAt = Date.now() - deadline < GRACE_SECONDS * 1000 ? deadline : Date.now();
+  return { duel: await save(duel, duel.state, event, new Date(startsAt).toISOString()), event };
 }
 
 async function leave(uid: string, duelId: string) {
-  const duel = await loadDuel(duelId);
-  const seat = seatOf(duel, uid);
-  if (duel.status === 'waiting') {
-    await admin.from('duels').update({ status: 'cancelled' }).eq('id', duelId).eq('status', 'waiting');
-    return { cancelled: true };
+  // Retries when a move or a timeout claim changes the duel between reading and writing it.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const duel = await loadDuel(duelId);
+    const seat = seatOf(duel, uid);
+    if (duel.status === 'waiting') {
+      await admin.from('duels').update({ status: 'cancelled' }).eq('id', duelId).eq('status', 'waiting');
+      return { cancelled: true };
+    }
+    if (duel.status !== 'playing') return { cancelled: false };
+    const event = forfeit(duel.state, seat);
+    if (!event) return { cancelled: false };
+    try {
+      // Whoever gives up does not want a rematch either.
+      return { duel: await save(duel, duel.state, event, duel.turn_started_at, { rematch_declined: true }), event };
+    } catch (e) {
+      if (!(e instanceof HttpError && e.message === 'conflict')) throw e;
+    }
   }
-  if (duel.status !== 'playing') return { cancelled: false };
-  const event = forfeit(duel.state, seat);
-  if (!event) return { cancelled: false };
-  // Whoever gives up does not want a rematch either.
-  return { duel: await save(duel, duel.state, event, false, { rematch_declined: true }), event };
+  throw new HttpError(409, 'conflict');
 }
 
 /**

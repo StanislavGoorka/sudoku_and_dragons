@@ -107,13 +107,18 @@ export class BoardView extends Container {
     this.refresh();
   }
 
-  /** Catches up with `board` without animation (e.g. after missing updates in a duel). */
+  /**
+   * Catches up with `board` without animation: after missing updates in a duel, or to take back
+   * digits the server did not accept.
+   */
   sync(board: Grid, color: number = theme.placed): void {
     board.forEach((digit, cell) => {
-      if (digit === 0 || this.board[cell] === digit) return;
+      if (this.board[cell] === digit) return;
       this.board[cell] = digit;
       const view = this.cells[cell];
-      view.digit.text = String(digit);
+      killTweens(view.digit.scale);
+      view.digit.scale.set(1);
+      view.digit.text = digit === 0 ? '' : String(digit);
       view.digit.style.fill = color;
     });
     this.refresh();

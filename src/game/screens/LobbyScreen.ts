@@ -5,6 +5,8 @@ import {
   connect,
   errorMessage,
   fetchDuel,
+  leaveDuel,
+  localNickname,
   online,
   watchDuel,
   type DuelRow,
@@ -20,13 +22,14 @@ export interface LobbyOptions {
   onMenu: () => void;
 }
 
+/** `duelId` and `code` are null while the server is still making the duel. */
 type View =
-  | { kind: 'connecting' }
   | { kind: 'offline'; message: string }
   | { kind: 'home'; message?: string }
-  | { kind: 'searching'; duelId: string }
-  | { kind: 'room'; duelId: string; code: string }
-  | { kind: 'join'; code: string; message?: string };
+  | { kind: 'searching'; duelId: string | null }
+  | { kind: 'room'; duelId: string | null; code: string | null }
+  | { kind: 'join'; code: string; message?: string }
+  | { kind: 'joining'; code: string };
 
 /** One line of the stacked layout: its height and how to place it in the column. */
 interface Row {
@@ -34,18 +37,24 @@ interface Row {
   place(left: number, top: number, width: number): void;
 }
 
-/** Where online duels start: quick match, a room with a code, or joining a friend's code. */
+/**
+ * Where online duels start: quick match, a room with a code, or joining a friend's code. Every
+ * button shows its result at once (the lobby, the search, the room); sign-in and the server's
+ * answers catch up in the background.
+ */
 export class LobbyScreen extends Container {
   private readonly options: LobbyOptions;
-  private me: Me | null = null;
+  private readonly nickname = localNickname();
+  private ready!: Promise<Me>;
   private difficulty: Difficulty = loadDifficulty();
-  private view: View = { kind: 'connecting' };
+  private view: View = { kind: 'home' };
   private content = new Container();
   private rows: Row[] = [];
-  /** Animates the dots of "Szukam przeciwnika…". */
-  private waitingText: Text | null = null;
+  /** A line whose dots run while something is under way, e.g. "Szukam przeciwnika…". */
+  private waiting: { text: Text; base: string } | null = null;
   private clock = 0;
-  private busy = false;
+  /** Bumped by every request and every cancel: an answer that comes back to a newer attempt is let go. */
+  private attempt = 0;
   private stopWatching: (() => void) | null = null;
   private pollTimer: number | null = null;
   private screenWidth = 0;
@@ -55,8 +64,8 @@ export class LobbyScreen extends Container {
     super();
     this.options = options;
     this.addChild(this.content);
+    this.connect();
     this.render();
-    void this.connect();
   }
 
   layout(width: number, height: number): void {
@@ -75,13 +84,16 @@ export class LobbyScreen extends Container {
 
   update(deltaMs: number): void {
     this.clock += deltaMs / 1000;
-    if (this.waitingText) this.waitingText.text = `Szukam przeciwnika${'.'.repeat(1 + (Math.floor(this.clock * 2) % 3))}`;
+    if (this.waiting) this.waiting.text.text = `${this.waiting.base}${'.'.repeat(1 + (Math.floor(this.clock * 2) % 3))}`;
   }
 
   handleBack(): boolean {
-    if (this.view.kind === 'searching' || this.view.kind === 'room') {
-      void this.cancelWaiting();
-    } else if (this.view.kind === 'join') {
+    const view = this.view;
+    if (view.kind === 'searching' || view.kind === 'room') {
+      this.cancelWaiting();
+    } else if (view.kind === 'joining') {
+      this.cancelJoin(view.code);
+    } else if (view.kind === 'join') {
       this.show({ kind: 'home' });
     } else {
       this.options.onMenu();
@@ -97,7 +109,7 @@ export class LobbyScreen extends Container {
     } else if (this.view.kind === 'join' && event.key === 'Backspace') {
       this.show({ kind: 'join', code: this.view.code.slice(0, -1) });
     } else if (this.view.kind === 'join' && event.key === 'Enter') {
-      void this.join(this.view.code);
+      this.join(this.view.code);
     }
   }
 
@@ -106,13 +118,16 @@ export class LobbyScreen extends Container {
     super.destroy(options);
   }
 
-  private async connect(): Promise<void> {
-    try {
-      this.me = await connect();
-      this.show({ kind: 'home' });
-    } catch (error) {
-      this.show({ kind: 'offline', message: errorMessage(error) });
-    }
+  /** Signs in in the background; the lobby works meanwhile and requests wait for it. */
+  private connect(): void {
+    const ready = connect();
+    this.ready = ready;
+    ready.catch((error: unknown) => {
+      // An idle lobby shows the failure at once; a request under way reports it itself.
+      if (this.ready === ready && !this.destroyed && this.view.kind === 'home') {
+        this.show({ kind: 'offline', message: errorMessage(error) });
+      }
+    });
   }
 
   private show(view: View): void {
@@ -126,47 +141,46 @@ export class LobbyScreen extends Container {
     this.content.destroy({ children: true });
     this.content = new Container();
     this.addChild(this.content);
-    this.waitingText = null;
+    this.waiting = null;
     this.rows = [];
 
     this.addText('Pojedynek online', 30, theme.text, '800');
     const view = this.view;
     switch (view.kind) {
-      case 'connecting':
-        this.addText('Łączenie z serwerem…', 16, theme.textMuted);
-        this.addButton('‹ Menu', () => this.options.onMenu());
-        break;
-
       case 'offline':
         this.addText(view.message, 16, theme.error);
         this.addButton('Spróbuj ponownie', () => {
-          this.show({ kind: 'connecting' });
-          void this.connect();
+          this.connect();
+          this.show({ kind: 'home' });
         }, { variant: 'primary' });
         this.addButton('‹ Menu', () => this.options.onMenu());
         break;
 
       case 'home':
-        this.addText(`Grasz jako: ${this.me?.nickname ?? ''}`, 15, theme.textMuted);
+        this.addText(`Grasz jako: ${this.nickname}`, 15, theme.textMuted);
         this.addDifficultyPicker();
-        this.addButton('Szybka gra', () => void this.quickMatch(), { variant: 'primary', subtitle: 'losowy przeciwnik', height: 64 });
-        this.addButton('Stwórz pokój', () => void this.createRoom(), { subtitle: 'zaproś znajomego kodem', height: 64 });
+        this.addButton('Szybka gra', () => this.quickMatch(), { variant: 'primary', subtitle: 'losowy przeciwnik', height: 64 });
+        this.addButton('Stwórz pokój', () => this.createRoom(), { subtitle: 'zaproś znajomego kodem', height: 64 });
         this.addButton('Dołącz kodem', () => this.show({ kind: 'join', code: '' }));
         if (view.message) this.addText(view.message, 15, theme.error);
         this.addButton('‹ Menu', () => this.options.onMenu());
         break;
 
       case 'searching':
-        this.waitingText = this.addText('Szukam przeciwnika…', 18, theme.text);
+        this.addWaiting('Szukam przeciwnika');
         this.addText(`Poziom: ${DIFFICULTY_INFO[this.difficulty].name.toLowerCase()}`, 15, theme.textMuted);
-        this.addButton('Anuluj', () => void this.cancelWaiting());
+        this.addButton('Anuluj', () => this.cancelWaiting());
         break;
 
       case 'room':
         this.addText('Kod pokoju', 16, theme.textMuted);
-        this.addText(view.code.split('').join(' '), 56, theme.boardFrame, '800');
-        this.addText('Podaj go znajomemu.\nPojedynek ruszy, gdy dołączy.', 15, theme.textMuted);
-        this.addButton('Anuluj', () => void this.cancelWaiting());
+        this.addText(view.code ? view.code.split('').join(' ') : '· · · ·', 56, theme.boardFrame, '800');
+        this.addText(
+          view.code ? 'Podaj go znajomemu.\nPojedynek ruszy, gdy dołączy.' : 'Tworzę pokój…\nZaraz pojawi się kod.',
+          15,
+          theme.textMuted,
+        );
+        this.addButton('Anuluj', () => this.cancelWaiting());
         break;
 
       case 'join': {
@@ -175,11 +189,18 @@ export class LobbyScreen extends Container {
         this.addText(slots, 52, theme.boardFrame, '800');
         this.addNumberPad();
         if (view.message) this.addText(view.message, 15, theme.error);
-        this.addButton('Dołącz', () => void this.join(view.code), { variant: 'primary', enabled: view.code.length === 4 });
+        this.addButton('Dołącz', () => this.join(view.code), { variant: 'primary', enabled: view.code.length === 4 });
         this.addButton('⌫ Usuń', () => this.show({ kind: 'join', code: view.code.slice(0, -1) }));
         this.addButton('Anuluj', () => this.show({ kind: 'home' }));
         break;
       }
+
+      case 'joining':
+        this.addText('Kod pokoju', 16, theme.textMuted);
+        this.addText(view.code.split('').join(' '), 52, theme.boardFrame, '800');
+        this.addWaiting('Dołączam');
+        this.addButton('Anuluj', () => this.cancelJoin(view.code));
+        break;
     }
   }
 
@@ -201,6 +222,10 @@ export class LobbyScreen extends Container {
     return label;
   }
 
+  private addWaiting(base: string): void {
+    this.waiting = { text: this.addText(`${base}…`, 18, theme.text), base };
+  }
+
   private addButton(
     text: string,
     onTap: () => void,
@@ -212,7 +237,7 @@ export class LobbyScreen extends Container {
       subtitle: options.subtitle,
       variant: options.variant,
       onTap: () => {
-        if (enabled && !this.busy) onTap();
+        if (enabled) onTap();
       },
     });
     button.alpha = enabled ? 1 : 0.4;
@@ -271,56 +296,77 @@ export class LobbyScreen extends Container {
     this.show({ kind: 'join', code: this.view.code + digit });
   }
 
-  private async quickMatch(): Promise<void> {
-    await this.run(async () => {
-      const joined = await online.quickMatch(this.difficulty);
-      this.handleJoined(joined, { kind: 'searching', duelId: joined.duel.id });
-    });
+  private quickMatch(): void {
+    this.show({ kind: 'searching', duelId: null });
+    void this.request(
+      () => online.quickMatch(this.difficulty),
+      (joined, me) => this.handleJoined(joined, me, { kind: 'searching', duelId: joined.duel.id }),
+      (error) => ({ kind: 'home', message: errorMessage(error) }),
+    );
   }
 
-  private async createRoom(): Promise<void> {
-    await this.run(async () => {
-      const joined = await online.createRoom(this.difficulty);
-      this.handleJoined(joined, { kind: 'room', duelId: joined.duel.id, code: joined.duel.code ?? '' });
-    });
+  private createRoom(): void {
+    this.show({ kind: 'room', duelId: null, code: null });
+    void this.request(
+      () => online.createRoom(this.difficulty),
+      (joined, me) => this.handleJoined(joined, me, { kind: 'room', duelId: joined.duel.id, code: joined.duel.code }),
+      (error) => ({ kind: 'home', message: errorMessage(error) }),
+    );
   }
 
-  private async join(code: string): Promise<void> {
+  private join(code: string): void {
     if (code.length !== 4) return;
-    try {
-      this.busy = true;
-      this.handleJoined(await online.joinRoom(code), { kind: 'home' });
-    } catch (error) {
-      this.show({ kind: 'join', code: '', message: errorMessage(error) });
-    } finally {
-      this.busy = false;
-    }
+    this.show({ kind: 'joining', code });
+    void this.request(
+      () => online.joinRoom(code),
+      (joined, me) => this.handleJoined(joined, me, { kind: 'home' }),
+      (error) => ({ kind: 'join', code: '', message: errorMessage(error) }),
+    );
   }
 
-  /** Runs an online action, showing its error on the home view. */
-  private async run(action: () => Promise<void>): Promise<void> {
-    if (this.busy) return;
-    this.busy = true;
+  /**
+   * Sends a lobby request whose view is already on screen; failures show the view `onError` gives.
+   * If the player moved on before the answer came, the duel it made is let go.
+   */
+  private async request(
+    send: () => Promise<Joined>,
+    onJoined: (joined: Joined, me: Me) => void,
+    onError: (error: unknown) => View,
+  ): Promise<void> {
+    const attempt = ++this.attempt;
+    const current = () => attempt === this.attempt && !this.destroyed;
+    let me: Me;
     try {
-      await action();
+      me = await this.ready;
     } catch (error) {
-      this.show({ kind: 'home', message: errorMessage(error) });
-    } finally {
-      this.busy = false;
+      if (current()) this.show({ kind: 'offline', message: errorMessage(error) });
+      return;
     }
+    let joined: Joined;
+    try {
+      joined = await send();
+    } catch (error) {
+      if (current()) this.show(onError(error));
+      return;
+    }
+    if (!current()) {
+      leaveDuel(joined.duel.id);
+      return;
+    }
+    onJoined(joined, me);
   }
 
   /** Starts the duel right away, or waits for an opponent while showing `waitingView`. */
-  private handleJoined(joined: Joined, waitingView: View): void {
+  private handleJoined(joined: Joined, me: Me, waitingView: View): void {
     if (joined.duel.status === 'playing') {
-      this.options.onStart(joined.duel, joined.seat, this.me!);
+      this.options.onStart(joined.duel, joined.seat, me);
       return;
     }
     this.show(waitingView);
     const onRow = (row: DuelRow) => {
       if (row.status === 'playing') {
         this.stopWaiting();
-        this.options.onStart(row, joined.seat, this.me!);
+        this.options.onStart(row, joined.seat, me);
       } else if (row.status === 'cancelled') {
         this.stopWaiting();
         this.show({ kind: 'home' });
@@ -338,15 +384,19 @@ export class LobbyScreen extends Container {
     this.pollTimer = null;
   }
 
-  private async cancelWaiting(): Promise<void> {
+  /** Back to the lobby at once; the server is told in the background. */
+  private cancelWaiting(): void {
     const view = this.view;
     if (view.kind !== 'searching' && view.kind !== 'room') return;
+    this.attempt++;
     this.stopWaiting();
     this.show({ kind: 'home' });
-    try {
-      await online.leave(view.duelId);
-    } catch {
-      // A stale waiting duel is cancelled by the server anyway after 30 minutes.
-    }
+    // A stale waiting duel is cancelled by the server anyway after 30 minutes.
+    if (view.duelId) leaveDuel(view.duelId);
+  }
+
+  private cancelJoin(code: string): void {
+    this.attempt++;
+    this.show({ kind: 'join', code });
   }
 }

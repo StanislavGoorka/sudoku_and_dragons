@@ -74,20 +74,45 @@ function randomNickname(): string {
   return `${TITLES[Math.floor(Math.random() * TITLES.length)]} ${100 + Math.floor(Math.random() * 900)}`;
 }
 
-/** Signs in (anonymously, once per device) and makes sure the player has a nickname. */
-export async function connect(): Promise<Me> {
+const NICKNAME_KEY = `sudoku-dragons.nickname${suffix}`;
+/** The nickname the server has last confirmed. */
+const SYNCED_KEY = `sudoku-dragons.nickname-synced${suffix}`;
+
+/** The player's nickname: made up on the first visit and kept on this device, so it shows before sign-in. */
+export function localNickname(): string {
+  let nickname = localStorage.getItem(NICKNAME_KEY);
+  if (!nickname) {
+    nickname = randomNickname();
+    localStorage.setItem(NICKNAME_KEY, nickname);
+  }
+  return nickname;
+}
+
+let connecting: Promise<Me> | null = null;
+
+/**
+ * Signs in (anonymously, once per device) and makes sure the server knows the nickname.
+ * Everyone shares one attempt; after a failure the next call tries again.
+ */
+export function connect(): Promise<Me> {
+  connecting ??= signIn().catch((error: unknown) => {
+    connecting = null;
+    throw error;
+  });
+  return connecting;
+}
+
+async function signIn(): Promise<Me> {
   let { data } = await supabase.auth.getSession();
   if (!data.session) {
     const signIn = await supabase.auth.signInAnonymously();
     if (signIn.error || !signIn.data.session) throw new OnlineError('sign-in');
     data = { session: signIn.data.session };
   }
-  const key = `sudoku-dragons.nickname${suffix}`;
-  let nickname = localStorage.getItem(key);
-  if (!nickname) {
-    nickname = randomNickname();
+  const nickname = localNickname();
+  if (localStorage.getItem(SYNCED_KEY) !== nickname) {
     await call('profile', { nickname });
-    localStorage.setItem(key, nickname);
+    localStorage.setItem(SYNCED_KEY, nickname);
   }
   return { id: data.session!.user.id, nickname };
 }
@@ -110,6 +135,19 @@ export const online = {
   rematch: (duelId: string) => call<{ waiting?: true; duel?: DuelRow; seat?: Seat }>('rematch', { duelId }),
   declineRematch: (duelId: string) => call<{ declined: true }>('decline-rematch', { duelId }),
 };
+
+/**
+ * Leaves a duel in the background: gives it up, or stops waiting for a rival. The screen moves on
+ * at once; a request that does not get through is tried twice more.
+ */
+export function leaveDuel(duelId: string, attempts = 3): void {
+  online.leave(duelId).catch((error: unknown) => {
+    const code = error instanceof OnlineError ? error.code : 'network';
+    if (attempts > 1 && ['network', 'server-error', 'conflict'].includes(code)) {
+      setTimeout(() => leaveDuel(duelId, attempts - 1), 1000);
+    }
+  });
+}
 
 export async function fetchDuel(id: string): Promise<DuelRow> {
   const { data, error } = await supabase.from('duels').select().eq('id', id).single();

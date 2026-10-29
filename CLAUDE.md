@@ -34,7 +34,8 @@ code and comments are English.
   `duel` function (MCP `deploy_edge_function` with `index.ts` + every `core/**` file, verify_jwt on).
   Redeploy whenever core rules change, or the server judges by old rules.
 - `npm run test:server`: end-to-end check of the deployed function with fresh anonymous players (rooms,
-  matchmaking, moves, forfeits, and that nobody can read solutions or other players' duels).
+  matchmaking, moves, forfeits, rematches, a turn running out, and that nobody can read solutions or other
+  players' duels). It waits out one full turn, so it takes about 40 s; run it in the background.
 - `npm run sim:duel`: bots duel each other; reports how duels end, first-mover advantage, strategy edge.
 - The Vite dev server must not watch `android/` (see vite.config.ts): its file handles stop Capacitor and
   Gradle from deleting folders there on Windows. Stop the dev server if `cap add`/Gradle reports a busy folder.
@@ -65,6 +66,10 @@ code and comments are English.
   `version` (updates only the version it read: concurrent writes get 409 `conflict`). Clients only read
   `duels` (their own, via RLS) and follow them live through Supabase Realtime. Note: a bot that solves the
   sudoku itself can still play perfectly; hiding the solution stops reading answers, not solving.
+  Callers are identified with `auth.getClaims` (local signature check, no round trip to Auth). A move loads
+  the duel and its solution in one query. A turn that ran out (`timeout`, claimable by either player once the
+  deadline passed) starts the next turn at the old deadline, not at the claim, because clients already show it
+  from the deadline on; only a claim more than 3 s late starts it at claim time.
   Rematch: after the end a player calls `rematch`; the first is recorded in `rematch_by` and waits, the second
   makes the function create the next duel (same players, seats and difficulty, fresh board) and link it in
   `next_duel`, which the first player picks up live. Leaving the end screen calls `decline-rematch`; giving up
@@ -78,9 +83,20 @@ code and comments are English.
   `enemies.ts` each dragon's placeholder look (emoji, tint, size) keyed by enemy id,
   `net/online.ts` the Supabase client (sign-in, nickname, calls to the `duel` function, `watchDuel` for live
   updates, `serverNow()` for the turn clock), `net/config.ts` the project URL and publishable key (public).
-  `BoardView` only shows results (`reveal`, `reject`, `sync`); `GameScreen` judges solo moves with core,
-  `DuelScreen` sends them to the server and animates each new duel version (`applyRow`: the next version is
-  animated from `last_event`, a jump in versions is synced without animation).
+  `BoardView` only shows results (`reveal`, `reject`, `sync`, which can also take digits back); `GameScreen`
+  judges solo moves with core.
+  `DuelScreen` is optimistic: `net/duelSync.ts` (pure, tested) solves the shared board locally (it has one
+  solution) and predicts each own move and each turn running out, so they play out the moment they happen.
+  Predictions go to the server one at a time, in order (a timeout claim 0.5 s after the deadline, so the
+  rival's last-moment move lands first). A server version that matches the prediction changes nothing on
+  screen; anything else (the rival's moves, a refusal) replaces all predictions: own digits are taken back
+  without animation, a toast says why, and the server's event is animated. Failed requests re-read the duel,
+  then retry (network, conflict, `not-yet`) or roll back. The end sequence starts only once the server
+  confirms the duel is over, timed from the last hit shown.
+  `LobbyScreen` shows every result at once too: the lobby before sign-in finishes (`connect()` is shared and
+  runs in the background; the nickname is made up locally), the search or the room (code filled in when it
+  comes), "Dołączam…". A request whose answer comes back after the player moved on lets its duel go
+  (`leaveDuel`). Giving up a duel and leaving the end screen also go to the menu at once.
   `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
   While a `Modal` is open on the battle screen the battle is paused (no timer, no input); the battle also
   pauses itself when the app goes to the background. Screens are laid out inside the safe area
@@ -99,7 +115,10 @@ code and comments are English.
 
 - Boards are seeded (`generatePuzzle(seed, difficulty)`) and fully deterministic, so a seed is enough to share
   a board between players or reproduce a bug.
-- In duels the client must never be trusted with the solution; the server holds it and validates moves with `core`.
+- In duels the client is never trusted: the server holds the solution and validates every move with `core`. The
+  client may solve the board itself, but only to predict; the server's version always wins.
+- Online actions are optimistic: show the outcome at once, send the request, reconcile when the answer comes.
+  Never make the player wait on a spinner for something the client can predict.
 - Single npm package, no workspaces: the repo lives on an exFAT drive (D:), which cannot hold the symlinks
   npm workspaces need.
 - Pixi `Container` already has a `label` property; don't name fields `label` on Container subclasses.
@@ -117,8 +136,9 @@ code and comments are English.
   to leave.
 - Two players in one browser: open `?profile=1` and `?profile=2` in two tabs; each gets its own anonymous
   account (dev only). Drive them with `__game.lobby()`, then `__game.screen.createRoom()` /
-  `quickMatch()` / `join(code)`; in a duel, `board.select(cell)` + `handleDigit(d)` (find digits with
-  `(await import('/src/core/index.ts')).solve(screen.state.board)`).
+  `quickMatch()` / `join(code)`; in a duel, `board.select(cell)` + `handleDigit(d)` (correct digits are in
+  `screen.sync.solution`; changing one there makes the next prediction wrong, to test a rollback).
+  `screen.sync.predictions` lists what the server has not confirmed yet.
 - In dev, `window.__game.start(difficulty, seed?)`, `__game.menu()` and `__game.lobby()` switch screens, and `__game.screen` is the
   current screen. On a `GameScreen`: `debugFill(n)` fills all but `n` cells,
   `debugMistake()` plays a wrong digit, `battle.charge = 36` jumps the dragon's timer to 4 s before its attack.

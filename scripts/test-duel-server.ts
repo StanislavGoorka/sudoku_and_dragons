@@ -1,5 +1,6 @@
 // End-to-end check of the deployed `duel` Edge Function with two fresh anonymous players:
-// room by code, random matchmaking, correct and wrong moves, moving out of turn, forfeiting.
+// room by code, random matchmaking, correct and wrong moves, moving out of turn, forfeiting,
+// rematches and a turn running out (that part waits for a full turn, about 30 s).
 // The test players find correct digits the way a player would: by solving the board (core solver).
 // Usage: node scripts/test-duel-server.ts
 import { solve, type DuelEvent, type DuelState } from '../src/core/index.ts';
@@ -13,6 +14,7 @@ interface Duel {
   player1: string | null;
   state: DuelState;
   version: number;
+  turn_started_at: string | null;
 }
 interface Player {
   name: string;
@@ -149,6 +151,28 @@ await call(b, 'leave', { duelId: matched.body.duel.id });
 // A waiting room can be cancelled.
 const lonely = await call(a, 'create', { difficulty: 'hard' });
 check('a waiting room can be cancelled', (await call(a, 'leave', { duelId: lonely.body.duel.id })).body.cancelled === true);
+
+// A turn running out: the next one starts at the deadline, not when the claim arrived.
+const slowRoom = await call(a, 'create', { difficulty: 'easy' });
+const slow: Duel = (await call(b, 'join', { code: slowRoom.body.duel.code })).body.duel;
+const deadline = Date.parse(slow.turn_started_at!) + 30_000;
+await new Promise((resolve) => setTimeout(resolve, deadline + 1500 - Date.now()));
+const claimed = await call(offTurnOf(slow), 'timeout', { duelId: slow.id });
+const afterTimeout: Duel = claimed.body.duel;
+check('a turn that ran out passes to the other player', claimed.body.event?.kind === 'timeout' && afterTimeout?.state.turn !== slow.state.turn, claimed.body);
+check('the next turn starts at the deadline', Date.parse(afterTimeout?.turn_started_at ?? '') === deadline, afterTimeout?.turn_started_at);
+check('a second claim for the same turn is refused', (await call(onTurnOf(slow), 'timeout', { duelId: slow.id })).body.error === 'not-yet');
+await call(a, 'leave', { duelId: slow.id });
+
+function onTurnOf(d: Duel): Player {
+  return players[d.state.turn];
+}
+function offTurnOf(d: Duel): Player {
+  return players[1 - d.state.turn];
+}
+
+const forged = await call({ name: 'X', id: '', token: 'not-a-token' }, 'profile', { nickname: 'Forged' });
+check('a request without a valid session is refused', forged.status === 401, forged);
 
 // What a player can read straight from the database with their session (row-level security).
 async function select(player: Player, query: string) {
