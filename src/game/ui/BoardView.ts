@@ -1,10 +1,27 @@
 import gsap from 'gsap';
-import { Container, Graphics, Rectangle, Text, type DestroyOptions, type PointData } from 'pixi.js';
+import { BitmapFont, BitmapText, Container, Graphics, Rectangle, Text, type DestroyOptions, type PointData } from 'pixi.js';
 import { boxOf, CELL_COUNT, colOf, rowOf, unitCells, type Grid, type Unit } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
 import type { BoardColors } from '../boardThemes.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
+
+/** The small digits of the player's notes: one glyph atlas, tinted, so a board full of notes stays cheap. */
+const NOTES_FONT = 'sudoku-dragons-notes';
+let notesFontReady = false;
+
+function notesFont(): string {
+  if (!notesFontReady) {
+    BitmapFont.install({
+      name: NOTES_FONT,
+      style: { fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 40, fill: 0xffffff },
+      chars: '123456789',
+      resolution: 2,
+    });
+    notesFontReady = true;
+  }
+  return NOTES_FONT;
+}
 
 /** Who put a digit on the board: it was there from the start, the player, or the rival in a duel. */
 export type DigitOwner = 'given' | 'mine' | 'rival';
@@ -15,6 +32,8 @@ class CellView extends Container {
   /** White overlay tinted per effect (gold for completed units, red for mistakes). */
   readonly flash = new Graphics();
   readonly digit = new Text({ text: '', style: { fontFamily: theme.fontFamily, fontWeight: '700' } });
+  /** The player's notes, digits 1–9 in a 3×3 grid; made the first time a note is written here. */
+  notes: BitmapText[] | null = null;
   owner: DigitOwner = 'given';
   homeX = 0;
   homeY = 0;
@@ -51,6 +70,8 @@ export class BoardView extends Container {
   private readonly lines = new Graphics();
   private readonly ghosts = new Set<Text>();
   private palette: BoardColors;
+  /** The player's notes per cell, as bits (bit d: digit d noted). Never checked against anything. */
+  private readonly notes: number[] = new Array<number>(CELL_COUNT).fill(0);
   private size = 0;
   private cellSize = 0;
 
@@ -85,6 +106,7 @@ export class BoardView extends Container {
   setColors(colors: BoardColors): void {
     this.palette = colors;
     for (const view of this.cells) view.digit.style.fill = this.digitColor(view.owner);
+    this.cells.forEach((_, cell) => this.drawNotes(cell));
     if (this.size > 0) this.drawLines(this.size);
     this.refresh();
   }
@@ -104,6 +126,7 @@ export class BoardView extends Container {
       // Baloo sits a little high in its line box.
       view.digit.position.set(s / 2, s / 2 + s * 0.04);
       view.digit.style.fontSize = Math.round(s * 0.62);
+      this.drawNotes(cell);
     });
     this.drawLines(size);
     this.refresh();
@@ -121,9 +144,27 @@ export class BoardView extends Container {
     this.select(row * 9 + col);
   }
 
+  /**
+   * Writes or rubs out `digit` among the player's notes in an empty cell (a filled one keeps none).
+   * Notes are the player's own: nothing here checks them, and nothing writes them for the player.
+   */
+  toggleNote(cell: number, digit: number): boolean {
+    if (this.board[cell] !== 0) return false;
+    this.notes[cell] ^= 1 << digit;
+    this.drawNotes(cell);
+    return true;
+  }
+
+  /** The digits noted in a cell, in order. */
+  notesAt(cell: number): number[] {
+    const bits = this.notes[cell];
+    return [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((digit) => bits & (1 << digit));
+  }
+
   /** Shows a correct digit with its pop, plus a golden wave through every unit it completed. */
   reveal(cell: number, digit: number, completed: Unit[], owner: DigitOwner = 'mine'): void {
     this.board[cell] = digit;
+    this.clearNotes(cell);
     this.cells[cell].owner = owner;
     this.cells[cell].digit.style.fill = this.digitColor(owner);
     this.animateCorrect(cell);
@@ -145,6 +186,7 @@ export class BoardView extends Container {
     board.forEach((digit, cell) => {
       if (this.board[cell] === digit) return;
       this.board[cell] = digit;
+      if (digit !== 0) this.clearNotes(cell);
       const view = this.cells[cell];
       killTweens(view.digit.scale);
       view.digit.scale.set(1);
@@ -178,6 +220,34 @@ export class BoardView extends Container {
     killTweens(...this.ghosts);
     for (const view of this.cells) killTweens(view, view.flash, view.digit.scale);
     super.destroy(options);
+  }
+
+  private clearNotes(cell: number): void {
+    if (this.notes[cell] === 0) return;
+    this.notes[cell] = 0;
+    this.drawNotes(cell);
+  }
+
+  /** The cell's notes, each digit in its place of a 3×3 grid, in the player's digit colour. */
+  private drawNotes(cell: number): void {
+    const view = this.cells[cell];
+    const bits = this.notes[cell];
+    if (!view.notes) {
+      if (bits === 0) return;
+      view.notes = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => {
+        const note = new BitmapText({ text: String(digit), style: { fontFamily: notesFont(), fontSize: 12 } });
+        note.anchor.set(0.5);
+        view.addChild(note);
+        return note;
+      });
+    }
+    const s = this.cellSize;
+    view.notes.forEach((note, i) => {
+      note.visible = (bits & (1 << (i + 1))) !== 0;
+      note.tint = this.palette.placed;
+      note.style.fontSize = Math.max(7, Math.round(s * 0.27));
+      note.position.set(((i % 3) + 0.5) * (s / 3), (Math.floor(i / 3) + 0.5) * (s / 3) + s * 0.02);
+    });
   }
 
   private digitColor(owner: DigitOwner): number {

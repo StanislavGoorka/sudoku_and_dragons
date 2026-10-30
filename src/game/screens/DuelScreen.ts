@@ -85,6 +85,9 @@ export class DuelScreen extends Container {
   private readonly hurtFlash = new Graphics();
   /** Round button in the scene's corner: give up (asks first), or leave a finished duel. */
   private readonly leaveButton: Button;
+  /** Round button in the other corner: notes mode on (gold) or off. Notes stay on this device. */
+  private readonly notesButton: Button;
+  private notesMode = false;
   private modal: Modal | null = null;
   private rematch: RematchState;
   /** We asked for a rematch and wait for the rival. */
@@ -133,6 +136,7 @@ export class DuelScreen extends Container {
     this.rematch = { by: row.rematch_by, declined: row.rematch_declined, next: row.next_duel };
 
     this.leaveButton = new Button({ text: 'Wyjdź', icon: 'back', onTap: () => this.requestLeave() });
+    this.notesButton = new Button({ text: 'Notatki', icon: 'pencil', onTap: () => this.toggleNotes() });
     // The rival as last seen this session (a rematch), until their profile is read again.
     const rivalId = seat === 0 ? row.player1 : row.player0;
     const known = rivalId ? this.backend.knownProfile(rivalId) : undefined;
@@ -150,7 +154,7 @@ export class DuelScreen extends Container {
     this.fx.eventMode = 'none';
     this.hurtFlash.eventMode = 'none';
     this.hurtFlash.alpha = 0;
-    this.addChild(this.arena, this.leaveButton, this.board, this.pad, this.hurtFlash, this.fx);
+    this.addChild(this.arena, this.leaveButton, this.notesButton, this.board, this.pad, this.hurtFlash, this.fx);
 
     this.stopWatching = this.backend.watch(this.duelId, (next) => this.applyRow(next));
     // A safety net for missed live updates: during the duel, and after it while a rematch is still possible.
@@ -182,8 +186,10 @@ export class DuelScreen extends Container {
     const buttonSize = 36;
     this.leaveButton.position.set(left + 7, arenaY + 5);
     this.leaveButton.layout(buttonSize, buttonSize);
+    this.notesButton.position.set(left + columnWidth - 7 - buttonSize, arenaY + 5);
+    this.notesButton.layout(buttonSize, buttonSize);
     this.arena.position.set(left, arenaY);
-    this.arena.layout(columnWidth, arenaHeight, buttonSize + 4);
+    this.arena.layout(columnWidth, arenaHeight, buttonSize + 4, buttonSize + 4);
     this.board.position.set((width - boardSize) / 2, boardY);
     this.board.layout(boardSize);
     this.pad.position.set(left, padY);
@@ -239,6 +245,10 @@ export class DuelScreen extends Container {
       this.handleDigit(Number(event.key));
       return;
     }
+    if (event.key === 'n') {
+      this.toggleNotes();
+      return;
+    }
     const moves: Record<string, [number, number]> = {
       ArrowUp: [-1, 0],
       ArrowDown: [1, 0],
@@ -285,6 +295,10 @@ export class DuelScreen extends Container {
     if (this.state.finished) return;
     const cell = this.board.selected;
     if (cell === null || this.board.board[cell] !== 0) return;
+    if (this.notesMode) {
+      if (this.board.toggleNote(cell, digit)) feedback.select();
+      return;
+    }
     if (this.state.turn !== this.seat) {
       this.toast('Tura rywala', theme.textMuted);
       return;
@@ -295,6 +309,14 @@ export class DuelScreen extends Container {
     this.playEvent(result.prediction.event, result.prediction.after.state);
     this.afterChange(turnBefore);
     this.pump();
+  }
+
+/** Notes mode: digits become the player's notes in the selected cell instead of moves. */
+  private toggleNotes(): void {
+    this.notesMode = !this.notesMode;
+    this.notesButton.setVariant(this.notesMode ? 'primary' : 'secondary');
+    this.pad.setNotesMode(this.notesMode);
+    feedback.select();
   }
 
   /** When the shown turn runs out, it passes on both screens at once; the claim follows. */

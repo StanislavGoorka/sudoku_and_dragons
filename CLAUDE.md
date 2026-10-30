@@ -110,6 +110,13 @@ code and comments are English.
   made-up nicknames and the rules for typed ones.
   `BoardView` only shows results (`reveal`, `reject`, `sync`, which can also take digits back); `GameScreen`
   judges solo moves with core.
+  Notes (pencil marks): the round pencil button in the arena's top-right corner (or "n") turns notes mode on
+  (gold button, the pad's digits shrink to the corner); then a digit toggles that note in the selected empty cell
+  (`BoardView.toggleNote`, `notesAt`): small digits in a 3×3 grid in the player's digit colour (one BitmapText
+  glyph atlas). The owner's rule: notes are the player's own skill, never a hint, so nothing checks them,
+  nothing writes them, and placing a digit clears only its own cell's notes (no cleaning of peers). They live
+  for the battle on this device; in a duel they can be written on the rival's turn too, and a digit the rival
+  places clears that cell's notes.
   `DuelScreen` is optimistic: `net/duelSync.ts` (pure, tested) solves the shared board locally (it has one
   solution) and predicts each own move and each turn running out, so they play out the moment they happen.
   Predictions go to the server one at a time, in order (a timeout claim 0.5 s after the deadline, so the
@@ -304,7 +311,7 @@ code and comments are English.
 - Without URL parameters the game opens on the menu. `?stage=peaks-2` (optionally with `&seed=123`) opens a
   campaign battle; `?seed=123&difficulty=easy|medium|hard` reproduces a board outside the campaign.
 - Menu: arrow keys flip the stage, Enter fights, keys 1–3 start a region's first stage at once. Battle: arrow keys move the
-  selection, keys 1–9 place digits, Escape pauses.
+  selection, keys 1–9 place digits (or notes, after "n"), Escape pauses.
 - Check new UI at phone size (`resize_window` mobile, 375×812) and on a small phone (360×640).
 - Two players in one browser: open `?profile=1` and `?profile=2` in two tabs; each gets its own anonymous
   account (dev only). Drive them with `__game.lobby()`, then `__game.screen.createRoom()` /

@@ -46,12 +46,15 @@ export class DuelArena extends Container {
     this.addChild(this.scene, this.myDragon, this.rivalDragon, this.turnPill, this.turnText, this.timer, this.rivalHp, this.myHp);
   }
 
-  /** `corner` keeps the top-left corner free (for the screen's pause or leave button). */
-  layout(width: number, height: number, corner = 0): void {
+  /**
+   * `corner` keeps the top-left corner free (for the screen's pause or leave button), `cornerRight` the
+   * top-right one (the notes toggle).
+   */
+  layout(width: number, height: number, corner = 0, cornerRight = 0): void {
     const pad = 10;
     this.scene.layout(width, height);
     this.rivalHp.position.set(pad + corner, pad);
-    this.rivalHp.layout(width - pad * 2 - corner);
+    this.rivalHp.layout(width - pad * 2 - corner - cornerRight);
     this.myHp.position.set(pad, height - pad - HpBar.HEIGHT);
     this.myHp.layout(width - pad * 2);
 

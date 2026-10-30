@@ -67,6 +67,9 @@ export class GameScreen extends Container {
   private readonly hurtFlash = new Graphics();
   /** Round button in the scene's corner: pauses, and leads back to the menu. */
   private readonly pauseButton: Button;
+  /** Round button in the other corner: notes mode on (gold) or off. */
+  private readonly notesButton: Button;
+  private notesMode = false;
   /** The leave-battle question or the end-of-battle summary. While it is open the battle is paused. */
   private modal: Modal | null = null;
 
@@ -96,6 +99,7 @@ export class GameScreen extends Container {
     this.grid = [...puzzle.givens];
     this.options = options;
     this.pauseButton = new Button({ text: 'Pauza', icon: 'pause', onTap: () => this.requestLeave() });
+    this.notesButton = new Button({ text: 'Notatki', icon: 'pencil', onTap: () => this.toggleNotes() });
     this.arena = new BattleArena(this.battle.enemy, lookOf(this.battle.enemy, options.stage), this.battle.playerMaxHp, chosenSkin(progress).design);
     const colors = chosenTheme(progress).colors;
     this.board = new BoardView(puzzle.givens, colors);
@@ -107,7 +111,7 @@ export class GameScreen extends Container {
     this.hurtFlash.eventMode = 'none';
     this.hurtFlash.alpha = 0;
 
-    this.addChild(this.arena, this.pauseButton, this.board, this.pad, this.hurtFlash, this.fx);
+    this.addChild(this.arena, this.pauseButton, this.notesButton, this.board, this.pad, this.hurtFlash, this.fx);
 
     // A player's very first battle walks them through it.
     const fought = Object.values(progress.levels).some((level) => level.wins + level.losses > 0);
@@ -142,9 +146,11 @@ export class GameScreen extends Container {
     const buttonSize = 36;
     this.pauseButton.position.set(left + 7, arenaY + 5);
     this.pauseButton.layout(buttonSize, buttonSize);
+    this.notesButton.position.set(left + columnWidth - 7 - buttonSize, arenaY + 5);
+    this.notesButton.layout(buttonSize, buttonSize);
 
     this.arena.position.set(left, arenaY);
-    this.arena.layout(columnWidth, arenaHeight, buttonSize + 4);
+    this.arena.layout(columnWidth, arenaHeight, buttonSize + 4, buttonSize + 4);
     this.board.position.set((width - boardSize) / 2, boardY);
     this.board.layout(boardSize);
     this.pad.position.set(left, padY);
@@ -218,6 +224,10 @@ export class GameScreen extends Container {
       this.handleDigit(Number(event.key));
       return;
     }
+    if (event.key === 'n') {
+      this.toggleNotes();
+      return;
+    }
     const moves: Record<string, [number, number]> = {
       ArrowUp: [-1, 0],
       ArrowDown: [1, 0],
@@ -252,6 +262,14 @@ export class GameScreen extends Container {
     stopEffects(this.fx);
     gsap.killTweensOf(this.hurtFlash);
     super.destroy(options);
+  }
+
+/** Notes mode: digits become the player's notes in the selected cell instead of moves. */
+  private toggleNotes(): void {
+    this.notesMode = !this.notesMode;
+    this.notesButton.setVariant(this.notesMode ? 'primary' : 'secondary');
+    this.pad.setNotesMode(this.notesMode);
+    feedback.select();
   }
 
   /** The guided battle is over (finished or skipped): it does not come back, and the dragon's timer starts. */
@@ -289,6 +307,10 @@ export class GameScreen extends Container {
     if (this.tutorial && !this.tutorial.acceptsDigits) return;
     const cell = this.board.selected;
     if (cell === null) return;
+    if (this.notesMode) {
+      if (this.board.toggleNote(cell, digit)) feedback.select();
+      return;
+    }
     const result = applyMove(this.grid, this.puzzle.solution, cell, digit);
     if (result.kind === 'occupied') return;
     this.tutorial?.played(result.kind === 'correct');

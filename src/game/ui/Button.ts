@@ -7,7 +7,7 @@ import { theme } from '../theme.ts';
 export type ButtonVariant = 'primary' | 'secondary' | 'accent';
 
 /** Icons drawn as shapes (no emoji, so they look the same on every phone). */
-export type ButtonIcon = 'pause' | 'back' | 'gear' | 'palette' | 'user' | 'map';
+export type ButtonIcon = 'pause' | 'back' | 'gear' | 'palette' | 'user' | 'map' | 'pencil';
 
 export interface ButtonOptions {
   text: string;
@@ -37,7 +37,7 @@ export class Button extends Container {
   private readonly subtitle: Text | null;
   private readonly icon: Graphics | null;
   private readonly iconName: ButtonIcon | undefined;
-  private readonly colors: (typeof COLORS)[ButtonVariant];
+  private colors: (typeof COLORS)[ButtonVariant];
   private buttonWidth = 0;
   private buttonHeight = 0;
   private lipHeight = 0;
@@ -110,6 +110,14 @@ export class Button extends Container {
     this.enabled = enabled;
     this.alpha = enabled ? 1 : 0.45;
     this.cursor = enabled ? 'pointer' : 'default';
+  }
+
+  /** Another colour, e.g. gold while a toggle is on. */
+  setVariant(variant: ButtonVariant): void {
+    this.colors = COLORS[variant];
+    this.title.style.fill = this.colors.text;
+    if (this.subtitle) this.subtitle.style.fill = this.colors.subtitle;
+    if (this.buttonWidth > 0) this.draw();
   }
 
   /** A white ring, e.g. for the option that is on. */
@@ -189,6 +197,21 @@ export class Button extends Container {
           .stroke({ width: r * 0.12, color: this.colors.face, alpha: 0.6 });
         for (const [dx, dy] of [[-0.75, 0.45], [-0.4, 0.15], [0, 0.25], [0.35, 0.0]]) g.circle(cx + dx * r, cy + dy * r, r * 0.09).fill(this.colors.face);
         g.circle(cx + r * 0.7, cy - r * 0.35, r * 0.22).fill(theme.error);
+        break;
+      }
+      case 'pencil': {
+        // A pencil lying from bottom left to top right: point, wooden tip, body and eraser.
+        const angle = -Math.PI / 4;
+        const along = (d: number, side: number) => ({
+          x: cx + Math.cos(angle) * d - Math.sin(angle) * side,
+          y: cy + Math.sin(angle) * d + Math.cos(angle) * side,
+        });
+        const w = r * 0.42;
+        const poly = (pts: { x: number; y: number }[]) => pts.flatMap((p) => [p.x, p.y]);
+        g.poly(poly([along(-0.55 * r, -w), along(0.75 * r, -w), along(0.75 * r, w), along(-0.55 * r, w)])).fill(color);
+        g.poly(poly([along(0.75 * r, -w), along(1.15 * r, -w), along(1.15 * r, w), along(0.75 * r, w)])).fill(theme.error);
+        g.poly(poly([along(-0.55 * r, -w), along(-0.55 * r, w), along(-1.15 * r, 0)])).fill(0xf6d7a8);
+        g.poly(poly([along(-0.92 * r, -w * 0.38), along(-0.92 * r, w * 0.38), along(-1.15 * r, 0)])).fill(this.colors.lip);
         break;
       }
       case 'user':

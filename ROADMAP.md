@@ -7,8 +7,8 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
 2. [x] **Trening z botem w pojedynkach** – gdy szybka gra nie znajduje rywala, propozycja walki z wyraźnie
    oznaczonym botem.
 3. [x] **Kampania** – krainy z kilkoma smokami każda, mapa postępu, bossowie, zamiast trzech poziomów.
-4. [ ] **Notatki ołówkiem** – ręczne kandydaty w polach (bez automatycznych podpowiedzi). Czeka na decyzję
-   właściciela (zasada „bez ułatwień”).
+4. [x] **Notatki ołówkiem** – ręczne kandydaty w polach, bez żadnych podpowiedzi ani automatycznego skreślania
+   (decyzja właściciela: notatki to umiejętność gracza, nie ułatwienie).
 5. [ ] **Muzyka w tle** – generowana (Web Audio), spokojna w menu, żywsza w walce, przełącznik w ustawieniach.
 6. [ ] **Ranking wyzwania dnia** – najlepsze czasy dnia na serwerze i miejsce gracza.
 7. [ ] **Przygotowanie do Google Play** – podpisany AAB, wersje, polityka prywatności, grafiki i opis sklepu.

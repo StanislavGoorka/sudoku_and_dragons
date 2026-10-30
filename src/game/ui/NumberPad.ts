@@ -21,6 +21,8 @@ export class NumberPad extends Container {
   private keyWidth = 0;
   private keyHeight = 0;
   private lipHeight = 0;
+  /** Taps write notes: the digits shrink to the corner, like a note in a cell. */
+  private notesMode = false;
 
   constructor(onDigit: (digit: number) => void, colors: BoardColors) {
     super();
@@ -62,10 +64,28 @@ export class NumberPad extends Container {
     this.keys.forEach((key, i) => {
       key.root.position.set(i * (this.keyWidth + gap), 0);
       key.root.hitArea = new Rectangle(0, 0, this.keyWidth, height);
-      key.label.position.set(this.keyWidth / 2, (height - this.lipHeight) / 2 + 2);
-      key.label.style.fontSize = Math.round(Math.min(this.keyWidth * 0.75, height * 0.55));
+      this.placeLabel(key);
       this.paint(key);
     });
+  }
+
+  /** In notes mode the keys write notes, and show it: small digits up in the corner. */
+  setNotesMode(on: boolean): void {
+    this.notesMode = on;
+    if (this.keyWidth > 0) for (const key of this.keys) this.placeLabel(key);
+  }
+
+  private placeLabel(key: PadKey): void {
+    const w = this.keyWidth;
+    const h = this.keyHeight - this.lipHeight;
+    const full = Math.round(Math.min(w * 0.75, this.keyHeight * 0.55));
+    if (this.notesMode) {
+      key.label.style.fontSize = Math.round(full * 0.6);
+      key.label.position.set(w * 0.34, h * 0.32 + 2);
+    } else {
+      key.label.style.fontSize = full;
+      key.label.position.set(w / 2, h / 2 + 2);
+    }
   }
 
   /** Repaints the keys in other colours (the shop's preview). */
