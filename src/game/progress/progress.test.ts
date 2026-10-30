@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { REGIONS, STAGES } from '../../core/index.ts';
 import { boardTheme, DEFAULT_BOARD_THEME } from '../boardThemes.ts';
 import { DEFAULT_DRAGON_SKIN, dragonSkin } from '../dragonSkins.ts';
 import { DEFAULT_HIT_EFFECT, hitEffect } from '../hitEffects.ts';
@@ -12,6 +13,8 @@ import {
   chosenTheme,
   DUEL_WIN_STARS,
   emptyProgress,
+  currentStage,
+  isStageUnlocked,
   isUnlocked,
   mergeProgress,
   owns,
@@ -64,15 +67,62 @@ describe('battle stars', () => {
   });
 });
 
-describe('unlocking dragons', () => {
-  it('only the young dragon is open at first; each win opens the next', () => {
+/** A won (or lost) battle on a campaign stage. */
+const fight = (stageIndex: number, overrides: Partial<BattleResult> = {}): BattleResult =>
+  win({ difficulty: STAGES[stageIndex].region.difficulty, stage: STAGES[stageIndex].id, ...overrides });
+
+describe('the campaign', () => {
+  it('opens one stage at a time, and a region with the boss before it', () => {
     const progress = emptyProgress();
+    expect(STAGES.map((stage) => isStageUnlocked(progress, stage))).toEqual(STAGES.map((_, i) => i === 0));
     expect([isUnlocked(progress, 'easy'), isUnlocked(progress, 'medium'), isUnlocked(progress, 'hard')]).toEqual([true, false, false]);
-    expect(recordBattle(progress, win({ won: false })).unlocked).toBeNull();
-    expect(recordBattle(progress, win()).unlocked).toBe('medium');
+    expect(recordBattle(progress, fight(0, { won: false })).unlocked).toBeNull();
+    expect(recordBattle(progress, fight(0)).unlocked).toBe(STAGES[1]);
+    expect(recordBattle(progress, fight(0)).unlocked).toBeNull();
+    expect(currentStage(progress)).toBe(STAGES[1]);
+    recordBattle(progress, fight(1));
+    recordBattle(progress, fight(2));
+    expect(isUnlocked(progress, 'medium')).toBe(false);
+    const boss = recordBattle(progress, fight(3));
+    expect(boss.unlocked).toBe(REGIONS[1].stages[0]);
+    expect(isUnlocked(progress, 'medium')).toBe(true);
+  });
+
+  it('a battle outside the campaign (the daily challenge) opens nothing but still counts', () => {
+    const progress = emptyProgress();
     expect(recordBattle(progress, win()).unlocked).toBeNull();
-    expect(recordBattle(progress, win({ difficulty: 'medium' })).unlocked).toBe('hard');
-    expect(isUnlocked(progress, 'hard')).toBe(true);
+    expect(progress.levels.easy.wins).toBe(1);
+    expect(progress.stages).toEqual({});
+  });
+
+  it('keeps each stage\'s best stars and time apart', () => {
+    const progress = emptyProgress();
+    recordBattle(progress, fight(0, { mistakes: 0, seconds: 500 }));
+    recordBattle(progress, fight(1, { seconds: 400 }));
+    expect(progress.stages[STAGES[0].id]).toMatchObject({ wins: 1, bestStars: 2, bestTime: 500 });
+    expect(progress.stages[STAGES[1].id]).toMatchObject({ wins: 1, bestStars: 1, bestTime: 400 });
+    expect(progress.levels.easy).toMatchObject({ wins: 2, bestStars: 2, bestTime: 400 });
+  });
+
+  it('a save from before the campaign counts a won level as its whole region', () => {
+    const progress = parseProgress({ levels: { easy: { wins: 3, losses: 1, bestStars: 2, bestTime: 420 } } });
+    for (const stage of REGIONS[0].stages) expect(progress.stages[stage.id]).toMatchObject({ wins: 1, bestStars: 2, bestTime: 420 });
+    expect(isUnlocked(progress, 'medium')).toBe(true);
+    expect(currentStage(progress)).toBe(REGIONS[1].stages[0]);
+    // A save from the campaign keeps its stages as they are.
+    expect(parseProgress({ levels: { easy: { wins: 3 } }, stages: {} }).stages).toEqual({});
+  });
+
+  it('merging adds up stage wins from both sides', () => {
+    const base = emptyProgress();
+    const local = emptyProgress();
+    const remote = emptyProgress();
+    recordBattle(local, fight(0));
+    recordBattle(remote, fight(0, { mistakes: 0 }));
+    recordBattle(remote, fight(1));
+    const merged = mergeProgress(base, local, remote);
+    expect(merged.stages[STAGES[0].id]).toMatchObject({ wins: 2, bestStars: 2 });
+    expect(merged.stages[STAGES[1].id]).toMatchObject({ wins: 1 });
   });
 });
 
@@ -91,13 +141,13 @@ describe('achievements', () => {
     expect(ids(recordBattle(progress, win({ won: false, bestCombo: 3 })).achievements)).toEqual(['combo', 'triple-combo']);
   });
 
-  it('beating all three dragons and quick wins', () => {
+  it('beating every boss and quick wins', () => {
     const progress = emptyProgress();
     recordBattle(progress, win({ seconds: 299 }));
-    recordBattle(progress, win({ difficulty: 'medium' }));
-    const last = recordBattle(progress, win({ difficulty: 'hard' }));
-    expect(ids(last.achievements)).toContain('dragon-slayer');
     expect(progress.achievements.lightning).toBeDefined();
+    let last = null;
+    for (let i = 0; i < STAGES.length; i++) last = recordBattle(progress, fight(i));
+    expect(ids(last!.achievements)).toContain('dragon-slayer');
   });
 
   it('duels pay stars for wins and count towards their achievements', () => {

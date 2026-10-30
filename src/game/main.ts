@@ -8,14 +8,15 @@ import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import gsap from 'gsap';
 import { Application, type Container } from 'pixi.js';
-import { generatePuzzle, type Difficulty, type Seat } from '../core/index.ts';
+import { generatePuzzle, stageById, type Difficulty, type Seat, type Stage } from '../core/index.ts';
 import { feedback } from './audio/feedback.ts';
-import { DIFFICULTIES, loadDifficulty, saveDifficulty } from './difficulty.ts';
+import { DIFFICULTIES, loadDifficulty, saveStageId } from './difficulty.ts';
 import { readSafeArea, type Insets } from './safeArea.ts';
 import type { DuelBackend } from './net/duelBackend.ts';
 import type { DuelRow, Me } from './net/online.ts';
 import { startCloudSave } from './net/cloudSave.ts';
 import { AccountScreen } from './screens/AccountScreen.ts';
+import { MapScreen } from './screens/MapScreen.ts';
 import { DuelScreen } from './screens/DuelScreen.ts';
 import { GameScreen } from './screens/GameScreen.ts';
 import { LobbyScreen } from './screens/LobbyScreen.ts';
@@ -93,12 +94,26 @@ async function boot(): Promise<void> {
     gsap.fromTo(next, { alpha: 0 }, { alpha: 1, duration: 0.25 });
   };
 
+  /** A campaign battle: the stage's dragon on a fresh board of its region's difficulty. */
+  const startStage = (stage: Stage, seed = randomSeed()) => {
+    saveStageId(stage.id);
+    show(
+      new GameScreen(generatePuzzle(seed, stage.region.difficulty), {
+        onRestart: () => startStage(stage),
+        onPlay: (next) => startStage(next),
+        onMenu: showMenu,
+        stage,
+      }),
+    );
+    if (import.meta.env.DEV) console.info(`[game] stage=${stage.id} seed=${seed}`);
+  };
+
+  /** A battle outside the campaign (a board to reproduce from the URL): the difficulty's dragon, nothing opened. */
   const startBattle = (difficulty: Difficulty, seed = randomSeed()) => {
-    saveDifficulty(difficulty);
     show(
       new GameScreen(generatePuzzle(seed, difficulty), {
         onRestart: () => startBattle(difficulty),
-        onPlay: (next) => startBattle(next),
+        onPlay: (next) => startStage(next),
         onMenu: showMenu,
       }),
     );
@@ -114,7 +129,7 @@ async function boot(): Promise<void> {
     show(
       new GameScreen(generatePuzzle(daily.seed, daily.difficulty), {
         onRestart: startDaily,
-        onPlay: (next) => startBattle(next),
+        onPlay: (next) => startStage(next),
         onMenu: showMenu,
         daily: daily.key,
       }),
@@ -124,8 +139,8 @@ async function boot(): Promise<void> {
   const showMenu = () => {
     show(
       new MenuScreen({
-        selected: loadDifficulty(),
-        onPick: (difficulty) => startBattle(difficulty),
+        onPick: (stage) => startStage(stage),
+        onMap: () => showMap(),
         onOnline: () => showLobby(),
         onDaily: startDaily,
         onProgress: () => showProgress(),
@@ -133,6 +148,10 @@ async function boot(): Promise<void> {
         onAccount: () => showAccount(),
       }),
     );
+  };
+
+  const showMap = () => {
+    show(new MapScreen({ onBack: showMenu, onPick: (stage) => startStage(stage) }));
   };
 
   const showAccount = () => {
@@ -220,6 +239,11 @@ async function boot(): Promise<void> {
           return screen;
         },
         start: startBattle,
+        stage: (id: string) => {
+          const stage = stageById(id);
+          if (stage) startStage(stage);
+        },
+        map: () => showMap(),
         daily: startDaily,
         menu: showMenu,
         lobby: () => showLobby(),
@@ -245,7 +269,10 @@ async function boot(): Promise<void> {
 
   // ?seed=123&difficulty=hard skips the menu and reproduces a specific board.
   const params = new URLSearchParams(location.search);
-  if (params.has('seed') || params.has('difficulty')) {
+  const linkedStage = stageById(params.get('stage') ?? '');
+  if (linkedStage) {
+    startStage(linkedStage, Number(params.get('seed')) || randomSeed());
+  } else if (params.has('seed') || params.has('difficulty')) {
     const difficulty = DIFFICULTIES.find((d) => d === params.get('difficulty')) ?? loadDifficulty();
     startBattle(difficulty, Number(params.get('seed')) || randomSeed());
   } else {

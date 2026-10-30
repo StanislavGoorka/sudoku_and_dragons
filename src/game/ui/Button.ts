@@ -7,7 +7,7 @@ import { theme } from '../theme.ts';
 export type ButtonVariant = 'primary' | 'secondary' | 'accent';
 
 /** Icons drawn as shapes (no emoji, so they look the same on every phone). */
-export type ButtonIcon = 'pause' | 'back' | 'gear' | 'palette' | 'user';
+export type ButtonIcon = 'pause' | 'back' | 'gear' | 'palette' | 'user' | 'map';
 
 export interface ButtonOptions {
   text: string;
@@ -177,6 +177,18 @@ export class Button extends Container {
           [0.62, -0.18, 0x2fb2ff],
         ];
         for (const [dx, dy, paint] of dabs) g.circle(cx + dx * r, cy + dy * r, r * 0.24).fill(paint);
+        break;
+      }
+      case 'map': {
+        // A map folded in three, with a dotted path to a marker.
+        const top = cy - r * 0.9;
+        const bottom = cy + r * 0.9;
+        g.poly([cx - r * 1.1, top + r * 0.15, cx - r * 0.37, top, cx + r * 0.37, top + r * 0.15, cx + r * 1.1, top,
+          cx + r * 1.1, bottom - r * 0.15, cx + r * 0.37, bottom, cx - r * 0.37, bottom - r * 0.15, cx - r * 1.1, bottom]).fill(color);
+        g.moveTo(cx - r * 0.37, top).lineTo(cx - r * 0.37, bottom - r * 0.15).moveTo(cx + r * 0.37, top + r * 0.15).lineTo(cx + r * 0.37, bottom)
+          .stroke({ width: r * 0.12, color: this.colors.face, alpha: 0.6 });
+        for (const [dx, dy] of [[-0.75, 0.45], [-0.4, 0.15], [0, 0.25], [0.35, 0.0]]) g.circle(cx + dx * r, cy + dy * r, r * 0.09).fill(this.colors.face);
+        g.circle(cx + r * 0.7, cy - r * 0.35, r * 0.22).fill(theme.error);
         break;
       }
       case 'user':

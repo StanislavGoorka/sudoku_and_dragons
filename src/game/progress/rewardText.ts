@@ -1,4 +1,3 @@
-import { ENEMIES } from '../../core/index.ts';
 import type { Reward } from './progress.ts';
 
 /** "gwiazdka", "gwiazdki" or "gwiazdek", as Polish counts them. */
@@ -17,7 +16,8 @@ export function rewardLines(reward: Reward, balance: number): string[] {
     const { stars, streak } = reward.daily;
     lines.push(`Wyzwanie dnia: +${stars} ${starsWord(stars)}${streak > 1 ? ` (seria: ${streak} dni)` : ''}`);
   }
-  if (reward.unlocked) lines.push(`Odblokowano: ${ENEMIES[reward.unlocked].name}!`);
+  const opened = reward.unlocked;
+  if (opened) lines.push(opened.number === 1 ? `Nowa kraina: ${opened.region.name}!` : `Odblokowano: ${opened.enemy.name}!`);
   for (const achievement of reward.achievements.slice(0, 2)) {
     lines.push(`Osiągnięcie: ${achievement.title} (+${achievement.reward})`);
   }

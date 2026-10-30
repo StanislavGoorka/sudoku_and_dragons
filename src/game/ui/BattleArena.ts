@@ -1,12 +1,12 @@
 import { Container, type PointData } from 'pixi.js';
 import type { EnemyDef } from '../../core/index.ts';
 import type { DragonDesign } from '../art/dragonArt.ts';
-import { designOf } from '../enemies.ts';
+import type { EnemyLook } from '../enemies.ts';
 import { theme } from '../theme.ts';
 import { ChargeMeter } from './ChargeMeter.ts';
 import { DragonView } from './DragonView.ts';
 import { HpBar } from './HpBar.ts';
-import { Scene, SCENES } from './Scene.ts';
+import { Scene } from './Scene.ts';
 
 /** Your dragon next to the enemy: smaller, the enemy is the boss. */
 const PLAYER_SCALE = 0.72;
@@ -25,10 +25,10 @@ export class BattleArena extends Container {
   readonly playerHp: HpBar;
   private readonly scene: Scene;
 
-  constructor(enemy: EnemyDef, playerMaxHp: number, playerDesign: DragonDesign) {
+  constructor(enemy: EnemyDef, look: EnemyLook, playerMaxHp: number, playerDesign: DragonDesign) {
     super();
-    this.scene = new Scene(SCENES[enemy.id] ?? SCENES.dragon);
-    this.dragon = new DragonView(designOf(enemy));
+    this.scene = new Scene(look.scene);
+    this.dragon = new DragonView(look.design);
     this.playerDragon = new DragonView(playerDesign);
     // Dragons face left: mirror yours so the two face each other.
     this.playerDragon.scale.x = -1;

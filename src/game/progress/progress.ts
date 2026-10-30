@@ -1,4 +1,4 @@
-import type { Difficulty } from '../../core/index.ts';
+import { REGIONS, STAGES, type Difficulty, type Stage } from '../../core/index.ts';
 import { BOARD_THEMES, boardTheme, DEFAULT_BOARD_THEME, type BoardTheme } from '../boardThemes.ts';
 import { DEFAULT_DRAGON_SKIN, DRAGON_SKINS, dragonSkin, type DragonSkin } from '../dragonSkins.ts';
 import { DEFAULT_HIT_EFFECT, HIT_EFFECTS, hitEffect, type HitEffect } from '../hitEffects.ts';
@@ -22,7 +22,10 @@ export interface Progress {
   stars: number;
   /** Every star ever earned, spent or not. */
   starsEarned: number;
+  /** Every battle by board difficulty (campaign or daily): for records and achievements. */
   levels: Record<Difficulty, LevelRecord>;
+  /** The campaign, by stage id (core/battle/campaign.ts): what opens the next stage. */
+  stages: Record<string, LevelRecord>;
   duels: { played: number; won: number };
   /** Battles won without a single mistake. */
   flawlessWins: number;
@@ -52,6 +55,7 @@ export function emptyProgress(): Progress {
     stars: 0,
     starsEarned: 0,
     levels: { easy: level(), medium: level(), hard: level() },
+    stages: {},
     duels: { played: 0, won: 0 },
     flawlessWins: 0,
     bestCombo: 0,
@@ -74,15 +78,28 @@ export function parseProgress(data: unknown): Progress {
   const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0);
   progress.stars = count(saved.stars);
   progress.starsEarned = Math.max(count(saved.starsEarned), progress.stars);
+  const record = (level: Partial<LevelRecord>): LevelRecord => ({
+    wins: count(level.wins),
+    losses: count(level.losses),
+    bestStars: Math.min(3, count(level.bestStars)),
+    bestTime: typeof level.bestTime === 'number' && level.bestTime > 0 ? level.bestTime : null,
+  });
   for (const difficulty of LEVELS) {
     const level = saved.levels?.[difficulty];
-    if (!level) continue;
-    progress.levels[difficulty] = {
-      wins: count(level.wins),
-      losses: count(level.losses),
-      bestStars: Math.min(3, count(level.bestStars)),
-      bestTime: typeof level.bestTime === 'number' && level.bestTime > 0 ? level.bestTime : null,
-    };
+    if (level) progress.levels[difficulty] = record(level);
+  }
+  if (saved.stages && typeof saved.stages === 'object') {
+    for (const { id } of STAGES) {
+      const stage = saved.stages[id];
+      if (stage) progress.stages[id] = record(stage);
+    }
+  } else {
+    // Saved before the campaign, when each level had one dragon: a level won counts as its whole region.
+    for (const region of REGIONS) {
+      const level = progress.levels[region.difficulty];
+      if (level.wins === 0) continue;
+      for (const stage of region.stages) progress.stages[stage.id] = { ...level, wins: 1, losses: 0 };
+    }
   }
   progress.duels = { played: count(saved.duels?.played), won: count(saved.duels?.won) };
   progress.flawlessWins = count(saved.flawlessWins);
@@ -111,10 +128,25 @@ export function parseProgress(data: unknown): Progress {
   return progress;
 }
 
-/** A level is open once the one before it has been won. */
+/** A campaign stage is open once the one before it has been won (the first one always is). */
+export function isStageUnlocked(progress: Progress, stage: Stage): boolean {
+  const before = STAGES[STAGES.indexOf(stage) - 1];
+  return !before || (progress.stages[before.id]?.wins ?? 0) > 0;
+}
+
+export function stageRecord(progress: Progress, stage: Stage): LevelRecord {
+  return progress.stages[stage.id] ?? { wins: 0, losses: 0, bestStars: 0, bestTime: null };
+}
+
+/** The stage to play next: the first open one not won yet (or the last boss, once all are won). */
+export function currentStage(progress: Progress): Stage {
+  return STAGES.find((stage) => isStageUnlocked(progress, stage) && stageRecord(progress, stage).wins === 0) ?? STAGES[STAGES.length - 1];
+}
+
+/** A board difficulty is open once its campaign region is (for the daily challenge). */
 export function isUnlocked(progress: Progress, difficulty: Difficulty): boolean {
-  const index = LEVELS.indexOf(difficulty);
-  return index <= 0 || progress.levels[LEVELS[index - 1]].wins > 0;
+  const region = REGIONS.find((r) => r.difficulty === difficulty);
+  return !region || isStageUnlocked(progress, region.stages[0]);
 }
 
 export interface BattleResult {
@@ -126,6 +158,8 @@ export interface BattleResult {
   seconds: number;
   /** Most units completed with one digit in this battle. */
   bestCombo: number;
+  /** The campaign stage this battle was, by id. */
+  stage?: string;
   /** The day ('YYYY-MM-DD') whose daily challenge this battle was. */
   daily?: string;
 }
@@ -179,9 +213,9 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'dragon-slayer',
     title: 'Pogromca smoków',
-    description: 'Pokonaj wszystkie trzy smoki.',
+    description: 'Pokonaj bossów wszystkich trzech krain.',
     reward: 15,
-    progress: (p) => [LEVELS.filter((d) => p.levels[d].wins > 0).length, 3],
+    progress: (p) => [REGIONS.filter((r) => (p.stages[r.stages[r.stages.length - 1].id]?.wins ?? 0) > 0).length, REGIONS.length],
   },
   { id: 'veteran', title: 'Weteran', description: 'Wygraj 10 walk ze smokami.', reward: 15, progress: (p) => [Math.min(10, totalWins(p)), 10] },
   { id: 'daily', title: 'Wyzwanie przyjęte', description: 'Wygraj wyzwanie dnia.', reward: 5, progress: (p) => [Math.min(1, p.daily.wins), 1] },
@@ -224,8 +258,8 @@ export interface Reward {
   stars: number;
   /** For a battle: which of its three stars were won. */
   goals: StarGoal[];
-  /** A level this fight opened. */
-  unlocked: Difficulty | null;
+  /** The campaign stage this fight opened (a new region's first stage after a boss). */
+  unlocked: Stage | null;
   /** The daily challenge's reward, when this battle won it for the first time today. */
   daily: { stars: number; streak: number } | null;
   achievements: Achievement[];
@@ -233,18 +267,24 @@ export interface Reward {
 
 /** Records a finished battle (won or lost) and pays its stars. Mutates `progress`. */
 export function recordBattle(progress: Progress, result: BattleResult, now = Date.now()): Reward {
-  const lockedBefore = LEVELS.filter((d) => !isUnlocked(progress, d));
-  const level = progress.levels[result.difficulty];
+  const lockedBefore = STAGES.filter((stage) => !isStageUnlocked(progress, stage));
   const goals = battleStars(result);
   const stars = goals.filter((goal) => goal.met).length;
-  if (result.won) {
-    level.wins++;
-    level.bestStars = Math.max(level.bestStars, stars);
-    level.bestTime = Math.min(level.bestTime ?? Infinity, result.seconds);
-    if (result.mistakes === 0) progress.flawlessWins++;
-  } else {
-    level.losses++;
+  const records = [progress.levels[result.difficulty]];
+  if (result.stage && STAGES.some((stage) => stage.id === result.stage)) {
+    progress.stages[result.stage] ??= { wins: 0, losses: 0, bestStars: 0, bestTime: null };
+    records.push(progress.stages[result.stage]);
   }
+  for (const level of records) {
+    if (result.won) {
+      level.wins++;
+      level.bestStars = Math.max(level.bestStars, stars);
+      level.bestTime = Math.min(level.bestTime ?? Infinity, result.seconds);
+    } else {
+      level.losses++;
+    }
+  }
+  if (result.won && result.mistakes === 0) progress.flawlessWins++;
   // A combo counts even in a lost battle.
   progress.bestCombo = Math.max(progress.bestCombo, result.bestCombo);
   addStars(progress, stars);
@@ -253,7 +293,7 @@ export function recordBattle(progress: Progress, result: BattleResult, now = Dat
   return {
     stars,
     goals,
-    unlocked: lockedBefore.find((d) => isUnlocked(progress, d)) ?? null,
+    unlocked: lockedBefore.find((stage) => isStageUnlocked(progress, stage)) ?? null,
     daily,
     achievements: claimAchievements(progress, now),
   };
@@ -353,15 +393,22 @@ export function mergeProgress(base: Progress, local: Progress, remote: Progress)
   const merged = emptyProgress();
   let stars = sum(base.stars, local.stars, remote.stars);
   let earned = sum(base.starsEarned, local.starsEarned, remote.starsEarned);
-  for (const difficulty of LEVELS) {
-    const [b, l, r] = [base, local, remote].map((p) => p.levels[difficulty]);
+  const mergeRecord = (b: LevelRecord | undefined, l: LevelRecord | undefined, r: LevelRecord | undefined): LevelRecord => {
+    const none: LevelRecord = { wins: 0, losses: 0, bestStars: 0, bestTime: null };
+    [b, l, r] = [b ?? none, l ?? none, r ?? none];
     const times = [l.bestTime, r.bestTime].filter((t): t is number => t !== null);
-    merged.levels[difficulty] = {
+    return {
       wins: sum(b.wins, l.wins, r.wins),
       losses: sum(b.losses, l.losses, r.losses),
       bestStars: Math.max(l.bestStars, r.bestStars),
       bestTime: times.length ? Math.min(...times) : null,
     };
+  };
+  for (const difficulty of LEVELS) {
+    merged.levels[difficulty] = mergeRecord(base.levels[difficulty], local.levels[difficulty], remote.levels[difficulty]);
+  }
+  for (const { id } of STAGES) {
+    if (local.stages[id] || remote.stages[id]) merged.stages[id] = mergeRecord(base.stages[id], local.stages[id], remote.stages[id]);
   }
   merged.duels = {
     played: sum(base.duels.played, local.duels.played, remote.duels.played),

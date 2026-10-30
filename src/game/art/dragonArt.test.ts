@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { STAGES } from '../../core/index.ts';
 import { DESIGNS, dragonParts, dragonSvg, type PartName } from './dragonArt.ts';
 
 // DragonView animates these by name.
@@ -39,12 +40,20 @@ describe('dragon art', () => {
     });
   }
 
+  it('every campaign stage has a design', () => {
+    for (const stage of STAGES) expect(DESIGNS[stage.design], stage.id).toBeDefined();
+  });
+
   it('the enemies, both duel sides and the skins have a design', () => {
     expect(Object.keys(DESIGNS).sort()).toEqual([
       'ancient-dragon',
+      'boss-valley',
+      'boss-volcano',
       'dragon',
       'duel-mine',
       'duel-rival',
+      'enemy-bone',
+      'enemy-storm',
       'skin-candy',
       'skin-emerald',
       'skin-frost',

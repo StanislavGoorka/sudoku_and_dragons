@@ -12,6 +12,7 @@
     "typecheck": "tsc -p . && tsc -p src/core",
     "sim:hp": "node scripts/sim-enemy-hp.ts",
     "sim:timer": "node scripts/sim-timer.ts",
+    "sim:campaign": "node scripts/sim-campaign.ts",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "android:run": "npm run android:sync && cap run android",

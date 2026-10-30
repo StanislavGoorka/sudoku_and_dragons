@@ -69,6 +69,14 @@ code and comments are English.
   Balance numbers come from simulations: `npm run sim:hp` (when each dragon falls, and how much damage a
   board deals) and `npm run sim:timer` (HP lost to the timer at different speeds; `node scripts/sim-timer.ts
   hard 30 4` tries other values for one difficulty). Re-run them when changing HP, damage, interval or knockback.
+  The campaign (`core/battle/campaign.ts`, tested): `REGIONS` Zielona Dolina (easy boards), Ogniste Szczyty (medium),
+  Księżycowe Ruiny (hard), each with three dragons and a boss (`STAGES` in order; ids are saved, never change one).
+  A region's first stage is the plain dragon of its difficulty (`ENEMIES`, also the daily challenge's enemy), except
+  the ruins, where Pradawny smok is the final boss. Along a region the timer gets a little faster and mistakes
+  hit harder; a boss has the most HP, hits for 5 and is drawn a bit bigger. `npm run sim:campaign` reports, for
+  every stage, the HP the timer leaves at 8-14 s per digit: each stage a little harder than the one before
+  (e.g. valley 22→10 HP at 12 s/digit, ruins 18→10 at 8 s/digit). `design` and a region's `scene` name the
+  looks in the game (`enemies.ts` `lookOf`).
 - `core/duel`: online duel rules on one shared board. Players take turns of up to 3 correct digits (a digit that
   completes a row, column or box is free: extra move); correct digits damage the rival as they would the dragon
   (their value, doubled for closing a box), a wrong digit costs its own player 10 HP and ends the turn; 30 s per
@@ -90,7 +98,7 @@ code and comments are English.
   declines too (`rematch_declined`). After a duel ends, `DuelScreen.applyRow` only reads these fields and never
   replays `last_event`.
 - `src/game/`: PixiJS client. `main.ts` boots the app and swaps full screens (`screens/`: `MenuScreen` for
-  picking a level, `GameScreen` for a battle, `LobbyScreen` and `DuelScreen` for online duels, `AccountScreen` for
+  the next campaign stage, `MapScreen` for the campaign map, `GameScreen` for a battle, `LobbyScreen` and `DuelScreen` for online duels, `AccountScreen` for
   the nickname and the account); a screen has `layout`, and optionally `update` (per frame)
   and `handleKey`. `ui/` are reusable views (`Button`, `Modal`, board, arena…), `fx/` holds short-lived effects
   (orbs, particles, floating text, shake), the hit effects (`fx/hitEffects.ts`) and `killTweens`, `theme.ts` holds colours and fonts (see Look below),
@@ -171,8 +179,11 @@ code and comments are English.
     fireball hits your dragon; when you lose, your dragon falls.
   - `HpBar`: a thick pill with the name and HP inside it. `Modal`: a violet panel with a lip; pass
     `theme.gold` as the title colour for a win.
-  - The menu shows one level at a time: its dragon in its scene, flipped with the arrows or a swipe, then
-    one "Walcz!" button, then the daily challenge and the online button side by side; sound and vibration live in the settings dialog (gear), board
+  - The menu shows one campaign stage at a time (the one played last, or the next to win): its dragon over its
+    region's scene, its name, region and place ("walka 2 z 4" or "boss"), flipped with the arrows or a swipe
+    through the open stages and the next locked one (no further), then
+    one "Walcz!" button, then the daily challenge and the online button side by side; a map button (`map` icon)
+    sits by the star counter; sound and vibration live in the settings dialog (gear), board
     themes, dragon skins and hit effects in the shop (palette, with a gold dot when the stars buy something not owned yet).
 - Board themes (`src/game/boardThemes.ts`): cosmetics bought with stars, never gameplay help (the owner's call).
   `BOARD_THEMES` (Fiołek free, then Łąka 15, Ocean 25, Cukierek 35, Wulkan 50, Noc 65, Skarbiec 90) each give
@@ -235,8 +246,18 @@ code and comments are English.
     `boardTheme` / `dragonSkin` / `hitEffect` the ones in use; `chosenTheme`, `chosenSkin`, `chosenEffect` look them up). A won battle gives one star per goal met: the win, no
     mistakes, at least 80% HP left (`HP_GOAL`; slow play lets the dragon's timed attacks through). An online
     duel win gives `DUEL_WIN_STARS` (2). Each level remembers its best stars.
-  - Levels unlock in order: only the young dragon at first, each win opens the next (`isUnlocked`). Online duels
-    are never locked.
+  - The campaign opens one stage at a time (`isStageUnlocked`: the stage before it won), a region with the boss
+    before it; `currentStage` is the first open stage not won. `Progress.stages` keeps a record per stage
+    (`stageRecord`) next to `levels`, the records by board difficulty (any battle, campaign or daily; used by
+    achievements and the progress screen). `isUnlocked(difficulty)` (the daily challenge's cap) means its region
+    is open. A save from before the campaign counts each won level as its whole region won. A battle passes its
+    `stage`; `Reward.unlocked` is the stage it opened ("Dalej: {dragon}" or "Dalej: {region}" in the end dialog).
+    Online duels are never locked.
+  - `screens/MapScreen`: the regions top to bottom, each a panel over its scene with its four stages along a
+    dotted path (gold where won): a round frame with the dragon (`idle: false`, mirrored to face along the
+    path), best stars under it, a padlock and a dark shape until it opens, "Boss" over the boss, a pulsing gold
+    ring on the stage to play next; a region not reached yet is dimmed and names the boss that opens it. It
+    scrolls (drag, wheel), opens at the region being played, and a tap on an open stage starts its battle.
   - Daily challenge (`daily.ts`, pure and tested): one board a day, seeded from the local date and level, so
     every player on the same level gets the same one; the level follows the weekday (`ROTATION`), capped at the
     hardest the player has opened. The day's first win pays `DAILY_STARS` (5) plus a star per day of the
@@ -250,7 +271,7 @@ code and comments are English.
     plurals of "gwiazdka").
   - UI: `ui/stars.ts` (`drawStar`, `StarCounter` pill, `StarRow` that lights a battle's stars one by one in
     the end dialog via `ModalExtra`), the menu's star counter (opens `ProgressScreen`: balance, numbers,
-    scrolling achievement list), best stars under each level, locked dragons as dark shapes behind a padlock,
+    scrolling achievement list), best stars under each stage, locked dragons as dark shapes behind a padlock,
     and "Dalej: {dragon}" as the main button after a win that unlocked it.
 - `src/game/audio/`: `feedback.ts` is the one place for sound and vibration. Screens report events
   (`feedback.digit(d)`, `unitsCompleted(n)`, `playerHit()`, `victory()`…) and it plays a sound from `Synth.ts`
@@ -280,9 +301,9 @@ code and comments are English.
 
 ## Checking changes in the browser
 
-- Without URL parameters the game opens on the menu. `?seed=123&difficulty=easy|medium|hard` skips it and
-  reproduces a board.
-- Menu: arrow keys flip the level, Enter fights, keys 1–3 start a level at once. Battle: arrow keys move the
+- Without URL parameters the game opens on the menu. `?stage=peaks-2` (optionally with `&seed=123`) opens a
+  campaign battle; `?seed=123&difficulty=easy|medium|hard` reproduces a board outside the campaign.
+- Menu: arrow keys flip the stage, Enter fights, keys 1–3 start a region's first stage at once. Battle: arrow keys move the
   selection, keys 1–9 place digits, Escape pauses.
 - Check new UI at phone size (`resize_window` mobile, 375×812) and on a small phone (360×640).
 - Two players in one browser: open `?profile=1` and `?profile=2` in two tabs; each gets its own anonymous
@@ -301,7 +322,7 @@ code and comments are English.
   page (patch `fetch` for `PUT /auth/v1/user` or `/auth/v1/recover`), then set the token in SQL:
   `email_change`/`email_change_token_new` (or `recovery_token`) = hex sha224 of e-mail + code, the `*_sent_at`
   to now(), and a matching `auth.one_time_tokens` row. Delete test users afterwards.
-- In dev, `window.__game.start(difficulty, seed?)`, `__game.daily()`, `__game.menu()` and `__game.lobby()` switch screens, and `__game.screen` is the
+- In dev, `window.__game.start(difficulty, seed?)`, `__game.stage(id)`, `__game.map()`, `__game.daily()`, `__game.menu()` and `__game.lobby()` switch screens, and `__game.screen` is the
   current screen. On a `GameScreen`: `debugFill(n)` fills all but `n` cells,
   `debugMistake()` plays a wrong digit, `battle.charge = 36` jumps the dragon's timer to 4 s before its attack.
 - When the Browser pane is hidden (or the game's tab is not the front one) the page gets few or no animation

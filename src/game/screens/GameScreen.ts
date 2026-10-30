@@ -12,9 +12,11 @@ import {
   type Grid,
   type Hit,
   type Puzzle,
+  type Stage,
   type Unit,
 } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
+import { lookOf } from '../enemies.ts';
 import { burst, floatText, launchOrb, shake, stopEffects, wait } from '../fx/effects.ts';
 import { fireShot } from '../fx/hitEffects.ts';
 import { OVERSCAN } from '../safeArea.ts';
@@ -35,8 +37,10 @@ import { fightLayout } from './fightLayout.ts';
 export interface GameScreenOptions {
   /** A new battle on the same difficulty. */
   onRestart: () => void;
-  /** A battle on another level (the one this win unlocked). */
-  onPlay: (difficulty: Difficulty) => void;
+  /** A battle on another campaign stage (the one this win opened). */
+  onPlay: (stage: Stage) => void;
+  /** The campaign stage this battle is, if any (the daily challenge is none). */
+  stage?: Stage;
   onMenu: () => void;
   /** The day ('YYYY-MM-DD') when this battle is that day's daily challenge. */
   daily?: string;
@@ -88,11 +92,11 @@ export class GameScreen extends Container {
   constructor(puzzle: Puzzle, options: GameScreenOptions) {
     super();
     this.puzzle = puzzle;
-    this.battle = createBattle(ENEMIES[puzzle.difficulty]);
+    this.battle = createBattle(options.stage?.enemy ?? ENEMIES[puzzle.difficulty]);
     this.grid = [...puzzle.givens];
     this.options = options;
     this.pauseButton = new Button({ text: 'Pauza', icon: 'pause', onTap: () => this.requestLeave() });
-    this.arena = new BattleArena(this.battle.enemy, this.battle.playerMaxHp, chosenSkin(progress).design);
+    this.arena = new BattleArena(this.battle.enemy, lookOf(this.battle.enemy, options.stage), this.battle.playerMaxHp, chosenSkin(progress).design);
     const colors = chosenTheme(progress).colors;
     this.board = new BoardView(puzzle.givens, colors);
     this.pad = new NumberPad((digit) => this.handleDigit(digit), colors);
@@ -418,6 +422,7 @@ export class GameScreen extends Container {
       maxHp: this.battle.playerMaxHp,
       seconds: this.elapsed,
       bestCombo: this.bestCombo,
+      stage: this.options.stage?.id,
       daily: this.options.daily,
     });
     saveProgress();
@@ -427,11 +432,15 @@ export class GameScreen extends Container {
       feedback.defeat();
     }
 
-    // A win that opened the next dragon leads straight to it.
+    // A win that opened the next dragon (or region) leads straight to it.
     const { unlocked } = reward;
     const actions: ModalAction[] = unlocked
       ? [
-          { text: `Dalej: ${ENEMIES[unlocked].name}`, variant: 'primary', onTap: () => this.options.onPlay(unlocked) },
+          {
+            text: unlocked.number === 1 ? `Dalej: ${unlocked.region.name}` : `Dalej: ${unlocked.enemy.name}`,
+            variant: 'primary',
+            onTap: () => this.options.onPlay(unlocked),
+          },
           { text: 'Walcz ponownie', onTap: () => this.options.onRestart() },
         ]
       : [{ text: 'Walcz ponownie', variant: 'primary', onTap: () => this.options.onRestart() }];

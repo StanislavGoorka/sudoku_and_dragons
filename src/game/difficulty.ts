@@ -27,3 +27,22 @@ export function saveDifficulty(difficulty: Difficulty): void {
     // Remembering the choice is a convenience; the game works without it.
   }
 }
+
+const STAGE_KEY = 'sudoku-dragons.stage';
+
+/** The campaign stage played last (its id), for the menu to show first; null if none or unknown. */
+export function loadStageId(): string | null {
+  try {
+    return localStorage.getItem(STAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function saveStageId(id: string): void {
+  try {
+    localStorage.setItem(STAGE_KEY, id);
+  } catch {
+    // A convenience, like the difficulty.
+  }
+}

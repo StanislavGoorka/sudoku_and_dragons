@@ -1,25 +1,27 @@
 import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.js';
-import { CLUES, ENEMIES, type Difficulty } from '../../core/index.ts';
+import { CLUES, REGIONS, STAGES, type Stage } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
-import { DIFFICULTIES, DIFFICULTY_INFO, saveDifficulty } from '../difficulty.ts';
-import { designOf } from '../enemies.ts';
+import { loadStageId, saveStageId } from '../difficulty.ts';
+import { lookOf } from '../enemies.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 import { Button } from '../ui/Button.ts';
 import { DragonView } from '../ui/DragonView.ts';
 import { currentStreak, dailyReward, dayKey } from '../progress/daily.ts';
-import { canBuyNew, isUnlocked, LEVELS } from '../progress/progress.ts';
+import { canBuyNew, currentStage, isStageUnlocked, stageRecord } from '../progress/progress.ts';
 import { starsWord } from '../progress/rewardText.ts';
 import { progress } from '../progress/store.ts';
 import { Modal } from '../ui/Modal.ts';
-import { Scene, SCENES } from '../ui/Scene.ts';
+import { Scene } from '../ui/Scene.ts';
+import { drawLock } from '../ui/lock.ts';
 import { drawStar, StarCounter } from '../ui/stars.ts';
 
 export interface MenuOptions {
-  /** The level shown first: the one played last. */
-  selected: Difficulty;
-  onPick: (difficulty: Difficulty) => void;
+  /** A campaign battle. */
+  onPick: (stage: Stage) => void;
+  /** The campaign map. */
+  onMap: () => void;
   onOnline: () => void;
   /** Today's daily challenge. */
   onDaily: () => void;
@@ -33,22 +35,12 @@ export interface MenuOptions {
 const soundLabel = () => `Dźwięk: ${feedback.settings.sound ? 'włączony' : 'wyłączony'}`;
 const hapticsLabel = () => `Wibracje: ${feedback.settings.haptics ? 'włączone' : 'wyłączone'}`;
 
-/** One level on the stage: its scene with its dragon hovering over it (a dark shape behind a lock until unlocked). */
-interface Stage {
+/** One campaign stage on show: its region's scene with its dragon hovering over it (a dark shape behind a lock until open). */
+interface Shown {
   root: Container;
   scene: Scene;
   dragon: DragonView;
   lock: Graphics | null;
-}
-
-/** A gold padlock centred on (cx, cy), `size` tall. */
-function drawLock(g: Graphics, cx: number, cy: number, size: number): Graphics {
-  const edge = theme.buttonPrimaryLip;
-  g.arc(cx, cy - size * 0.12, size * 0.26, Math.PI, 0).stroke({ width: size * 0.13, color: edge, cap: 'round' });
-  g.roundRect(cx - size * 0.38, cy - size * 0.12, size * 0.76, size * 0.6, size * 0.14).fill(theme.gold).stroke({ width: size * 0.06, color: edge });
-  g.circle(cx, cy + size * 0.1, size * 0.08).fill(theme.buttonPrimaryText);
-  g.roundRect(cx - size * 0.03, cy + size * 0.12, size * 0.06, size * 0.16, size * 0.03).fill(theme.buttonPrimaryText);
-  return g;
 }
 
 /**
@@ -78,7 +70,7 @@ export class MenuScreen extends Container {
     },
   });
   private readonly stageArea = new Container();
-  private stage: Stage | null = null;
+  private stage: Shown | null = null;
   private readonly prevButton: Button;
   private readonly nextButton: Button;
   private readonly levelName = new Text({
@@ -106,11 +98,13 @@ export class MenuScreen extends Container {
   private readonly dailyDot = new Graphics();
   private readonly settingsButton: Button;
   private readonly accountButton: Button;
+  /** The campaign map, beside the star counter. */
+  private readonly mapButton: Button;
   /** Opens the shop (board themes, dragon skins); a gold dot on it when the stars buy something not owned yet. */
   private readonly shopButton: Button;
   private readonly shopDot = new Graphics();
   private modal: Modal | null = null;
-  private readonly onPick: (difficulty: Difficulty) => void;
+  private readonly onPick: (stage: Stage) => void;
   private index: number;
   private stageWidth = 0;
   private stageHeight = 0;
@@ -123,15 +117,15 @@ export class MenuScreen extends Container {
   constructor(options: MenuOptions) {
     super();
     this.onPick = options.onPick;
-    // The level played last, unless it is still locked (then the furthest open one).
-    const open = LEVELS.filter((d) => isUnlocked(progress, d));
-    this.index = DIFFICULTIES.indexOf(open.includes(options.selected) ? options.selected : open[open.length - 1]);
+    // The stage played last, if it is open; otherwise the one to play next.
+    const last = STAGES.find((stage) => stage.id === loadStageId());
+    this.index = STAGES.indexOf(last && isStageUnlocked(progress, last) ? last : currentStage(progress));
     this.starCounter = new StarCounter(progress.stars, options.onProgress);
     for (const text of [this.titleTop, this.titleBottom, this.levelName, this.levelInfo]) text.anchor.set(0.5, 0);
 
     this.prevButton = new Button({ text: 'Poprzedni', icon: 'back', onTap: () => this.flip(-1) });
     this.nextButton = new Button({ text: 'Następny', icon: 'back', onTap: () => this.flip(1) });
-    this.playButton = new Button({ text: 'Walcz!', variant: 'primary', onTap: () => this.play(this.difficulty) });
+    this.playButton = new Button({ text: 'Walcz!', variant: 'primary', onTap: () => this.play(this.current) });
     this.onlineButton = new Button({
       text: 'Pojedynek',
       subtitle: 'online z graczem',
@@ -153,6 +147,7 @@ export class MenuScreen extends Container {
     this.settingsButton = new Button({ text: 'Ustawienia', icon: 'gear', onTap: () => this.openSettings() });
     this.shopButton = new Button({ text: 'Sklep', icon: 'palette', onTap: options.onShop });
     this.accountButton = new Button({ text: 'Konto', icon: 'user', onTap: options.onAccount });
+    this.mapButton = new Button({ text: 'Mapa', icon: 'map', onTap: options.onMap });
     this.shopDot.visible = canBuyNew(progress);
     this.shopDot.circle(40, 5, 7).fill(theme.gold).stroke({ width: 2.5, color: theme.panelLip });
     this.shopDot.eventMode = 'none';
@@ -179,6 +174,7 @@ export class MenuScreen extends Container {
       this.settingsButton,
       this.shopButton,
       this.accountButton,
+      this.mapButton,
       this.starCounter,
     );
     this.showLevel(0);
@@ -203,9 +199,11 @@ export class MenuScreen extends Container {
     this.accountButton.layout(44, 44);
     this.starCounter.layout(42);
     this.starCounter.position.set(margin, 13);
+    this.mapButton.position.set(margin + this.starCounter.pillWidth + 10, 12);
+    this.mapButton.layout(44, 44);
 
-    // The logo sits between the star counter and the round buttons when it fits there, else under them.
-    const besideRow = Math.min(width / 2 - (margin + this.starCounter.pillWidth), this.accountButton.x - width / 2) - 8;
+    // The logo sits between the left and right buttons when it fits there, else under them.
+    const besideRow = Math.min(width / 2 - (this.mapButton.x + 44), this.accountButton.x - width / 2) - 8;
     const titleTop = this.titleTop.width / 2 <= besideRow ? Math.max(18, height * 0.035) : 12 + 44 + 4;
     this.titleTop.position.set(width / 2, titleTop);
     this.titleBottom.position.set(width / 2, titleTop + this.titleTop.height * 0.78);
@@ -259,10 +257,10 @@ export class MenuScreen extends Container {
       return;
     }
     const index = ['1', '2', '3'].indexOf(event.key);
-    if (index >= 0) this.play(DIFFICULTIES[index]);
+    if (index >= 0) this.play(REGIONS[index].stages[0]);
     else if (event.key === 'ArrowLeft') this.flip(-1);
     else if (event.key === 'ArrowRight') this.flip(1);
-    else if (event.key === 'Enter') this.play(this.difficulty);
+    else if (event.key === 'Enter') this.play(this.current);
   }
 
   /** Back closes the settings; otherwise there is nothing to go back to (the app exits). */
@@ -278,19 +276,23 @@ export class MenuScreen extends Container {
     super.destroy(options);
   }
 
-  private get difficulty(): Difficulty {
-    return DIFFICULTIES[this.index];
+  private get current(): Stage {
+    return STAGES[this.index];
   }
 
-  /** Starts a battle, if that level is open. */
-  private play(difficulty: Difficulty): void {
-    if (isUnlocked(progress, difficulty)) this.onPick(difficulty);
+  /** Starts a battle, if that stage is open. */
+  private play(stage: Stage): void {
+    if (isStageUnlocked(progress, stage)) this.onPick(stage);
   }
 
+  /** The open stages, and the next one (shown locked): no further, so the campaign keeps a surprise. */
   private flip(step: number): void {
     if (this.modal) return;
-    this.index = (this.index + step + DIFFICULTIES.length) % DIFFICULTIES.length;
-    saveDifficulty(this.difficulty);
+    const last = Math.min(STAGES.length - 1, STAGES.indexOf(currentStage(progress)) + 1);
+    const next = Math.max(0, Math.min(last, this.index + step));
+    if (next === this.index) return;
+    this.index = next;
+    if (isStageUnlocked(progress, this.current)) saveStageId(this.current.id);
     feedback.select();
     this.showLevel(step);
   }
@@ -304,14 +306,15 @@ export class MenuScreen extends Container {
 
   /** Puts the current level on the stage; `from` is the direction it slides in from (0: no slide). */
   private showLevel(from: number): void {
-    const enemy = ENEMIES[this.difficulty];
+    const shown = this.current;
+    const look = lookOf(shown.enemy, shown);
     const old = this.stage;
     const root = new Container();
-    const open = isUnlocked(progress, this.difficulty);
-    const stage: Stage = {
+    const open = isStageUnlocked(progress, shown);
+    const stage: Shown = {
       root,
-      scene: new Scene(SCENES[enemy.id] ?? SCENES.dragon),
-      dragon: new DragonView(designOf(enemy)),
+      scene: new Scene(look.scene),
+      dragon: new DragonView(look.design),
       lock: open ? null : new Graphics(),
     };
     // A locked dragon is only a dark shape, still hovering.
@@ -338,18 +341,19 @@ export class MenuScreen extends Container {
       }
     }
 
-    this.levelName.text = DIFFICULTY_INFO[this.difficulty].name;
-    const before = DIFFICULTIES[this.index - 1];
+    const { region } = shown;
+    this.levelName.text = shown.enemy.name;
+    const place = shown.boss ? 'boss' : `walka ${shown.number} z ${region.stages.length}`;
     this.levelInfo.text = open
-      ? `${enemy.name} · ${CLUES[this.difficulty]} podpowiedzi`
-      : `Wygraj najpierw poziom ${DIFFICULTY_INFO[before].name.toLowerCase()}`;
+      ? `${region.name} · ${place} · ${CLUES[region.difficulty]} podpowiedzi`
+      : `Pokonaj najpierw: ${STAGES[this.index - 1].enemy.name}`;
     this.playButton.setText(open ? 'Walcz!' : 'Zablokowany');
     this.playButton.setEnabled(open);
     if (from !== 0) gsap.fromTo(this.levelName.scale, { x: 0.85, y: 0.85 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(3)' });
     this.drawBestStars();
   }
 
-  private layoutStage(stage: Stage): void {
+  private layoutStage(stage: Shown): void {
     stage.scene.layout(this.stageWidth, this.stageHeight, 24);
     const ground = stage.scene.groundY() + 4;
     stage.dragon.layout(Math.max(48, Math.min(this.stageWidth * 0.8, (ground - 12) * 1.05)));
@@ -360,8 +364,8 @@ export class MenuScreen extends Container {
   /** Three small stars under the level name: the most it has given (none shown while locked). */
   private drawBestStars(): void {
     this.bestStars.clear();
-    if (this.screenWidth === 0 || !isUnlocked(progress, this.difficulty)) return;
-    const best = progress.levels[this.difficulty].bestStars;
+    if (this.screenWidth === 0 || !isStageUnlocked(progress, this.current)) return;
+    const best = stageRecord(progress, this.current).bestStars;
     for (let i = 0; i < 3; i++) drawStar(this.bestStars, this.screenWidth / 2 + (i - 1) * 26, this.starsY, 10, i < best);
   }
 
