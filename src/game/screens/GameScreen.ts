@@ -36,6 +36,8 @@ export interface GameScreenOptions {
   /** A battle on another level (the one this win unlocked). */
   onPlay: (difficulty: Difficulty) => void;
   onMenu: () => void;
+  /** The day ('YYYY-MM-DD') when this battle is that day's daily challenge. */
+  daily?: string;
 }
 
 function formatTime(seconds: number): string {
@@ -68,6 +70,8 @@ export class GameScreen extends Container {
   /** Seconds of battle so far, not counting pauses. */
   private elapsed = 0;
   private endShown = false;
+  /** A daily battle announces itself once, at the first layout. */
+  private announced = false;
   /** Whole seconds left at the last countdown tick sound, or null outside the last seconds. */
   private lastTick: number | null = null;
   private screenWidth = 0;
@@ -113,6 +117,10 @@ export class GameScreen extends Container {
     // Oversized so the flash also covers the safe-area margins around this screen.
     this.hurtFlash.clear().rect(-OVERSCAN, -OVERSCAN, width + OVERSCAN * 2, height + OVERSCAN * 2).fill(theme.error);
     this.modal?.layout(width, height);
+    if (this.options.daily && !this.announced) {
+      this.announced = true;
+      floatText(this.fx, 'Wyzwanie dnia', this.fx.toLocal(this.board.cellCenter(40), this.board), { color: theme.gold, fontSize: 32 });
+    }
   }
 
   /** Called every frame with the frame time; drives the dragon's timed attack. */
@@ -361,6 +369,7 @@ export class GameScreen extends Container {
       maxHp: this.battle.playerMaxHp,
       seconds: this.elapsed,
       bestCombo: this.bestCombo,
+      daily: this.options.daily,
     });
     saveProgress();
     if (won) {

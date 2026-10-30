@@ -2,6 +2,7 @@ import type { Difficulty } from '../../core/index.ts';
 import { BOARD_THEMES, boardTheme, DEFAULT_BOARD_THEME, type BoardTheme } from '../boardThemes.ts';
 import { DEFAULT_DRAGON_SKIN, DRAGON_SKINS, dragonSkin, type DragonSkin } from '../dragonSkins.ts';
 import { DEFAULT_HIT_EFFECT, HIT_EFFECTS, hitEffect, type HitEffect } from '../hitEffects.ts';
+import { emptyDaily, winDaily, type DailyRecord } from './daily.ts';
 
 /** The solo levels in the order they unlock. */
 export const LEVELS: Difficulty[] = ['easy', 'medium', 'hard'];
@@ -27,6 +28,8 @@ export interface Progress {
   flawlessWins: number;
   /** Most rows, columns and boxes completed with one digit. */
   bestCombo: number;
+  /** The daily challenge: last day won, streak, wins (daily.ts). */
+  daily: DailyRecord;
   /** Unlocked achievements: id → when (ms since epoch). */
   achievements: Record<string, number>;
   /** Board themes bought (the free one is not listed). */
@@ -52,6 +55,7 @@ export function emptyProgress(): Progress {
     duels: { played: 0, won: 0 },
     flawlessWins: 0,
     bestCombo: 0,
+    daily: emptyDaily(),
     achievements: {},
     boardThemes: [],
     boardTheme: DEFAULT_BOARD_THEME,
@@ -83,6 +87,15 @@ export function parseProgress(data: unknown): Progress {
   progress.duels = { played: count(saved.duels?.played), won: count(saved.duels?.won) };
   progress.flawlessWins = count(saved.flawlessWins);
   progress.bestCombo = count(saved.bestCombo);
+  const daily = saved.daily;
+  if (daily && typeof daily.lastWon === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(daily.lastWon)) {
+    progress.daily = {
+      lastWon: daily.lastWon,
+      streak: Math.max(1, count(daily.streak)),
+      bestStreak: Math.max(1, count(daily.bestStreak), count(daily.streak)),
+      wins: Math.max(1, count(daily.wins)),
+    };
+  }
   // In the order of ACHIEVEMENTS, like the lists of bought items, so equal progress saves as equal JSON.
   const unlocked: Record<string, unknown> = saved.achievements ?? {};
   for (const { id } of ACHIEVEMENTS) {
@@ -113,6 +126,8 @@ export interface BattleResult {
   seconds: number;
   /** Most units completed with one digit in this battle. */
   bestCombo: number;
+  /** The day ('YYYY-MM-DD') whose daily challenge this battle was. */
+  daily?: string;
 }
 
 /** The share of HP to keep for the third star: the dragon's timed attacks take it from slow players. */
@@ -169,6 +184,14 @@ export const ACHIEVEMENTS: Achievement[] = [
     progress: (p) => [LEVELS.filter((d) => p.levels[d].wins > 0).length, 3],
   },
   { id: 'veteran', title: 'Weteran', description: 'Wygraj 10 walk ze smokami.', reward: 15, progress: (p) => [Math.min(10, totalWins(p)), 10] },
+  { id: 'daily', title: 'Wyzwanie przyjęte', description: 'Wygraj wyzwanie dnia.', reward: 5, progress: (p) => [Math.min(1, p.daily.wins), 1] },
+  {
+    id: 'daily-week',
+    title: 'Tydzień ze smokami',
+    description: 'Wygraj wyzwanie dnia 7 dni z rzędu.',
+    reward: 20,
+    progress: (p) => [Math.min(7, p.daily.bestStreak), 7],
+  },
   { id: 'duelist', title: 'Pojedynkowicz', description: 'Wygraj pojedynek online.', reward: 5, progress: (p) => [Math.min(1, p.duels.won), 1] },
   { id: 'arena-master', title: 'Mistrz areny', description: 'Wygraj 10 pojedynków online.', reward: 20, progress: (p) => [Math.min(10, p.duels.won), 10] },
 ];
@@ -203,6 +226,8 @@ export interface Reward {
   goals: StarGoal[];
   /** A level this fight opened. */
   unlocked: Difficulty | null;
+  /** The daily challenge's reward, when this battle won it for the first time today. */
+  daily: { stars: number; streak: number } | null;
   achievements: Achievement[];
 }
 
@@ -223,10 +248,13 @@ export function recordBattle(progress: Progress, result: BattleResult, now = Dat
   // A combo counts even in a lost battle.
   progress.bestCombo = Math.max(progress.bestCombo, result.bestCombo);
   addStars(progress, stars);
+  const daily = result.won && result.daily ? winDaily(progress.daily, result.daily) : null;
+  if (daily) addStars(progress, daily.stars);
   return {
     stars,
     goals,
     unlocked: lockedBefore.find((d) => isUnlocked(progress, d)) ?? null,
+    daily,
     achievements: claimAchievements(progress, now),
   };
 }
@@ -240,7 +268,7 @@ export function recordDuel(progress: Progress, won: boolean, now = Date.now()): 
   const stars = won ? DUEL_WIN_STARS : 0;
   if (won) progress.duels.won++;
   addStars(progress, stars);
-  return { stars, goals: [], unlocked: null, achievements: claimAchievements(progress, now) };
+  return { stars, goals: [], unlocked: null, daily: null, achievements: claimAchievements(progress, now) };
 }
 
 /** Something bought with stars that changes only how the game looks. */
@@ -341,6 +369,15 @@ export function mergeProgress(base: Progress, local: Progress, remote: Progress)
   };
   merged.flawlessWins = sum(base.flawlessWins, local.flawlessWins, remote.flawlessWins);
   merged.bestCombo = Math.max(local.bestCombo, remote.bestCombo);
+  // The daily streak is the one of the side that won the later day.
+  const [ld, rd] = [local.daily, remote.daily];
+  const later = (ld.lastWon ?? '') >= (rd.lastWon ?? '') ? ld : rd;
+  merged.daily = {
+    lastWon: later.lastWon,
+    streak: ld.lastWon === rd.lastWon ? Math.max(ld.streak, rd.streak) : later.streak,
+    bestStreak: Math.max(ld.bestStreak, rd.bestStreak),
+    wins: sum(base.daily.wins, ld.wins, rd.wins),
+  };
   for (const achievement of ACHIEVEMENTS) {
     const { id } = achievement;
     const times = [local.achievements[id], remote.achievements[id]].filter((t): t is number => t !== undefined);

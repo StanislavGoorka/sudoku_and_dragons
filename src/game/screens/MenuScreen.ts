@@ -8,7 +8,9 @@ import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
 import { Button } from '../ui/Button.ts';
 import { DragonView } from '../ui/DragonView.ts';
+import { currentStreak, dailyReward, dayKey } from '../progress/daily.ts';
 import { canBuyNew, isUnlocked, LEVELS } from '../progress/progress.ts';
+import { starsWord } from '../progress/rewardText.ts';
 import { progress } from '../progress/store.ts';
 import { Modal } from '../ui/Modal.ts';
 import { Scene, SCENES } from '../ui/Scene.ts';
@@ -19,6 +21,8 @@ export interface MenuOptions {
   selected: Difficulty;
   onPick: (difficulty: Difficulty) => void;
   onOnline: () => void;
+  /** Today's daily challenge. */
+  onDaily: () => void;
   /** The star counter opens the progress screen. */
   onProgress: () => void;
   onShop: () => void;
@@ -49,7 +53,8 @@ function drawLock(g: Graphics, cx: number, cy: number, size: number): Graphics {
 
 /**
  * Start screen, kept to a few things: the logo, one level at a time (its dragon in its scene,
- * flipped with the arrows or a swipe), a big "Walcz!" button, online duels, and a settings button.
+ * flipped with the arrows or a swipe), a big "Walcz!" button, the daily challenge and online duels
+ * side by side, and round buttons for the account, the shop and the settings.
  */
 export class MenuScreen extends Container {
   private readonly titleTop = new Text({
@@ -96,6 +101,9 @@ export class MenuScreen extends Container {
   private readonly starCounter: StarCounter;
   private readonly playButton: Button;
   private readonly onlineButton: Button;
+  /** The daily challenge, with a gold dot until today's is won. */
+  private readonly dailyButton: Button;
+  private readonly dailyDot = new Graphics();
   private readonly settingsButton: Button;
   private readonly accountButton: Button;
   /** Opens the shop (board themes, dragon skins); a gold dot on it when the stars buy something not owned yet. */
@@ -125,11 +133,23 @@ export class MenuScreen extends Container {
     this.nextButton = new Button({ text: 'Następny', icon: 'back', onTap: () => this.flip(1) });
     this.playButton = new Button({ text: 'Walcz!', variant: 'primary', onTap: () => this.play(this.difficulty) });
     this.onlineButton = new Button({
-      text: 'Pojedynek online',
-      subtitle: 'gracz kontra gracz',
+      text: 'Pojedynek',
+      subtitle: 'online z graczem',
       variant: 'accent',
       onTap: options.onOnline,
     });
+    const today = dayKey(new Date());
+    const doneToday = progress.daily.lastWon === today;
+    const reward = dailyReward(progress.daily, today);
+    this.dailyButton = new Button({
+      text: 'Wyzwanie dnia',
+      subtitle: doneToday ? `zrobione · seria ${currentStreak(progress.daily, today)}` : `nagroda: ${reward} ${starsWord(reward)}`,
+      variant: 'secondary',
+      onTap: options.onDaily,
+    });
+    this.dailyDot.visible = !doneToday;
+    this.dailyDot.eventMode = 'none';
+    this.dailyButton.addChild(this.dailyDot);
     this.settingsButton = new Button({ text: 'Ustawienia', icon: 'gear', onTap: () => this.openSettings() });
     this.shopButton = new Button({ text: 'Sklep', icon: 'palette', onTap: options.onShop });
     this.accountButton = new Button({ text: 'Konto', icon: 'user', onTap: options.onAccount });
@@ -155,6 +175,7 @@ export class MenuScreen extends Container {
       this.levelInfo,
       this.playButton,
       this.onlineButton,
+      this.dailyButton,
       this.settingsButton,
       this.shopButton,
       this.accountButton,
@@ -166,8 +187,8 @@ export class MenuScreen extends Container {
   layout(width: number, height: number): void {
     this.screenWidth = width;
     this.screenHeight = height;
-    killTweens(this.titleTop, this.titleBottom, this.stageArea, this.playButton, this.onlineButton);
-    for (const item of [this.titleTop, this.titleBottom, this.stageArea, this.playButton, this.onlineButton]) item.alpha = 1;
+    killTweens(this.titleTop, this.titleBottom, this.stageArea, this.playButton, this.onlineButton, this.dailyButton);
+    for (const item of [this.titleTop, this.titleBottom, this.stageArea, this.playButton, this.onlineButton, this.dailyButton]) item.alpha = 1;
 
     const margin = 16;
     const gap = 12;
@@ -189,13 +210,17 @@ export class MenuScreen extends Container {
     this.titleTop.position.set(width / 2, titleTop);
     this.titleBottom.position.set(width / 2, titleTop + this.titleTop.height * 0.78);
 
-    // From the bottom up: online, play, level texts, dots; the stage takes what is left.
+    // From the bottom up: the daily challenge and online side by side, play, level texts, dots; the stage takes what is left.
     const onlineHeight = 62;
     const playHeight = 70;
     const onlineY = height - margin - onlineHeight;
     const playY = onlineY - gap - playHeight;
-    this.onlineButton.position.set(left, onlineY);
-    this.onlineButton.layout(column, onlineHeight);
+    const half = (column - gap) / 2;
+    this.dailyButton.position.set(left, onlineY);
+    this.dailyButton.layout(half, onlineHeight);
+    this.onlineButton.position.set(left + half + gap, onlineY);
+    this.onlineButton.layout(half, onlineHeight);
+    this.dailyDot.clear().circle(half - 8, 4, 7).fill(theme.gold).stroke({ width: 2.5, color: theme.panelLip });
     this.playButton.position.set(left, playY);
     this.playButton.layout(column, playHeight);
     const infoY = playY - 16 - 22;
@@ -248,7 +273,7 @@ export class MenuScreen extends Container {
   }
 
   override destroy(options?: DestroyOptions): void {
-    killTweens(this.titleTop, this.titleBottom, this.stageArea, this.playButton, this.onlineButton, this.levelName.scale);
+    killTweens(this.titleTop, this.titleBottom, this.stageArea, this.playButton, this.onlineButton, this.dailyButton, this.levelName.scale);
     if (this.stage) killTweens(this.stage.root);
     super.destroy(options);
   }
@@ -375,6 +400,7 @@ export class MenuScreen extends Container {
     gsap.from(this.titleBottom, { alpha: 0, y: this.titleBottom.y - 24, duration: 0.5, delay: 0.08, ease: 'back.out(2)' });
     gsap.from(this.stageArea, { alpha: 0, duration: 0.5, delay: 0.1 });
     gsap.from(this.playButton, { alpha: 0, y: this.playButton.y + 30, duration: 0.45, delay: 0.2, ease: 'power2.out' });
-    gsap.from(this.onlineButton, { alpha: 0, y: this.onlineButton.y + 30, duration: 0.45, delay: 0.28, ease: 'power2.out' });
+    gsap.from(this.dailyButton, { alpha: 0, y: this.dailyButton.y + 30, duration: 0.45, delay: 0.28, ease: 'power2.out' });
+    gsap.from(this.onlineButton, { alpha: 0, y: this.onlineButton.y + 30, duration: 0.45, delay: 0.32, ease: 'power2.out' });
   }
 }

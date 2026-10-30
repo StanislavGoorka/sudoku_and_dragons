@@ -13,6 +13,10 @@ export function starsWord(count: number): string {
 export function rewardLines(reward: Reward, balance: number): string[] {
   const lines: string[] = [];
   if (reward.stars > 0) lines.push(`+${reward.stars} ${starsWord(reward.stars)} (razem ${balance})`);
+  if (reward.daily) {
+    const { stars, streak } = reward.daily;
+    lines.push(`Wyzwanie dnia: +${stars} ${starsWord(stars)}${streak > 1 ? ` (seria: ${streak} dni)` : ''}`);
+  }
   if (reward.unlocked) lines.push(`Odblokowano: ${ENEMIES[reward.unlocked].name}!`);
   for (const achievement of reward.achievements.slice(0, 2)) {
     lines.push(`Osiągnięcie: ${achievement.title} (+${achievement.reward})`);

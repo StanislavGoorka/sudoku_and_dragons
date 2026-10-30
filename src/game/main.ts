@@ -21,7 +21,8 @@ import { LobbyScreen } from './screens/LobbyScreen.ts';
 import { MenuScreen } from './screens/MenuScreen.ts';
 import { ProgressScreen } from './screens/ProgressScreen.ts';
 import { ShopScreen } from './screens/ShopScreen.ts';
-import { emptyProgress, type CosmeticKind } from './progress/progress.ts';
+import { dailyChallenge } from './progress/daily.ts';
+import { emptyProgress, isUnlocked, LEVELS, type CosmeticKind } from './progress/progress.ts';
 import { onProgressReplaced, progress, saveProgress } from './progress/store.ts';
 import { theme } from './theme.ts';
 import { Backdrop } from './ui/Backdrop.ts';
@@ -103,12 +104,29 @@ async function boot(): Promise<void> {
     if (import.meta.env.DEV) console.info(`[game] seed=${seed} difficulty=${difficulty}`);
   };
 
+  /** Today's daily challenge: the day's board, on a level the player has opened. */
+  const startDaily = () => {
+    const daily = dailyChallenge(
+      new Date(),
+      LEVELS.filter((d) => isUnlocked(progress, d)),
+    );
+    show(
+      new GameScreen(generatePuzzle(daily.seed, daily.difficulty), {
+        onRestart: startDaily,
+        onPlay: (next) => startBattle(next),
+        onMenu: showMenu,
+        daily: daily.key,
+      }),
+    );
+  };
+
   const showMenu = () => {
     show(
       new MenuScreen({
         selected: loadDifficulty(),
         onPick: (difficulty) => startBattle(difficulty),
         onOnline: () => showLobby(),
+        onDaily: startDaily,
         onProgress: () => showProgress(),
         onShop: () => showShop(),
         onAccount: () => showAccount(),
@@ -200,6 +218,7 @@ async function boot(): Promise<void> {
           return screen;
         },
         start: startBattle,
+        daily: startDaily,
         menu: showMenu,
         lobby: () => showLobby(),
         progress: () => showProgress(),

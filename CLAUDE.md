@@ -156,7 +156,7 @@ code and comments are English.
   - `HpBar`: a thick pill with the name and HP inside it. `Modal`: a violet panel with a lip; pass
     `theme.gold` as the title colour for a win.
   - The menu shows one level at a time: its dragon in its scene, flipped with the arrows or a swipe, then
-    one "Walcz!" button and the online button; sound and vibration live in the settings dialog (gear), board
+    one "Walcz!" button, then the daily challenge and the online button side by side; sound and vibration live in the settings dialog (gear), board
     themes, dragon skins and hit effects in the shop (palette, with a gold dot when the stars buy something not owned yet).
 - Board themes (`src/game/boardThemes.ts`): cosmetics bought with stars, never gameplay help (the owner's call).
   `BOARD_THEMES` (Fiołek free, then Łąka 15, Ocean 25, Cukierek 35, Wulkan 50, Noc 65, Skarbiec 90) each give
@@ -221,8 +221,15 @@ code and comments are English.
     duel win gives `DUEL_WIN_STARS` (2). Each level remembers its best stars.
   - Levels unlock in order: only the young dragon at first, each win opens the next (`isUnlocked`). Online duels
     are never locked.
-  - `ACHIEVEMENTS`: ten simple ones (first win, flawless, combos, three stars, under 5 minutes, all dragons,
-    10 wins, first duel win, 10 duel wins), each paying stars once; `progress()` gives [current, target].
+  - Daily challenge (`daily.ts`, pure and tested): one board a day, seeded from the local date and level, so
+    every player on the same level gets the same one; the level follows the weekday (`ROTATION`), capped at the
+    hardest the player has opened. The day's first win pays `DAILY_STARS` (5) plus a star per day of the
+    streak, up to `DAILY_STREAK_BONUS` more (`recordBattle` with `daily`, `Reward.daily`); a missed day ends the
+    streak. `Progress.daily` keeps the last day won, streak, best streak and wins; merging takes the streak of the
+    later day. The menu's button shows the reward, or "zrobione · seria N", with a gold dot until today is won;
+    the battle announces "Wyzwanie dnia", and "Walcz ponownie" replays the same board (no second reward).
+  - `ACHIEVEMENTS`: twelve simple ones (first win, flawless, combos, three stars, under 5 minutes, all dragons,
+    10 wins, first daily win, a 7-day daily streak, first duel win, 10 duel wins), each paying stars once; `progress()` gives [current, target].
   - `store.ts` holds the loaded progress and `saveProgress()`; `rewardText.ts` the end-dialog lines (with Polish
     plurals of "gwiazdka").
   - UI: `ui/stars.ts` (`drawStar`, `StarCounter` pill, `StarRow` that lights a battle's stars one by one in
@@ -277,7 +284,7 @@ code and comments are English.
   page (patch `fetch` for `PUT /auth/v1/user` or `/auth/v1/recover`), then set the token in SQL:
   `email_change`/`email_change_token_new` (or `recovery_token`) = hex sha224 of e-mail + code, the `*_sent_at`
   to now(), and a matching `auth.one_time_tokens` row. Delete test users afterwards.
-- In dev, `window.__game.start(difficulty, seed?)`, `__game.menu()` and `__game.lobby()` switch screens, and `__game.screen` is the
+- In dev, `window.__game.start(difficulty, seed?)`, `__game.daily()`, `__game.menu()` and `__game.lobby()` switch screens, and `__game.screen` is the
   current screen. On a `GameScreen`: `debugFill(n)` fills all but `n` cells,
   `debugMistake()` plays a wrong digit, `battle.charge = 36` jumps the dragon's timer to 4 s before its attack.
 - When the Browser pane is hidden (or the game's tab is not the front one) the page gets few or no animation
