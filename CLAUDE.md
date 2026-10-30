@@ -114,6 +114,14 @@ code and comments are English.
   runs in the background; the nickname is made up locally), the search or the room (code filled in when it
   comes), "Dołączam…". A request whose answer comes back after the player moved on lets its duel go
   (`leaveDuel`). Giving up a duel and leaving the end screen also go to the menu at once.
+  Training with a bot ("Z botem" in the lobby, and offered while a search finds nobody or the connection is
+  down): `DuelScreen` talks to whoever judges the duel through `net/duelBackend.ts` (`DuelBackend`: moves,
+  timeout claims, leave, rematch, watch, profiles, clock); `onlineDuels` is the server, `net/botDuel.ts` a
+  `BotDuel` that judges on the device with the same core rules (no sign-in, no connection), the player in
+  seat 0 and "Bot treningowy" in seat 1, playing a digit at a time after thinking (`core/duel/bot.ts`, pure and
+  tested: `BOT_LEVELS` by difficulty set the mistake rate, think time and whether it plays for damage and
+  keeps the player from closing boxes; `moveScore`, `botMove`). Bot duels are not `ranked`: no stars, no
+  records, and the end dialog says so; a rematch starts a new board at once.
   `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
   Tutorials (`tutorial.ts`: which were seen, per device in localStorage, and `easyCell`): a player's first battle
   (no battle recorded yet) is guided by `screens/BattleTutorial`, a card with a tip and a pulsing gold ring around

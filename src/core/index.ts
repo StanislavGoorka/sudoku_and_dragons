@@ -6,3 +6,4 @@ export * from './sudoku/moves.ts';
 export * from './battle/battle.ts';
 export * from './battle/enemies.ts';
 export * from './duel/duel.ts';
+export * from './duel/bot.ts';

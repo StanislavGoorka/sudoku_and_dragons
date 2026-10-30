@@ -12,6 +12,7 @@ import { generatePuzzle, type Difficulty, type Seat } from '../core/index.ts';
 import { feedback } from './audio/feedback.ts';
 import { DIFFICULTIES, loadDifficulty, saveDifficulty } from './difficulty.ts';
 import { readSafeArea, type Insets } from './safeArea.ts';
+import type { DuelBackend } from './net/duelBackend.ts';
 import type { DuelRow, Me } from './net/online.ts';
 import { startCloudSave } from './net/cloudSave.ts';
 import { AccountScreen } from './screens/AccountScreen.ts';
@@ -150,12 +151,13 @@ async function boot(): Promise<void> {
     show(new LobbyScreen({ onStart: startDuel, onMenu: showMenu }));
   };
 
-  const startDuel = (duel: DuelRow, seat: Seat, me: Me) => {
+  const startDuel = (duel: DuelRow, seat: Seat, me: Me, backend?: DuelBackend) => {
     show(
       new DuelScreen(duel, me, seat, {
         onLobby: showLobby,
         onMenu: showMenu,
-        onRematch: (next, nextSeat) => startDuel(next, nextSeat, me),
+        onRematch: (next, nextSeat) => startDuel(next, nextSeat, me, backend),
+        backend,
       }),
     );
   };

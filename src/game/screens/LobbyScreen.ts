@@ -14,6 +14,8 @@ import {
   type Me,
 } from '../net/online.ts';
 import { DESIGNS } from '../art/dragonArt.ts';
+import { BotDuel } from '../net/botDuel.ts';
+import type { DuelBackend } from '../net/duelBackend.ts';
 import { chosenSkin, chosenTheme } from '../progress/progress.ts';
 import { progress } from '../progress/store.ts';
 import { theme } from '../theme.ts';
@@ -25,7 +27,8 @@ import { Scene, SCENES } from '../ui/Scene.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 
 export interface LobbyOptions {
-  onStart: (duel: DuelRow, seat: Seat, me: Me) => void;
+  /** A duel to open: online (judged by the server), or with `backend` a bot to train with. */
+  onStart: (duel: DuelRow, seat: Seat, me: Me, backend?: DuelBackend) => void;
   onMenu: () => void;
 }
 
@@ -199,6 +202,7 @@ export class LobbyScreen extends Container {
           this.connect();
           this.show({ kind: 'home' });
         }, { variant: 'primary' });
+        this.addButton('Trening z botem', () => this.startBot(), { subtitle: 'działa bez internetu', height: 64 });
         break;
 
       case 'home':
@@ -207,7 +211,7 @@ export class LobbyScreen extends Container {
         this.addButton('Szybka gra', () => this.quickMatch(), { variant: 'primary', subtitle: 'losowy przeciwnik', height: 64 });
         this.addButton('Stwórz pokój', () => this.createRoom(), { subtitle: 'zaproś znajomego kodem', height: 64 });
         this.addButton('Dołącz kodem', () => this.show({ kind: 'join', code: '' }));
-        this.addButton('Zasady pojedynku', () => this.showRules(), { height: 48 });
+        this.addButtonPair(['Z botem', () => this.startBot()], ['Zasady', () => this.showRules()]);
         if (view.message) this.addText(view.message, 15, theme.error);
         break;
 
@@ -215,6 +219,9 @@ export class LobbyScreen extends Container {
         this.addWaiting('Szukam przeciwnika');
         this.addText(`Poziom: ${DIFFICULTY_INFO[this.difficulty].name.toLowerCase()}`, 15, theme.textMuted);
         this.addButton('Anuluj', () => this.cancelWaiting());
+        // Few players online: the bot is a game at once instead of a wait.
+        this.addText('Nikt się nie zgłasza?', 15, theme.textMuted);
+        this.addButton('Trening z botem', () => this.startBot(), { subtitle: 'bez gwiazdek, od razu', height: 64 });
         break;
 
       case 'room':
@@ -320,6 +327,23 @@ export class LobbyScreen extends Container {
       place: (left, top, width) => {
         button.position.set(left, top);
         button.layout(width, height);
+      },
+    });
+  }
+
+  /** Two buttons side by side on one row. */
+  private addButtonPair(...pair: [string, () => void][]): void {
+    const buttons = pair.map(([text, onTap]) => new Button({ text, onTap }));
+    this.content.addChild(...buttons);
+    this.rows.push({
+      height: 48,
+      place: (left, top, width) => {
+        const gap = 10;
+        const w = (width - gap) / 2;
+        buttons.forEach((button, i) => {
+          button.position.set(left + i * (w + gap), top);
+          button.layout(w, 48);
+        });
       },
     });
   }
@@ -454,6 +478,19 @@ export class LobbyScreen extends Container {
     this.stopWatching = null;
     if (this.pollTimer !== null) window.clearInterval(this.pollTimer);
     this.pollTimer = null;
+  }
+
+  /**
+   * Training with a bot on the chosen level, on the device: no sign-in and no connection needed, and
+   * a search under way is given up.
+   */
+  private startBot(): void {
+    if (this.view.kind === 'searching' || this.view.kind === 'room') this.cancelWaiting();
+    this.attempt++;
+    const nickname = this.nickname;
+    const bot = new BotDuel(this.difficulty, 'you');
+    const { duel, seat } = bot.start();
+    this.options.onStart(duel, seat, { id: 'you', nickname }, bot);
   }
 
   /** Back to the lobby at once; the server is told in the background. */

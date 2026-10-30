@@ -4,7 +4,7 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
 
 1. [x] **Samouczek** – prowadzona pierwsza walka (wybór pola, cyfra, ciosy, licznik smoka; licznik stoi na czas
    samouczka) i zasady pojedynku w lobby przed pierwszym pojedynkiem.
-2. [ ] **Trening z botem w pojedynkach** – gdy szybka gra nie znajduje rywala, propozycja walki z wyraźnie
+2. [x] **Trening z botem w pojedynkach** – gdy szybka gra nie znajduje rywala, propozycja walki z wyraźnie
    oznaczonym botem.
 3. [ ] **Kampania** – krainy z kilkoma smokami każda, mapa postępu, bossowie, zamiast trzech poziomów.
 4. [ ] **Notatki ołówkiem** – ręczne kandydaty w polach (bez automatycznych podpowiedzi). Czeka na decyzję

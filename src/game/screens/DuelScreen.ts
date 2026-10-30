@@ -7,19 +7,8 @@ import { floatText, shake, stopEffects, wait } from '../fx/effects.ts';
 import { fireShot } from '../fx/hitEffects.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { DuelSync, type Prediction, type Snapshot } from '../net/duelSync.ts';
-import {
-  errorMessage,
-  fetchDuel,
-  fetchProfile,
-  knownProfile,
-  leaveDuel,
-  online,
-  OnlineError,
-  serverNow,
-  watchDuel,
-  type DuelRow,
-  type Me,
-} from '../net/online.ts';
+import { onlineDuels, type DuelBackend } from '../net/duelBackend.ts';
+import { errorMessage, OnlineError, type DuelRow, type Me } from '../net/online.ts';
 import { OVERSCAN } from '../safeArea.ts';
 import { theme } from '../theme.ts';
 import { BoardView } from '../ui/BoardView.ts';
@@ -38,6 +27,8 @@ export interface DuelScreenOptions {
   onMenu: () => void;
   /** Both players asked for a rematch: open the new duel. */
   onRematch: (duel: DuelRow, seat: Seat) => void;
+  /** Who judges the duel: the server (the default), or the device for training with a bot. */
+  backend?: DuelBackend;
 }
 
 /** What the server says about a rematch once the duel is over. */
@@ -76,6 +67,7 @@ function refusalMessage(error: unknown): string {
  */
 export class DuelScreen extends Container {
   private readonly duelId: string;
+  private readonly backend: DuelBackend;
   private readonly me: Me;
   private readonly seat: Seat;
   private readonly options: DuelScreenOptions;
@@ -128,6 +120,7 @@ export class DuelScreen extends Container {
   constructor(row: DuelRow, me: Me, seat: Seat, options: DuelScreenOptions) {
     super();
     this.duelId = row.id;
+    this.backend = options.backend ?? onlineDuels;
     this.me = me;
     this.seat = seat;
     this.options = options;
@@ -142,7 +135,7 @@ export class DuelScreen extends Container {
     this.leaveButton = new Button({ text: 'Wyjdź', icon: 'back', onTap: () => this.requestLeave() });
     // The rival as last seen this session (a rematch), until their profile is read again.
     const rivalId = seat === 0 ? row.player1 : row.player0;
-    const known = rivalId ? knownProfile(rivalId) : undefined;
+    const known = rivalId ? this.backend.knownProfile(rivalId) : undefined;
     if (known) {
       this.rivalName = known.nickname;
       this.rivalEffect = known.effect;
@@ -159,14 +152,14 @@ export class DuelScreen extends Container {
     this.hurtFlash.alpha = 0;
     this.addChild(this.arena, this.leaveButton, this.board, this.pad, this.hurtFlash, this.fx);
 
-    this.stopWatching = watchDuel(this.duelId, (next) => this.applyRow(next));
+    this.stopWatching = this.backend.watch(this.duelId, (next) => this.applyRow(next));
     // A safety net for missed live updates: during the duel, and after it while a rematch is still possible.
     this.pollTimer = window.setInterval(() => {
       if (this.sending || this.switching || this.rematch.declined) return;
-      void fetchDuel(this.duelId).then((next) => this.applyRow(next), () => {});
+      void this.backend.fetchDuel(this.duelId).then((next) => this.applyRow(next), () => {});
     }, 4000);
     if (rivalId) {
-      void fetchProfile(rivalId).then((profile) => {
+      void this.backend.fetchProfile(rivalId).then((profile) => {
         if (this.destroyed) return;
         this.rivalName = profile.nickname;
         this.rivalEffect = profile.effect;
@@ -208,7 +201,7 @@ export class DuelScreen extends Container {
     const { state, turnStartedAt } = this.sync.shown;
     if (state.finished || turnStartedAt === null) return;
     const total = DUEL_RULES.turnSeconds;
-    const left = total - (serverNow() - turnStartedAt) / 1000;
+    const left = total - (this.backend.now() - turnStartedAt) / 1000;
     this.arena.timer.update(Math.min(1, Math.max(0, 1 - left / total)), Math.max(0, left), deltaMs / 1000);
 
     const mine = state.turn === this.seat;
@@ -297,7 +290,7 @@ export class DuelScreen extends Container {
       return;
     }
     const turnBefore = this.state.turn;
-    const result = this.sync.play(cell, digit, serverNow());
+    const result = this.sync.play(cell, digit, this.backend.now());
     if (!result.ok) return;
     this.playEvent(result.prediction.event, result.prediction.after.state);
     this.afterChange(turnBefore);
@@ -314,7 +307,7 @@ export class DuelScreen extends Container {
 
   private predictTimeout(): boolean {
     const deadline = this.sync.deadline();
-    const prediction = this.sync.expire(serverNow());
+    const prediction = this.sync.expire(this.backend.now());
     if (!prediction) return false;
     this.playEvent(prediction.event, prediction.after.state, deadline);
     return true;
@@ -325,7 +318,7 @@ export class DuelScreen extends Container {
     if (this.sending || this.destroyed || this.switching) return;
     const prediction = this.sync.nextToSend();
     if (!prediction) return;
-    const delay = prediction.sendAt - serverNow();
+    const delay = prediction.sendAt - this.backend.now();
     if (delay > 0) {
       window.clearTimeout(this.sendTimer);
       this.sendTimer = window.setTimeout(() => this.pump(), delay);
@@ -335,7 +328,7 @@ export class DuelScreen extends Container {
     prediction.sent = true;
     const { action } = prediction;
     const request =
-      action.kind === 'move' ? online.move(this.duelId, action.cell, action.digit) : online.claimTimeout(this.duelId);
+      action.kind === 'move' ? this.backend.move(this.duelId, action.cell, action.digit) : this.backend.claimTimeout(this.duelId);
     request
       .then((result) => this.applyRow(result.duel))
       .catch((error: unknown) => this.handleRefusal(prediction, error))
@@ -348,13 +341,13 @@ export class DuelScreen extends Container {
   /** A request failed: see what the server has now, then try again or take the predictions back. */
   private async handleRefusal(prediction: Prediction, error: unknown): Promise<void> {
     // The action may have landed after all, or the duel moved on without it.
-    await fetchDuel(this.duelId).then((row) => this.applyRow(row), () => {});
+    await this.backend.fetchDuel(this.duelId).then((row) => this.applyRow(row), () => {});
     if (this.destroyed || this.switching || !this.sync.isPending(prediction)) return;
     const code = error instanceof OnlineError ? error.code : 'network';
     if (RETRIED.has(code) && prediction.retries < 3) {
       prediction.retries++;
       prediction.sent = false;
-      prediction.sendAt = serverNow() + 300 * prediction.retries;
+      prediction.sendAt = this.backend.now() + 300 * prediction.retries;
       return;
     }
     this.rollBack(prediction.action.kind === 'move' ? refusalMessage(error) : null);
@@ -533,9 +526,11 @@ export class DuelScreen extends Container {
           onTap: () => {
             this.closeModal();
             // The rival learns it from the server; nothing here waits for that.
-            leaveDuel(this.duelId);
-            recordDuel(progress, false);
-            saveProgress();
+            this.backend.leave(this.duelId);
+            if (this.backend.ranked) {
+              recordDuel(progress, false);
+              saveProgress();
+            }
             this.options.onMenu();
           },
         },
@@ -580,9 +575,13 @@ export class DuelScreen extends Container {
     if (event?.kind === 'forfeit') {
       this.endMessage = event.seat === this.seat ? 'Poddałeś pojedynek.' : `${this.rivalName} opuścił pojedynek.`;
     }
-    const reward = recordDuel(progress, won);
-    saveProgress();
-    this.endMessage = [this.endMessage, ...rewardLines(reward, progress.stars)].join('\n');
+    if (this.backend.ranked) {
+      const reward = recordDuel(progress, won);
+      saveProgress();
+      this.endMessage = [this.endMessage, ...rewardLines(reward, progress.stars)].join('\n');
+    } else {
+      this.endMessage += '\nTrening z botem nie daje gwiazdek.';
+    }
     if (won) {
       feedback.victory();
     } else {
@@ -640,7 +639,7 @@ export class DuelScreen extends Container {
     } else {
       this.updateRematch();
     }
-    online
+    this.backend
       .rematch(this.duelId)
       .then((result) => {
         if (result.duel && result.seat !== undefined) {
@@ -667,7 +666,7 @@ export class DuelScreen extends Container {
     if (this.switching) return;
     this.switching = true;
     try {
-      this.startRematch(await fetchDuel(nextId), this.seat);
+      this.startRematch(await this.backend.fetchDuel(nextId), this.seat);
     } catch {
       if (this.destroyed) return;
       this.switching = false;
@@ -733,7 +732,7 @@ export class DuelScreen extends Container {
   /** Leaving the end screen tells the rival not to wait for a rematch. */
   private leaveEnd(go: () => void): void {
     if (!this.switching && !this.rematch.declined && !this.rematch.next) {
-      void online.declineRematch(this.duelId).catch(() => {});
+      void this.backend.declineRematch(this.duelId).catch(() => {});
     }
     go();
   }
