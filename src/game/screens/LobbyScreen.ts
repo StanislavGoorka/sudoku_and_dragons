@@ -1,5 +1,5 @@
 import { Container, Text, type DestroyOptions } from 'pixi.js';
-import type { Difficulty, Seat } from '../../core/index.ts';
+import { DUEL_RULES, type Difficulty, type Seat } from '../../core/index.ts';
 import { DIFFICULTIES, DIFFICULTY_INFO, loadDifficulty, saveDifficulty } from '../difficulty.ts';
 import {
   connect,
@@ -17,7 +17,9 @@ import { DESIGNS } from '../art/dragonArt.ts';
 import { chosenSkin, chosenTheme } from '../progress/progress.ts';
 import { progress } from '../progress/store.ts';
 import { theme } from '../theme.ts';
+import { lessonSeen, markLessonSeen } from '../tutorial.ts';
 import { Button } from '../ui/Button.ts';
+import { Modal } from '../ui/Modal.ts';
 import { DragonView } from '../ui/DragonView.ts';
 import { Scene, SCENES } from '../ui/Scene.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
@@ -63,6 +65,8 @@ export class LobbyScreen extends Container {
   /** Round button in the top-left corner: the same as Back. */
   private readonly backButton: Button;
   private stopWatching: (() => void) | null = null;
+  /** The duel rules, shown on the first visit and from their button. */
+  private modal: Modal | null = null;
   private pollTimer: number | null = null;
   private screenWidth = 0;
   private screenHeight = 0;
@@ -74,6 +78,8 @@ export class LobbyScreen extends Container {
     this.addChild(this.content, this.backButton);
     this.connect();
     this.render();
+    // Before the first duel, while no turn clock is running yet.
+    if (!lessonSeen('duel')) this.showRules();
   }
 
   layout(width: number, height: number): void {
@@ -90,6 +96,7 @@ export class LobbyScreen extends Container {
       row.place(left, top, columnWidth);
       top += row.height + gap;
     }
+    this.modal?.layout(width, height);
   }
 
   update(deltaMs: number): void {
@@ -99,7 +106,9 @@ export class LobbyScreen extends Container {
 
   handleBack(): boolean {
     const view = this.view;
-    if (view.kind === 'searching' || view.kind === 'room') {
+    if (this.modal) {
+      this.closeRules();
+    } else if (view.kind === 'searching' || view.kind === 'room') {
       this.cancelWaiting();
     } else if (view.kind === 'joining') {
       this.cancelJoin(view.code);
@@ -126,6 +135,30 @@ export class LobbyScreen extends Container {
   override destroy(options?: DestroyOptions): void {
     this.stopWaiting();
     super.destroy(options);
+  }
+
+  /** How a duel goes, in a few lines. Closing it the first time marks the lesson seen. */
+  private showRules(): void {
+    if (this.modal) return;
+    const { movesPerTurn, turnSeconds, mistakeDamage, maxHp, maxIdleTurns } = DUEL_RULES;
+    const rules = [
+      'Gracie na jednej planszy, na zmianę.',
+      `W swojej turze wpisujesz do ${movesPerTurn} dobrych cyfr, na co masz ${turnSeconds} s. Cyfra, która kończy wiersz, kolumnę albo kwadrat, daje dodatkowy ruch.`,
+      `Dobra cyfra rani rywala, zła kosztuje Ciebie ${mistakeDamage} HP i kończy turę.`,
+      `Wygrywa, kto pierwszy zbije rywalowi ${maxHp} HP. ${maxIdleTurns + 1} przegapione tury z rzędu to poddanie.`,
+    ];
+    this.modal = new Modal('Zasady pojedynku', rules.join('\n\n'), [
+      { text: 'Rozumiem', variant: 'primary', onTap: () => this.closeRules() },
+    ]);
+    this.addChild(this.modal);
+    if (this.screenWidth > 0) this.modal.layout(this.screenWidth, this.screenHeight);
+    this.modal.show();
+  }
+
+  private closeRules(): void {
+    markLessonSeen('duel');
+    this.modal?.destroy({ children: true });
+    this.modal = null;
   }
 
   /** Signs in in the background; the lobby works meanwhile and requests wait for it. */
@@ -174,6 +207,7 @@ export class LobbyScreen extends Container {
         this.addButton('Szybka gra', () => this.quickMatch(), { variant: 'primary', subtitle: 'losowy przeciwnik', height: 64 });
         this.addButton('Stwórz pokój', () => this.createRoom(), { subtitle: 'zaproś znajomego kodem', height: 64 });
         this.addButton('Dołącz kodem', () => this.show({ kind: 'join', code: '' }));
+        this.addButton('Zasady pojedynku', () => this.showRules(), { height: 48 });
         if (view.message) this.addText(view.message, 15, theme.error);
         break;
 

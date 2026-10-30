@@ -1,5 +1,5 @@
 import gsap from 'gsap';
-import { Container, Graphics, type DestroyOptions } from 'pixi.js';
+import { Container, Graphics, Rectangle, type DestroyOptions } from 'pixi.js';
 import {
   advanceTime,
   applyMove,
@@ -28,6 +28,8 @@ import { StarRow } from '../ui/stars.ts';
 import { chosenEffect, chosenSkin, chosenTheme, recordBattle } from '../progress/progress.ts';
 import { rewardLines } from '../progress/rewardText.ts';
 import { progress, saveProgress } from '../progress/store.ts';
+import { easyCell, lessonSeen, markLessonSeen } from '../tutorial.ts';
+import { BattleTutorial } from './BattleTutorial.ts';
 import { fightLayout } from './fightLayout.ts';
 
 export interface GameScreenOptions {
@@ -74,6 +76,12 @@ export class GameScreen extends Container {
   private announced = false;
   /** Whole seconds left at the last countdown tick sound, or null outside the last seconds. */
   private lastTick: number | null = null;
+  /** The guided first battle, while it lasts; the dragon's timer waits for it. */
+  private tutorial: BattleTutorial | null = null;
+  /** The selected cell as last seen, so the tutorial hears about a new selection. */
+  private lastSelected: number | null = null;
+  /** Arena, board and pad rectangles from the last layout, for the tutorial to point at. */
+  private areas = { arena: new Rectangle(), board: new Rectangle(), pad: new Rectangle() };
   private screenWidth = 0;
   private screenHeight = 0;
 
@@ -96,6 +104,30 @@ export class GameScreen extends Container {
     this.hurtFlash.alpha = 0;
 
     this.addChild(this.arena, this.pauseButton, this.board, this.pad, this.hurtFlash, this.fx);
+
+    // A player's very first battle walks them through it.
+    const fought = Object.values(progress.levels).some((level) => level.wins + level.losses > 0);
+    if (!fought && !lessonSeen('battle')) {
+      this.tutorial = new BattleTutorial(
+        {
+          arena: () => this.areas.arena,
+          pad: () => this.areas.pad,
+          board: () => this.areas.board,
+          cell: (cell) => {
+            const at = this.toLocal(this.board.cellCenter(cell), this.board);
+            const size = this.areas.board.width / 9;
+            return new Rectangle(at.x - size / 2, at.y - size / 2, size, size);
+          },
+          charge: () => {
+            const at = this.toLocal(this.arena.chargePoint(), this.arena);
+            return new Rectangle(at.x - 34, at.y - 34, 68, 88);
+          },
+        },
+        easyCell(this.grid),
+        () => this.endTutorial(),
+      );
+      this.addChild(this.tutorial);
+    }
   }
 
   layout(width: number, height: number): void {
@@ -113,6 +145,12 @@ export class GameScreen extends Container {
     this.board.layout(boardSize);
     this.pad.position.set(left, padY);
     this.pad.layout(columnWidth, padHeight);
+    this.areas = {
+      arena: new Rectangle(left, arenaY, columnWidth, arenaHeight),
+      board: new Rectangle(this.board.x, this.board.y, boardSize, boardSize),
+      pad: new Rectangle(left, padY, columnWidth, padHeight),
+    };
+    this.tutorial?.layout(left, columnWidth, arenaY, boardY);
 
     // Oversized so the flash also covers the safe-area margins around this screen.
     this.hurtFlash.clear().rect(-OVERSCAN, -OVERSCAN, width + OVERSCAN * 2, height + OVERSCAN * 2).fill(theme.error);
@@ -125,8 +163,13 @@ export class GameScreen extends Container {
 
   /** Called every frame with the frame time; drives the dragon's timed attack. */
   update(deltaMs: number): void {
+    if (this.tutorial && this.board.selected !== this.lastSelected) {
+      this.lastSelected = this.board.selected;
+      if (this.lastSelected !== null) this.tutorial.selected(this.grid[this.lastSelected] === 0);
+    }
     if (this.modal) return;
-    const dt = deltaMs / 1000;
+    // The tutorial holds the clock: the countdown shows, but neither it nor the battle time runs.
+    const dt = this.tutorial ? 0 : deltaMs / 1000;
     const hit = advanceTime(this.battle, dt);
     const ongoing = this.battle.outcome === 'ongoing';
     if (ongoing) this.elapsed += dt;
@@ -207,6 +250,13 @@ export class GameScreen extends Container {
     super.destroy(options);
   }
 
+  /** The guided battle is over (finished or skipped): it does not come back, and the dragon's timer starts. */
+  private endTutorial(): void {
+    markLessonSeen('battle');
+    this.tutorial?.destroy({ children: true });
+    this.tutorial = null;
+  }
+
   /** The pause button and Back pause the battle (leaving is one of the options); after the battle they go to the menu. */
   private requestLeave(): void {
     if (this.modal) return;
@@ -232,10 +282,12 @@ export class GameScreen extends Container {
 
   private handleDigit(digit: number): void {
     if (this.battle.outcome !== 'ongoing' || this.modal) return;
+    if (this.tutorial && !this.tutorial.acceptsDigits) return;
     const cell = this.board.selected;
     if (cell === null) return;
     const result = applyMove(this.grid, this.puzzle.solution, cell, digit);
     if (result.kind === 'occupied') return;
+    this.tutorial?.played(result.kind === 'correct');
 
     if (result.kind === 'wrong') {
       this.board.reject(cell, digit);

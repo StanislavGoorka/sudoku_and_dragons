@@ -113,6 +113,12 @@ code and comments are English.
   comes), "Dołączam…". A request whose answer comes back after the player moved on lets its duel go
   (`leaveDuel`). Giving up a duel and leaving the end screen also go to the menu at once.
   `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
+  Tutorials (`tutorial.ts`: which were seen, per device in localStorage, and `easyCell`): a player's first battle
+  (no battle recorded yet) is guided by `screens/BattleTutorial`, a card with a tip and a pulsing gold ring around
+  what it is about (the arena, an easy cell where only one digit fits, the pad, the board, the countdown). Taps go
+  through to the board and pad; steps wait for a selection or a correct digit (a wrong one gets its own line), or
+  for "Dalej"; "Pomiń" ends it. While it is up the dragon's timer stands still. The lobby shows the duel rules
+  (from `DUEL_RULES`) on the first visit, before any turn clock runs, and from its "Zasady pojedynku" button.
   While a `Modal` is open on the battle screen the battle is paused (no timer, no input); the battle also
   pauses itself when the app goes to the background. Screens are laid out inside the safe area
   (`safeArea.ts` reads CSS env(safe-area-inset-*)); full-screen layers they draw extend by `OVERSCAN`.
@@ -274,6 +280,7 @@ code and comments are English.
   `quickMatch()` / `join(code)`; in a duel, `board.select(cell)` + `handleDigit(d)` (correct digits are in
   `screen.sync.solution`; changing one there makes the next prediction wrong, to test a rollback).
   `screen.sync.predictions` lists what the server has not confirmed yet.
+- A fresh `?profile=N` sees the tutorials; to see them again remove the `sudoku-dragons.tutorial-*` keys.
 - In dev, `__game.state` is the saved progress (change it, then `__game.save()`), `__game.unlockAll()` opens every
   level, `__game.resetProgress()` starts over, `__game.progress()`, `__game.account()` and `__game.shop()` (or
   `__game.shop('dragon')`, `__game.shop('effect')`) open those screens. To see an effect frozen mid-flight, fire it
