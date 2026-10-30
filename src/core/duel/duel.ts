@@ -1,4 +1,4 @@
-import { moveDamage } from '../battle/battle.ts';
+import { closesBox, moveDamage } from '../battle/battle.ts';
 import { CELL_COUNT, type Grid, type Unit } from '../sudoku/grid.ts';
 import { applyMove } from '../sudoku/moves.ts';
 
@@ -6,7 +6,7 @@ import { applyMove } from '../sudoku/moves.ts';
 export type Seat = 0 | 1;
 
 export const DUEL_RULES = {
-  maxHp: 150,
+  maxHp: 130,
   /** Correct digits per turn. A digit that completes a row, column or box does not use one up. */
   movesPerTurn: 3,
   /** Time for one turn; the server enforces it. */
@@ -111,7 +111,7 @@ export function playDuelMove(
   }
 
   const units = move.completed.length;
-  const damage = Math.min(moveDamage(units), state.hp[other]);
+  const damage = Math.min(moveDamage(digit, closesBox(move.completed)), state.hp[other]);
   state.hp[other] -= damage;
   const extraMove = units > 0;
   if (state.hp[other] === 0) {

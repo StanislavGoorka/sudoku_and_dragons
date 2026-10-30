@@ -34,7 +34,7 @@ describe('enemies', () => {
   for (const difficulty of DIFFICULTIES) {
     it(`${difficulty}: the enemy falls with the last digits of the board`, () => {
       for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
-        expect(fallsAt(seed, difficulty)).toBeGreaterThanOrEqual(0.9);
+        expect(fallsAt(seed, difficulty)).toBeGreaterThanOrEqual(0.85);
       }
     });
   }

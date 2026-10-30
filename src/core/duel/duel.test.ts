@@ -13,6 +13,7 @@ function boardWithout(...cells: number[]) {
 
 /** Cells 0..n-1 cleared: plenty of moves that complete nothing (row 0 stays open until its last cell). */
 const OPEN = Array.from({ length: 30 }, (_, i) => i);
+const MAX = DUEL_RULES.maxHp;
 
 describe('duel', () => {
   it('starts with full HP and the given player on turn', () => {
@@ -33,22 +34,30 @@ describe('duel', () => {
     expect(playDuelMove(duel, SOLUTION, 0, 1.5, 4)).toEqual({ ok: false, error: 'bad-move' });
   });
 
-  it('damages the other player for a correct digit and passes the turn after three', () => {
+  it('damages the other player by the digit played and passes the turn after three', () => {
     const duel = createDuel(boardWithout(...OPEN), 0);
-    expect(playDuelMove(duel, SOLUTION, 0, 0, 4)).toMatchObject({ ok: true, event: { kind: 'correct', damage: 2 } });
-    expect(duel.hp).toEqual([150, 148]);
-    expect(duel.movesLeft).toBe(2);
+    expect(playDuelMove(duel, SOLUTION, 0, 0, 4)).toMatchObject({ ok: true, event: { kind: 'correct', damage: 4 } });
+    expect(duel.hp).toEqual([MAX, MAX - 4]);
     playDuelMove(duel, SOLUTION, 0, 1, 8);
+    expect(duel.hp).toEqual([MAX, MAX - 12]);
+    expect(duel.movesLeft).toBe(1);
     playDuelMove(duel, SOLUTION, 0, 2, 3);
     expect(duel.turn).toBe(1);
     expect(duel.movesLeft).toBe(DUEL_RULES.movesPerTurn);
   });
 
-  it('gives an extra move for completing a unit', () => {
+  it('a completed row alone gives the extra move but no double damage', () => {
+    // Cell 2 is the last gap of row 0; column 2 and box 0 stay open (cells 20 and 10).
+    const duel = createDuel(boardWithout(2, 10, 20), 0);
+    expect(playDuelMove(duel, SOLUTION, 0, 2, 3)).toMatchObject({ ok: true, event: { extraMove: true, damage: 3 } });
+    expect(duel.movesLeft).toBe(DUEL_RULES.movesPerTurn);
+  });
+
+  it('gives an extra move for completing a unit, and double damage for closing a box', () => {
     // Cell 0 is the last gap of row 0, column 0 and box 0.
     const duel = createDuel(boardWithout(0, 80), 0);
     const result = playDuelMove(duel, SOLUTION, 0, 0, 4);
-    expect(result).toMatchObject({ ok: true, event: { extraMove: true, damage: 2 + 54 } });
+    expect(result).toMatchObject({ ok: true, event: { extraMove: true, damage: 8 } });
     expect(duel.turn).toBe(0);
     expect(duel.movesLeft).toBe(DUEL_RULES.movesPerTurn);
   });
@@ -59,7 +68,7 @@ describe('duel', () => {
       ok: true,
       event: { kind: 'wrong', damage: DUEL_RULES.mistakeDamage },
     });
-    expect(duel.hp).toEqual([140, 150]);
+    expect(duel.hp).toEqual([MAX - DUEL_RULES.mistakeDamage, MAX]);
     expect(duel.turn).toBe(1);
     expect(duel.board[0]).toBe(0);
   });
@@ -69,7 +78,7 @@ describe('duel', () => {
     duel.hp[1] = 3;
     playDuelMove(duel, SOLUTION, 0, 0, 4);
     playDuelMove(duel, SOLUTION, 0, 1, 8);
-    expect(duel).toMatchObject({ finished: true, winner: 0, hp: [150, 0] });
+    expect(duel).toMatchObject({ finished: true, winner: 0, hp: [MAX, 0] });
     expect(playDuelMove(duel, SOLUTION, 0, 2, 3)).toEqual({ ok: false, error: 'finished' });
   });
 
@@ -77,7 +86,7 @@ describe('duel', () => {
     const duel = createDuel(boardWithout(...OPEN), 0);
     duel.hp[0] = 5;
     playDuelMove(duel, SOLUTION, 0, 0, 5);
-    expect(duel).toMatchObject({ finished: true, winner: 1, hp: [0, 150] });
+    expect(duel).toMatchObject({ finished: true, winner: 1, hp: [0, MAX] });
   });
 
   it('goes to the player with more HP when the board is full, or is drawn on equal HP', () => {
@@ -87,10 +96,10 @@ describe('duel', () => {
     expect(won).toMatchObject({ finished: true, winner: 1 });
 
     const drawn = createDuel(boardWithout(80), 0);
-    drawn.hp = [150, 206];
-    // The last digit completes three units: 56 damage brings player 1 to 150 as well.
+    drawn.hp = [100, 104];
+    // The last digit, a 2, closes box 8: 4 damage brings player 1 to 100 as well.
     playDuelMove(drawn, SOLUTION, 0, 80, 2);
-    expect(drawn).toMatchObject({ finished: true, winner: null, hp: [150, 150] });
+    expect(drawn).toMatchObject({ finished: true, winner: null, hp: [100, 100] });
   });
 
   it('passes the turn on timeout and forfeits after too many in a row', () => {

@@ -3,7 +3,7 @@
 //   random  - any empty cell
 //   smart   - completes rows/columns/boxes when it can, otherwise avoids leaving the opponent
 //             a unit with a single gap
-// Usage: node scripts/sim-duel.ts [mistakeRate=0.05]
+// Usage: node scripts/sim-duel.ts [mistakeRate=0.05] [difficulty=easy]
 import {
   createDuel,
   createRng,
@@ -12,6 +12,7 @@ import {
   playDuelMove,
   unitCells,
   unitsOf,
+  type Difficulty,
   type Grid,
   type Rng,
   type Seat,
@@ -20,6 +21,7 @@ import {
 type Strategy = 'random' | 'smart';
 const MISTAKE_RATE = Number(process.argv[2] ?? 0.05);
 const GAMES = 300;
+const DIFFICULTY = (process.argv[3] ?? 'easy') as Difficulty;
 
 function gaps(board: Grid, cells: number[]): number {
   return cells.filter((c) => board[c] === 0).length;
@@ -50,7 +52,7 @@ function pickCell(board: Grid, strategy: Strategy, rng: Rng): number {
 }
 
 function play(seed: number, strategies: [Strategy, Strategy]) {
-  const { givens, solution } = generatePuzzle(seed, 'easy');
+  const { givens, solution } = generatePuzzle(seed, DIFFICULTY);
   const rng = createRng(seed * 101);
   const first: Seat = rng() < 0.5 ? 0 : 1;
   const duel = createDuel(givens, first);
@@ -73,7 +75,7 @@ function play(seed: number, strategies: [Strategy, Strategy]) {
   return { winner: duel.winner, first, filled, ko, turns };
 }
 
-console.log(`HP ${DUEL_RULES.maxHp}, ${DUEL_RULES.movesPerTurn} moves per turn, mistake rate ${MISTAKE_RATE}`);
+console.log(`${DIFFICULTY} boards, HP ${DUEL_RULES.maxHp}, ${DUEL_RULES.movesPerTurn} moves per turn, mistake rate ${MISTAKE_RATE}`);
 for (const strategies of [
   ['random', 'random'],
   ['smart', 'smart'],

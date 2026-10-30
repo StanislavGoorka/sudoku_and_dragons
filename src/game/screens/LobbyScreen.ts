@@ -144,7 +144,7 @@ export class LobbyScreen extends Container {
     const rules = [
       'Gracie na jednej planszy, na zmianę.',
       `W swojej turze wpisujesz do ${movesPerTurn} dobrych cyfr, na co masz ${turnSeconds} s. Cyfra, która kończy wiersz, kolumnę albo kwadrat, daje dodatkowy ruch.`,
-      `Dobra cyfra rani rywala, zła kosztuje Ciebie ${mistakeDamage} HP i kończy turę.`,
+      `Dobra cyfra rani rywala o swoją wartość (5 to 5 HP), a ta, która domyka kwadrat 3×3, podwójnie. Zła kosztuje Ciebie ${mistakeDamage} HP i kończy turę.`,
       `Wygrywa, kto pierwszy zbije rywalowi ${maxHp} HP. ${maxIdleTurns + 1} przegapione tury z rzędu to poddanie.`,
     ];
     this.modal = new Modal('Zasady pojedynku', rules.join('\n\n'), [

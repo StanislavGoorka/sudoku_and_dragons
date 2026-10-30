@@ -34,6 +34,7 @@ describe('applyMove', () => {
     const result = applyMove(boardWithout(0, 80), SOLUTION, 0, 4);
     expect(result).toEqual({
       kind: 'correct',
+      digit: 4,
       completed: [
         { kind: 'row', index: 0 },
         { kind: 'col', index: 0 },

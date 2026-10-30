@@ -57,10 +57,11 @@ code and comments are English.
 - `src/core/`: pure game logic (sudoku generator, solver, move rules). No DOM, no PixiJS, no Node APIs.
   It must also run in Supabase Edge Functions (Deno), so imports use explicit `.ts` extensions.
   `src/core/tsconfig.json` enforces the no-DOM rule. Tests sit next to the code as `*.test.ts`.
-  `core/battle` turns sudoku moves into hits: correct digit = damage to the enemy (more for completed
-  rows/columns/boxes, combo bonus for several at once), wrong digit = enemy hits the player, solving the board
-  is a finishing blow. Each difficulty has its own dragon (`core/battle/enemies.ts`: Młody smok, Smok,
-  Pradawny smok) with HP tuned so it falls with the last few digits of its board, and harder hits and a faster
+  `core/battle` turns sudoku moves into hits: a correct digit deals its own value (a 5 deals 5; `moveDamage`),
+  doubled (`BOX_MULTIPLIER`) when it closes a 3×3 box (fills its last cell; completed rows and columns add no
+  damage), wrong digit = enemy hits the player, solving the board is a finishing blow (the owner's rules). Each difficulty has its own dragon (`core/battle/enemies.ts`: Młody smok, Smok,
+  Pradawny smok: 228, 270, 300 HP) with HP tuned so it falls with the last few digits of its board (a whole
+  board deals ~200-320; the dragon falls at ~90-96% of the empty cells, the finisher takes the rest), and harder hits and a faster
   timed attack the higher the level; `enemies.test.ts` guards the HP. Enemy names are masculine Polish
   because the UI says "{name} pokonany!".
   The enemy also charges a timed attack (`advanceTime`, fed the frame time by the game loop; core has no clocks
@@ -69,10 +70,11 @@ code and comments are English.
   board deals) and `npm run sim:timer` (HP lost to the timer at different speeds; `node scripts/sim-timer.ts
   hard 30 4` tries other values for one difficulty). Re-run them when changing HP, damage, interval or knockback.
 - `core/duel`: online duel rules on one shared board. Players take turns of up to 3 correct digits (a digit that
-  completes a unit is free: extra move); correct digits damage the rival (same damage as vs the dragon), a wrong
-  digit costs its own player 10 HP and ends the turn; 30 s per turn, three timeouts in a row forfeit; 150 HP;
-  a full board goes to the player with more HP. `npm run sim:duel`: duels end by KO at ~75-80% of the board
-  after ~8 turns; the first mover wins ~53%; tactics matter (smart bot beats random 96%).
+  completes a row, column or box is free: extra move); correct digits damage the rival as they would the dragon
+  (their value, doubled for closing a box), a wrong digit costs its own player 10 HP and ends the turn; 30 s per
+  turn, three timeouts in a row forfeit; 130 HP; a full board goes to the player with more HP. `npm run sim:duel
+  [mistakeRate] [difficulty]`: duels end by KO at ~72-81% of the board after ~8-13 turns (harder boards end
+  earlier); the first mover wins ~52-58%; tactics still matter (smart bot beats random ~86-91%).
 - `supabase/functions/duel/index.ts`: the referee. Holds each board's solution (`duel_secrets`, no RLS
   policies, so no client can read it), judges moves with core, writes the new `state` + `last_event` and bumps
   `version` (updates only the version it read: concurrent writes get 409 `conflict`). Clients only read

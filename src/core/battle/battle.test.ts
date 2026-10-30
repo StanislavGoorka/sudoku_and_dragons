@@ -3,8 +3,8 @@ import type { Unit } from '../sudoku/grid.ts';
 import type { MoveResult } from '../sudoku/moves.ts';
 import {
   advanceTime,
+  BOX_MULTIPLIER,
   createBattle,
-  DAMAGE,
   moveDamage,
   moveKnockback,
   resolveMove,
@@ -13,9 +13,10 @@ import {
 
 const ENEMY: EnemyDef = { id: 'test', name: 'Test', maxHp: 100, attack: 10, attackEvery: 20, timedAttack: 5 };
 
-function correct(units: number, solved = false): MoveResult {
-  const completed: Unit[] = Array.from({ length: units }, (_, index) => ({ kind: 'row', index }));
-  return { kind: 'correct', completed, solved };
+/** A correct `digit` completing `units` rows (or, with `box`, a 3×3 box among them). */
+function correct(digit: number, units = 0, solved = false, box = false): MoveResult {
+  const completed: Unit[] = Array.from({ length: units }, (_, index) => ({ kind: box && index === 0 ? 'box' : 'row', index }));
+  return { kind: 'correct', digit, completed, solved };
 }
 
 const WRONG: MoveResult = { kind: 'wrong', expected: 1 };
@@ -25,24 +26,31 @@ describe('battle', () => {
     expect(createBattle(ENEMY, 30)).toMatchObject({ enemyHp: 100, playerHp: 30, outcome: 'ongoing' });
   });
 
-  it('scales damage with completed units and rewards combos', () => {
-    expect(moveDamage(0)).toBe(DAMAGE.cell);
-    expect(moveDamage(1)).toBe(2 + 12);
-    expect(moveDamage(2)).toBe(2 + 30);
-    expect(moveDamage(3)).toBe(2 + 54);
+  it('a digit deals its own value, doubled when it closes a 3×3 box', () => {
+    expect(moveDamage(5, false)).toBe(5);
+    expect(moveDamage(1, false)).toBe(1);
+    expect(moveDamage(3, true)).toBe(3 * BOX_MULTIPLIER);
+    expect(moveDamage(9, true)).toBe(18);
   });
 
   it('hits the enemy for a correct digit', () => {
     const battle = createBattle(ENEMY);
-    expect(resolveMove(battle, correct(2))).toEqual({
+    expect(resolveMove(battle, correct(7))).toEqual({
       target: 'enemy',
       cause: 'digit',
-      damage: 32,
-      units: 2,
+      damage: 7,
+      units: 0,
+      boxed: false,
       finisher: false,
-      hpAfter: 68,
+      hpAfter: 93,
     });
-    expect(battle.enemyHp).toBe(68);
+    expect(battle.enemyHp).toBe(93);
+  });
+
+  it('only a closed box doubles the damage, not rows or columns', () => {
+    const battle = createBattle(ENEMY);
+    expect(resolveMove(battle, correct(4, 2))).toMatchObject({ damage: 4, units: 2, boxed: false });
+    expect(resolveMove(battle, correct(4, 3, false, true))).toMatchObject({ damage: 8, units: 3, boxed: true });
   });
 
   it('hits the player for a wrong digit', () => {
@@ -60,19 +68,19 @@ describe('battle', () => {
     resolveMove(battle, WRONG);
     expect(resolveMove(battle, WRONG)).toMatchObject({ damage: 5, hpAfter: 0 });
     expect(battle.outcome).toBe('lost');
-    expect(resolveMove(battle, correct(3))).toBeNull();
+    expect(resolveMove(battle, correct(3, 3))).toBeNull();
   });
 
   it('is won when the enemy runs out of HP; damage never exceeds remaining HP', () => {
-    const battle = createBattle({ ...ENEMY, maxHp: 40 });
-    resolveMove(battle, correct(3));
+    const battle = createBattle({ ...ENEMY, maxHp: 12 });
+    resolveMove(battle, correct(9, 1, false, true));
     expect(battle.outcome).toBe('won');
     expect(battle.enemyHp).toBe(0);
   });
 
   it('treats solving the board as a finishing blow', () => {
     const battle = createBattle(ENEMY);
-    expect(resolveMove(battle, correct(0, true))).toMatchObject({ damage: 100, finisher: true, hpAfter: 0 });
+    expect(resolveMove(battle, correct(2, 0, true))).toMatchObject({ damage: 100, finisher: true, hpAfter: 0 });
     expect(battle.outcome).toBe('won');
   });
 
@@ -85,6 +93,7 @@ describe('battle', () => {
         cause: 'timer',
         damage: 5,
         units: 0,
+        boxed: false,
         finisher: false,
         hpAfter: 45,
       });
@@ -96,9 +105,9 @@ describe('battle', () => {
       expect(moveKnockback(2)).toBe(12);
       const battle = createBattle(ENEMY);
       advanceTime(battle, 15);
-      resolveMove(battle, correct(1));
+      resolveMove(battle, correct(6, 1));
       expect(battle.charge).toBe(15 - 7);
-      resolveMove(battle, correct(3));
+      resolveMove(battle, correct(6, 3));
       expect(battle.charge).toBe(0);
     });
 

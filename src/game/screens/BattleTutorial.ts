@@ -37,7 +37,7 @@ const STEPS: Step[] = [
     card: 'arena',
   },
   {
-    text: 'Trafienie! Ukończony wiersz, kolumna albo kwadrat to mocny cios, a kilka naraz to combo.',
+    text: 'Trafienie! Cyfra rani smoka o swoją wartość: 5 to 5 obrażeń. Cyfra, która domyka kwadrat 3×3, rani podwójnie.',
     target: (t) => t.board(),
     card: 'arena',
     button: 'Dalej',

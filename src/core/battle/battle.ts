@@ -1,3 +1,4 @@
+import type { Unit } from '../sudoku/grid.ts';
 import type { MoveResult } from '../sudoku/moves.ts';
 
 export interface EnemyDef {
@@ -14,15 +15,8 @@ export interface EnemyDef {
 
 export const PLAYER_MAX_HP = 50;
 
-export const DAMAGE = {
-  /** Every correct digit. */
-  cell: 2,
-  /** Every row, column or box the digit completes. */
-  unit: 12,
-} as const;
-
-/** Bonus for completing several units with one digit, indexed by the number of units. */
-export const COMBO_MULTIPLIER = [1, 1, 1.25, 1.5] as const;
+/** A digit that closes a 3×3 box (fills its last cell) deals this many times its value. */
+export const BOX_MULTIPLIER = 2;
 
 /** Seconds of charge a correct digit takes away from the enemy's timed attack. */
 export const KNOCKBACK = {
@@ -50,6 +44,8 @@ export interface Hit {
   damage: number;
   /** Units the move completed; 2 or more is a combo. */
   units: number;
+  /** The digit closed a 3×3 box, so its damage was doubled. */
+  boxed: boolean;
   /** The move solved the board, which deals all of the enemy's remaining HP. */
   finisher: boolean;
   /** Target HP after the hit. */
@@ -60,9 +56,14 @@ export function createBattle(enemy: EnemyDef, playerMaxHp = PLAYER_MAX_HP): Batt
   return { enemy, playerMaxHp, enemyHp: enemy.maxHp, playerHp: playerMaxHp, charge: 0, outcome: 'ongoing' };
 }
 
-/** Damage of a correct digit that completed `units` rows/columns/boxes (0–3). */
-export function moveDamage(units: number): number {
-  return DAMAGE.cell + Math.round(DAMAGE.unit * units * COMBO_MULTIPLIER[units]);
+/** Whether a move's completed units include a 3×3 box. */
+export function closesBox(completed: readonly Unit[]): boolean {
+  return completed.some((unit) => unit.kind === 'box');
+}
+
+/** Damage of a correct digit: its own value (a 5 deals 5), doubled when it closes a 3×3 box. */
+export function moveDamage(digit: number, boxed: boolean): number {
+  return digit * (boxed ? BOX_MULTIPLIER : 1);
 }
 
 /** Seconds of charge removed by a correct digit that completed `units` units. */
@@ -74,7 +75,7 @@ function hitPlayer(battle: Battle, damage: number, cause: 'mistake' | 'timer'): 
   const dealt = Math.min(damage, battle.playerHp);
   battle.playerHp -= dealt;
   if (battle.playerHp === 0) battle.outcome = 'lost';
-  return { target: 'player', cause, damage: dealt, units: 0, finisher: false, hpAfter: battle.playerHp };
+  return { target: 'player', cause, damage: dealt, units: 0, boxed: false, finisher: false, hpAfter: battle.playerHp };
 }
 
 /**
@@ -93,11 +94,12 @@ export function resolveMove(battle: Battle, move: MoveResult): Hit | null {
 
     case 'correct': {
       const units = move.completed.length;
-      const damage = move.solved ? battle.enemyHp : Math.min(moveDamage(units), battle.enemyHp);
+      const boxed = closesBox(move.completed);
+      const damage = move.solved ? battle.enemyHp : Math.min(moveDamage(move.digit, boxed), battle.enemyHp);
       battle.enemyHp -= damage;
       battle.charge = Math.max(0, battle.charge - moveKnockback(units));
       if (battle.enemyHp === 0) battle.outcome = 'won';
-      return { target: 'enemy', cause: 'digit', damage, units, finisher: move.solved, hpAfter: battle.enemyHp };
+      return { target: 'enemy', cause: 'digit', damage, units, boxed, finisher: move.solved, hpAfter: battle.enemyHp };
     }
   }
 }

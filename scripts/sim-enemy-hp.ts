@@ -4,6 +4,7 @@
 // Usage: node scripts/sim-enemy-hp.ts
 import {
   applyMove,
+  closesBox,
   createBattle,
   createRng,
   ENEMIES,
@@ -29,7 +30,7 @@ for (const difficulty of ['easy', 'medium', 'hard'] as Difficulty[]) {
     let total = 0;
     for (let k = 0; k < order.length; k++) {
       const move = applyMove(board, solution, order[k], solution[order[k]]);
-      if (move.kind === 'correct') total += moveDamage(move.completed.length);
+      if (move.kind === 'correct') total += moveDamage(move.digit, closesBox(move.completed));
       const hit = resolveMove(battle, move);
       if (hit?.hpAfter === 0) {
         if (hit.finisher) finishers++;

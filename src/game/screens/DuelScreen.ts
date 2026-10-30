@@ -1,6 +1,6 @@
 import gsap from 'gsap';
 import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
-import { DUEL_RULES, otherSeat, solve, type DuelEvent, type DuelState, type Seat, type Unit } from '../../core/index.ts';
+import { closesBox, DUEL_RULES, otherSeat, solve, type DuelEvent, type DuelState, type Seat, type Unit } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
 import { rivalDesign } from '../dragonSkins.ts';
 import { floatText, shake, stopEffects, wait } from '../fx/effects.ts';
@@ -464,28 +464,24 @@ export class DuelScreen extends Container {
 
   /**
    * The hitter's effect flies from the board to the dragon of the player who was hit (`targetMine`: you),
-   * whose HP drops to `hp`: your effect at the rival, theirs at you.
+   * whose HP drops to `hp`: your effect at the rival, theirs at you. A digit that closed a 3×3 box (double
+   * damage) sends a big gold shot from the box's middle.
    */
   private async playHit(cell: number, completed: Unit[], targetMine: boolean, damage: number, hp: number): Promise<void> {
     const epoch = this.epoch;
-    const big = completed.length > 0;
-    const origins = big ? completed.map((unit) => this.board.unitCenter(unit)) : [this.board.cellCenter(cell)];
+    const big = closesBox(completed);
+    const box = completed.find((unit) => unit.kind === 'box');
+    const origin = box ? this.board.unitCenter(box) : this.board.cellCenter(cell);
     const color = big ? theme.flash : targetMine ? this.board.colors.opponent : this.board.colors.placed;
     const to = this.fx.toLocal(this.arena.dragonPoint(targetMine), this.arena);
-    let landed = false;
-    await Promise.all(
-      origins.map(async (origin, i) => {
-        await wait(0.1 + i * 0.12);
-        if (this.destroyed) return;
-        const from = this.fx.toLocal(origin, this.board);
-        const effect = targetMine ? (this.rivalEffect ?? '') : chosenEffect(progress).id;
-        await fireShot(this.fx, effect, { from, to, big, color, side: Math.random() < 0.5 ? -1 : 1 });
-        if (this.destroyed || landed) return;
-        landed = true;
-        // Predictions taken back meanwhile: show the HP as it is now.
-        this.hurtPlayer(targetMine, damage, big, epoch === this.epoch ? hp : null);
-      }),
-    );
+    await wait(0.1);
+    if (this.destroyed) return;
+    const from = this.fx.toLocal(origin, this.board);
+    const effect = targetMine ? (this.rivalEffect ?? '') : chosenEffect(progress).id;
+    await fireShot(this.fx, effect, { from, to, big, color, side: Math.random() < 0.5 ? -1 : 1 });
+    if (this.destroyed) return;
+    // Predictions taken back meanwhile: show the HP as it is now.
+    this.hurtPlayer(targetMine, damage, big, epoch === this.epoch ? hp : null);
   }
 
   /** HP bar (to `hp`, or the shown HP), dragon flinch, damage number and sound for a hit on one player. */
@@ -495,6 +491,7 @@ export class DuelScreen extends Container {
     this.arena.dragon(mine).hurt(big ? 18 : 8);
     const at = this.fx.toLocal(this.arena.dragonPoint(mine), this.arena);
     floatText(this.fx, `-${damage}`, { x: at.x, y: at.y - 30 }, { color: mine ? theme.error : theme.flash, fontSize: big ? 30 : 22 });
+    if (big) floatText(this.fx, 'Kwadrat ×2!', { x: at.x, y: at.y - 70 }, { color: theme.combo, fontSize: 24 });
     if (mine) {
       feedback.playerHit();
       shake(this, big ? 8 : 4, 0.3);

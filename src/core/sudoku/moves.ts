@@ -3,6 +3,8 @@ import { unitCells, unitsOf, type Grid, type Unit } from './grid.ts';
 export type MoveResult =
   | {
       kind: 'correct';
+      /** The digit played: its value is the damage it deals. */
+      digit: number;
       /** Units (row, column, box) this move filled up — the hook for RPG effects. */
       completed: Unit[];
       /** True when this move finished the whole board. */
@@ -22,5 +24,5 @@ export function applyMove(board: Grid, solution: Grid, cell: number, digit: numb
 
   board[cell] = digit;
   const completed = unitsOf(cell).filter((unit) => unitCells(unit).every((other) => board[other] !== 0));
-  return { kind: 'correct', completed, solved: !board.includes(0) };
+  return { kind: 'correct', digit, completed, solved: !board.includes(0) };
 }

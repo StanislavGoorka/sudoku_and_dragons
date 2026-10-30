@@ -325,42 +325,39 @@ export class GameScreen extends Container {
     });
   }
 
-  /** Your dragon lunges as your hit effect flies from the board to the enemy: a small shot per digit, a big one per completed unit. */
+  /**
+   * Your dragon lunges as your hit effect flies from the board to the enemy: from the cell, or big and gold
+   * from the middle of the 3×3 box the digit closed (double damage).
+   */
   private async playPlayerAttack(hit: Hit, cell: number, completed: Unit[]): Promise<void> {
     void this.arena.playerDragon.attack();
-    const big = completed.length > 0;
-    const origins = big ? completed.map((unit) => this.board.unitCenter(unit)) : [this.board.cellCenter(cell)];
+    const big = hit.boxed;
+    const box = completed.find((unit) => unit.kind === 'box');
+    const origin = box ? this.board.unitCenter(box) : this.board.cellCenter(cell);
     const color = big ? theme.flash : this.board.colors.placed;
-    let landed = false;
 
-    await Promise.all(
-      origins.map(async (origin, i) => {
-        await wait(0.1 + i * 0.12);
-        if (this.destroyed) return;
-        const from = this.fx.toLocal(origin, this.board);
-        const to = this.fx.toLocal(this.arena.enemyTarget(), this.arena);
-        const side = Math.random() < 0.5 ? -1 : 1;
-        await fireShot(this.fx, chosenEffect(progress).id, { from, to, big, color, side });
-        if (this.destroyed || landed) return;
+    await wait(0.1);
+    if (this.destroyed) return;
+    const from = this.fx.toLocal(origin, this.board);
+    const to = this.fx.toLocal(this.arena.enemyTarget(), this.arena);
+    const side = Math.random() < 0.5 ? -1 : 1;
+    await fireShot(this.fx, chosenEffect(progress).id, { from, to, big, color, side });
+    if (this.destroyed) return;
 
-        // The first orb to land carries the whole hit.
-        landed = true;
-        feedback.enemyHit(big);
-        this.arena.enemyHp.setHp(hit.hpAfter);
-        this.arena.dragon.hurt(big ? 18 : 6);
-        const jitter = (Math.random() - 0.5) * 40;
-        floatText(this.fx, `-${hit.damage}`, { x: to.x + 45 + jitter, y: to.y - 25 }, {
-          color: big ? theme.flash : theme.text,
-          fontSize: big ? 30 : 20,
-        });
-        if (hit.finisher) {
-          floatText(this.fx, 'Cios ostateczny!', { x: to.x, y: to.y - 70 }, { color: theme.combo, fontSize: 26 });
-        } else if (hit.units >= 2) {
-          floatText(this.fx, `COMBO ×${hit.units}!`, { x: to.x, y: to.y - 70 }, { color: theme.combo, fontSize: 26 });
-        }
-        if (big) shake(this.arena, 4, 0.25);
-      }),
-    );
+    feedback.enemyHit(big);
+    this.arena.enemyHp.setHp(hit.hpAfter);
+    this.arena.dragon.hurt(big ? 18 : 6);
+    const jitter = (Math.random() - 0.5) * 40;
+    floatText(this.fx, `-${hit.damage}`, { x: to.x + 45 + jitter, y: to.y - 25 }, {
+      color: big ? theme.flash : theme.text,
+      fontSize: big ? 30 : 20,
+    });
+    if (hit.finisher) {
+      floatText(this.fx, 'Cios ostateczny!', { x: to.x, y: to.y - 70 }, { color: theme.combo, fontSize: 26 });
+    } else if (big) {
+      floatText(this.fx, 'Kwadrat ×2!', { x: to.x, y: to.y - 70 }, { color: theme.combo, fontSize: 26 });
+    }
+    if (big) shake(this.arena, 4, 0.25);
   }
 
   /** The enemy lunges and spits a fireball at your dragon. */
