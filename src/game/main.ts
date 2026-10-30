@@ -10,6 +10,7 @@ import gsap from 'gsap';
 import { Application, type Container } from 'pixi.js';
 import { generatePuzzle, stageById, type Difficulty, type Seat, type Stage } from '../core/index.ts';
 import { feedback } from './audio/feedback.ts';
+import type { TrackId } from './audio/tracks.ts';
 import { DIFFICULTIES, loadDifficulty, saveStageId } from './difficulty.ts';
 import { readSafeArea, type Insets } from './safeArea.ts';
 import type { DuelBackend } from './net/duelBackend.ts';
@@ -41,6 +42,8 @@ interface Screen extends Container {
   handleBack?(): boolean;
   /** The app went to the background. */
   pause?(): void;
+  /** Its background music (the menu's, if not given). */
+  readonly music?: TrackId;
 }
 
 function randomSeed(): number {
@@ -89,6 +92,7 @@ async function boot(): Promise<void> {
       screen.destroy({ children: true });
     }
     screen = next;
+    feedback.playMusic(next.music ?? 'menu');
     app.stage.addChild(next);
     layoutScreen();
     gsap.fromTo(next, { alpha: 0 }, { alpha: 1, duration: 0.25 });
@@ -218,6 +222,8 @@ async function boot(): Promise<void> {
     if (document.hidden) {
       screen?.pause?.();
       feedback.suspend();
+    } else {
+      feedback.resume();
     }
   });
   if (Capacitor.isNativePlatform()) {

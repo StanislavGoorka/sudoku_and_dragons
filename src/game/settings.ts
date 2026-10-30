@@ -1,10 +1,15 @@
 export interface Settings {
+  /** Sound effects. */
   sound: boolean;
   haptics: boolean;
+  /** Music on, or muted (the volume is kept for when it comes back). */
+  music: boolean;
+  /** 0–1. */
+  musicVolume: number;
 }
 
 const STORAGE_KEY = 'sudoku-dragons.settings';
-const DEFAULTS: Settings = { sound: true, haptics: true };
+const DEFAULTS: Settings = { sound: true, haptics: true, music: true, musicVolume: 0.6 };
 
 /** Saved settings, or the defaults. Storage can be missing or blocked, so failures fall back quietly. */
 export function loadSettings(): Settings {
@@ -13,6 +18,11 @@ export function loadSettings(): Settings {
     return {
       sound: typeof saved.sound === 'boolean' ? saved.sound : DEFAULTS.sound,
       haptics: typeof saved.haptics === 'boolean' ? saved.haptics : DEFAULTS.haptics,
+      music: typeof saved.music === 'boolean' ? saved.music : DEFAULTS.music,
+      musicVolume:
+        typeof saved.musicVolume === 'number' && saved.musicVolume >= 0 && saved.musicVolume <= 1
+          ? saved.musicVolume
+          : DEFAULTS.musicVolume,
     };
   } catch {
     return { ...DEFAULTS };

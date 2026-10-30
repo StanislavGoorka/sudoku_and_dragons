@@ -13,6 +13,7 @@ import { canBuyNew, currentStage, isStageUnlocked, stageRecord } from '../progre
 import { starsWord } from '../progress/rewardText.ts';
 import { progress } from '../progress/store.ts';
 import { Modal } from '../ui/Modal.ts';
+import { MusicControl } from '../ui/MusicControl.ts';
 import { Scene } from '../ui/Scene.ts';
 import { drawLock } from '../ui/lock.ts';
 import { drawStar, StarCounter } from '../ui/stars.ts';
@@ -32,7 +33,7 @@ export interface MenuOptions {
   onAccount: () => void;
 }
 
-const soundLabel = () => `Dźwięk: ${feedback.settings.sound ? 'włączony' : 'wyłączony'}`;
+const soundLabel = () => `Dźwięki: ${feedback.settings.sound ? 'włączone' : 'wyłączone'}`;
 const hapticsLabel = () => `Wibracje: ${feedback.settings.haptics ? 'włączone' : 'wyłączone'}`;
 
 /** One campaign stage on show: its region's scene with its dragon hovering over it (a dark shape behind a lock until open). */
@@ -387,7 +388,7 @@ export class MenuScreen extends Container {
         },
       },
       { text: 'Gotowe', variant: 'primary', onTap: () => this.closeModal() },
-    ]);
+    ], theme.text, new MusicControl());
     this.modal = modal;
     this.addChild(modal);
     modal.layout(this.screenWidth, this.screenHeight);

@@ -7,7 +7,7 @@ import { theme } from '../theme.ts';
 export type ButtonVariant = 'primary' | 'secondary' | 'accent';
 
 /** Icons drawn as shapes (no emoji, so they look the same on every phone). */
-export type ButtonIcon = 'pause' | 'back' | 'gear' | 'palette' | 'user' | 'map' | 'pencil';
+export type ButtonIcon = 'pause' | 'back' | 'gear' | 'palette' | 'user' | 'map' | 'pencil' | 'speaker' | 'muted';
 
 export interface ButtonOptions {
   text: string;
@@ -36,7 +36,7 @@ export class Button extends Container {
   private readonly title: Text;
   private readonly subtitle: Text | null;
   private readonly icon: Graphics | null;
-  private readonly iconName: ButtonIcon | undefined;
+  private iconName: ButtonIcon | undefined;
   private colors: (typeof COLORS)[ButtonVariant];
   private buttonWidth = 0;
   private buttonHeight = 0;
@@ -103,6 +103,12 @@ export class Button extends Container {
 
   setText(text: string): void {
     this.title.text = text;
+  }
+
+  /** Another icon, for a button made with one (e.g. a speaker that gets muted). */
+  setIcon(icon: ButtonIcon): void {
+    this.iconName = icon;
+    if (this.buttonWidth > 0) this.draw();
   }
 
   /** A disabled button is dimmed and ignores taps. */
@@ -212,6 +218,28 @@ export class Button extends Container {
         g.poly(poly([along(0.75 * r, -w), along(1.15 * r, -w), along(1.15 * r, w), along(0.75 * r, w)])).fill(theme.error);
         g.poly(poly([along(-0.55 * r, -w), along(-0.55 * r, w), along(-1.15 * r, 0)])).fill(0xf6d7a8);
         g.poly(poly([along(-0.92 * r, -w * 0.38), along(-0.92 * r, w * 0.38), along(-1.15 * r, 0)])).fill(this.colors.lip);
+        break;
+      }
+      case 'speaker':
+      case 'muted': {
+        // A loudspeaker; sound waves in front of it, or a cross when muted.
+        const back = cx - r * 0.95;
+        const mouth = cx + r * 0.05;
+        g.poly([back, cy - r * 0.38, back + r * 0.42, cy - r * 0.38, mouth, cy - r * 0.9, mouth, cy + r * 0.9,
+          back + r * 0.42, cy + r * 0.38, back, cy + r * 0.38]).fill(color);
+        if (this.iconName === 'speaker') {
+          for (const radius of [0.45, 0.85]) {
+            // moveTo first: an arc would otherwise join on from the origin.
+            g.moveTo(mouth + Math.cos(-0.75) * r * radius, cy + Math.sin(-0.75) * r * radius)
+              .arc(mouth, cy, r * radius, -0.75, 0.75)
+              .stroke({ width: r * 0.2, color, cap: 'round' });
+          }
+        } else {
+          const x = cx + r * 0.62;
+          const d = r * 0.3;
+          g.moveTo(x - d, cy - d).lineTo(x + d, cy + d).moveTo(x + d, cy - d).lineTo(x - d, cy + d)
+            .stroke({ width: r * 0.22, color, cap: 'round' });
+        }
         break;
       }
       case 'user':

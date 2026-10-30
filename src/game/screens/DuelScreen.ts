@@ -2,6 +2,7 @@ import gsap from 'gsap';
 import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
 import { closesBox, DUEL_RULES, otherSeat, solve, type DuelEvent, type DuelState, type Seat, type Unit } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
+import type { TrackId } from '../audio/tracks.ts';
 import { rivalDesign } from '../dragonSkins.ts';
 import { floatText, shake, stopEffects, wait } from '../fx/effects.ts';
 import { fireShot } from '../fx/hitEffects.ts';
@@ -66,6 +67,7 @@ function refusalMessage(error: unknown): string {
  * replaces it. The rival's moves are played out as their new versions of the duel arrive.
  */
 export class DuelScreen extends Container {
+  readonly music: TrackId = 'duel';
   private readonly duelId: string;
   private readonly backend: DuelBackend;
   private readonly me: Me;

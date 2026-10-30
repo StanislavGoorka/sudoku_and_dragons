@@ -37,6 +37,8 @@ interface NoiseOptions {
 export class Synth {
   private readonly ctx: BaseAudioContext;
   private readonly out: GainNode;
+  /** Where other sound (the music) joins the effects, before the soft clipping, so together they never clip. */
+  readonly mix: AudioNode;
   private noiseBuffer: AudioBuffer | null = null;
 
   constructor(ctx: BaseAudioContext, destination: AudioNode = ctx.destination) {
@@ -52,6 +54,7 @@ export class Synth {
     clipper.curve = curve;
     clipper.oversample = '2x';
     this.out.connect(clipper).connect(destination);
+    this.mix = clipper;
   }
 
   /** UI button. */

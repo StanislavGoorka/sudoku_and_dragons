@@ -16,6 +16,7 @@ import {
   type Unit,
 } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
+import type { TrackId } from '../audio/tracks.ts';
 import { lookOf } from '../enemies.ts';
 import { burst, floatText, launchOrb, shake, stopEffects, wait } from '../fx/effects.ts';
 import { fireShot } from '../fx/hitEffects.ts';
@@ -25,6 +26,7 @@ import { BattleArena } from '../ui/BattleArena.ts';
 import { BoardView } from '../ui/BoardView.ts';
 import { Button } from '../ui/Button.ts';
 import { Modal, type ModalAction } from '../ui/Modal.ts';
+import { MusicControl } from '../ui/MusicControl.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 import { StarRow } from '../ui/stars.ts';
 import { chosenEffect, chosenSkin, chosenTheme, recordBattle } from '../progress/progress.ts';
@@ -52,6 +54,7 @@ function formatTime(seconds: number): string {
 }
 
 export class GameScreen extends Container {
+  readonly music: TrackId = 'battle';
   private readonly puzzle: Puzzle;
   private readonly battle: Battle;
   /** The board as the rules see it; moves are checked here against the solution. */
@@ -211,7 +214,7 @@ export class GameScreen extends Container {
     this.openModal(new Modal('Pauza', 'Smok czeka na Twój ruch.\nWyjście kończy tę walkę.', [
       { text: 'Wróć do walki', variant: 'primary', onTap: () => this.closeModal() },
       { text: 'Wyjdź do menu', onTap: () => this.options.onMenu() },
-    ]));
+    ], theme.text, new MusicControl()));
   }
 
   handleKey(event: KeyboardEvent): void {

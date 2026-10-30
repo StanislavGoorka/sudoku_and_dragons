@@ -174,7 +174,8 @@ code and comments are English.
     the first screen, because Pixi measures text when it is created. Fredoka was tried and lacks ą, ę, ż.
   - `ui/Button`: chunky casual-game buttons, a coloured face on a darker lip that it sinks into when pressed;
     variants `primary` (gold, the main action), `secondary` (violet), `accent` (blue, online); a square button
-    is round; `icon` (`pause`, `back`, `gear`, `palette`, `user`) draws a vector icon instead of the text (no emoji).
+    is round; `icon` (`pause`, `back`, `gear`, `palette`, `user`, `map`, `pencil`, `speaker`, `muted`) draws a vector
+    icon instead of the text (no emoji).
   - `ui/Scene`: a rounded window onto a sky gradient, a soft light and two rows of hills, one look per dragon
     (morning for the young one, sunset for the red, moonlit night for the ancient) plus a twilight for duels.
     `groundY()` is where dragons stand; `DragonView.footOffset()` puts a dragon's shadow on it.
@@ -190,7 +191,7 @@ code and comments are English.
     region's scene, its name, region and place ("walka 2 z 4" or "boss"), flipped with the arrows or a swipe
     through the open stages and the next locked one (no further), then
     one "Walcz!" button, then the daily challenge and the online button side by side; a map button (`map` icon)
-    sits by the star counter; sound and vibration live in the settings dialog (gear), board
+    sits by the star counter; music (volume and mute), sound effects and vibration live in the settings dialog (gear), board
     themes, dragon skins and hit effects in the shop (palette, with a gold dot when the stars buy something not owned yet).
 - Board themes (`src/game/boardThemes.ts`): cosmetics bought with stars, never gameplay help (the owner's call).
   `BOARD_THEMES` (Fiołek free, then Łąka 15, Ocean 25, Cukierek 35, Wulkan 50, Noc 65, Skarbiec 90) each give
@@ -288,6 +289,21 @@ code and comments are English.
   background. To check sounds without ears, render them in an `OfflineAudioContext` (`new Synth(offlineCtx)`)
   and measure the peak: quiet effects ~0.05–0.15, digits ~0.3, big hits ~0.6, never above 1. Don't add a
   DynamicsCompressor: Chrome's turns short quiet sounds down ~10 dB even below its threshold.
+  Background music is synthesised too: `tracks.ts` (pure, tested) writes three looping tracks like a tracker, a bar
+  of eight steps at a time (chords, a tune, bass, arpeggio and drum patterns, and which layers play in each pass
+  through the loop; every third pass the tune rests): `menu` (calm, 80 bpm, music box and a soft flute-like tune,
+  no drums), `battle` (128 bpm, A minor, driving bass, drums, a bright square-wave tune) and `duel` (116 bpm, D
+  minor with the dorian B, a 3-3-2 groove, a plucked tune). Every note is in C major so the digits' pentatonic notes
+  fit over any of them; each bar of a tune starts on a note of its chord (the tests check both). `Music.ts` plays
+  them on the audio clock, scheduling a bar at a time ahead (`update`, fed every 100 ms by `feedback`), and fades
+  one track into the next. A screen names its music (`music` on the screen, read by `show()` in main.ts; the menu's
+  by default), the same track goes on across screens, and `victory()`/`defeat()` fade it out so the fanfare plays
+  alone. The music joins the effects before their soft clipper (`Synth.mix`). Settings: `music` (mute) and
+  `musicVolume` (0–1, gain = its square), set in `ui/MusicControl` (a speaker button and a slider, in the menu's
+  settings and the battle's pause dialog); muted music schedules nothing, so it costs no battery. Levels at the
+  default 60%: peaks ~0.10 (menu) to ~0.17 (duel), under a digit's 0.3. Synthesis is the costly part: the battle
+  track takes ~4% of a desktop core (an OfflineAudioContext renders 10 s in ~420 ms); keep new layers cheap (few
+  nodes per note, one filter per chord).
 
 ## Conventions
 
