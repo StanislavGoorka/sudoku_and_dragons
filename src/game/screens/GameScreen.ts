@@ -29,9 +29,10 @@ import { Modal, type ModalAction } from '../ui/Modal.ts';
 import { MusicControl } from '../ui/MusicControl.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 import { StarRow } from '../ui/stars.ts';
-import { chosenEffect, chosenSkin, chosenTheme, recordBattle } from '../progress/progress.ts';
+import { chosenEffect, chosenSkin, chosenTheme, recordBattle, type Reward } from '../progress/progress.ts';
 import { rewardLines } from '../progress/rewardText.ts';
-import { progress, saveProgress } from '../progress/store.ts';
+import { progress, saveActiveBattle, saveProgress } from '../progress/store.ts';
+import type { SavedBattle } from '../progress/battleSave.ts';
 import { easyCell, lessonSeen, markLessonSeen } from '../tutorial.ts';
 import { BattleTutorial } from './BattleTutorial.ts';
 import { fightLayout } from './fightLayout.ts';
@@ -46,6 +47,7 @@ export interface GameScreenOptions {
   onMenu: () => void;
   /** The day ('YYYY-MM-DD') when this battle is that day's daily challenge. */
   daily?: string;
+  resume?: SavedBattle;
 }
 
 function formatTime(seconds: number): string {
@@ -82,6 +84,8 @@ export class GameScreen extends Container {
   /** Seconds of battle so far, not counting pauses. */
   private elapsed = 0;
   private endShown = false;
+  private reward: Reward | null = null;
+  private sinceCheckpoint = 0;
   /** A daily battle announces itself once, at the first layout. */
   private announced = false;
   /** Whole seconds left at the last countdown tick sound, or null outside the last seconds. */
@@ -98,15 +102,29 @@ export class GameScreen extends Container {
   constructor(puzzle: Puzzle, options: GameScreenOptions) {
     super();
     this.puzzle = puzzle;
-    this.battle = createBattle(options.stage?.enemy ?? ENEMIES[puzzle.difficulty]);
-    this.grid = [...puzzle.givens];
+    const saved = options.resume;
+    this.battle = saved ? structuredClone(saved.battle) : createBattle(options.stage?.enemy ?? ENEMIES[puzzle.difficulty]);
+    this.grid = [...(saved?.grid ?? puzzle.givens)];
+    this.elapsed = saved?.elapsed ?? 0;
+    this.mistakes = saved?.mistakes ?? 0;
+    this.bestCombo = saved?.bestCombo ?? 0;
     this.options = options;
     this.pauseButton = new Button({ text: 'Pauza', icon: 'pause', onTap: () => this.requestLeave() });
     this.notesButton = new Button({ text: 'Notatki', icon: 'pencil', onTap: () => this.toggleNotes() });
     this.arena = new BattleArena(this.battle.enemy, lookOf(this.battle.enemy, options.stage), this.battle.playerMaxHp, chosenSkin(progress).design);
     const colors = chosenTheme(progress).colors;
     this.board = new BoardView(puzzle.givens, colors);
+    this.board.sync(this.grid);
+    if (saved) {
+      this.board.restoreNotes(saved.notes);
+      if (saved.selected !== null) this.board.select(saved.selected);
+      this.notesMode = saved.notesMode;
+      this.notesButton.setVariant(this.notesMode ? 'primary' : 'secondary');
+    }
     this.pad = new NumberPad((digit) => this.handleDigit(digit), colors);
+    this.pad.setNotesMode(this.notesMode);
+    this.arena.playerHp.setHp(this.battle.playerHp);
+    this.arena.enemyHp.setHp(this.battle.enemyHp);
     for (let digit = 1; digit <= 9; digit++) {
       if (this.board.countOf(digit) === 9) this.pad.setDone(digit, true);
     }
@@ -139,6 +157,7 @@ export class GameScreen extends Container {
       );
       this.addChild(this.tutorial);
     }
+    this.checkpoint();
   }
 
   layout(width: number, height: number): void {
@@ -194,6 +213,8 @@ export class GameScreen extends Container {
     this.arena.dragon.setHeat(ongoing ? Math.max(0, 1 - secondsLeft / 5) : 0);
     this.tickCountdown(ongoing ? secondsLeft : Infinity);
     if (hit) this.play(hit, this.playDragonAttack(hit));
+    this.sinceCheckpoint += deltaMs;
+    if (this.sinceCheckpoint >= 1000) this.checkpoint();
   }
 
   /** Android back button and Escape: close an open question, ask to leave, or leave a finished battle. */
@@ -210,8 +231,9 @@ export class GameScreen extends Container {
 
   /** The app went to the background: show a pause so the dragon does not strike the moment it returns. */
   pause(): void {
+    this.checkpoint();
     if (this.modal || this.battle.outcome !== 'ongoing') return;
-    this.openModal(new Modal('Pauza', 'Smok czeka na Twój ruch.\nWyjście kończy tę walkę.', [
+    this.openModal(new Modal('Pauza', 'Smok czeka na Twój ruch.\nMożesz wrócić do tej walki z menu.', [
       { text: 'Wróć do walki', variant: 'primary', onTap: () => this.closeModal() },
       { text: 'Wyjdź do menu', onTap: () => this.options.onMenu() },
     ], theme.text, new MusicControl()));
@@ -273,6 +295,18 @@ export class GameScreen extends Container {
     this.notesButton.setVariant(this.notesMode ? 'primary' : 'secondary');
     this.pad.setNotesMode(this.notesMode);
     feedback.select();
+    this.checkpoint();
+  }
+
+  private checkpoint(): void {
+    if (this.battle.outcome !== 'ongoing') return;
+    this.sinceCheckpoint = 0;
+    saveActiveBattle({
+      version: 1, puzzle: this.puzzle, stage: this.options.stage?.id, daily: this.options.daily,
+      grid: [...this.grid], battle: structuredClone(this.battle), notes: this.board.saveNotes(),
+      notesMode: this.notesMode, selected: this.board.selected, mistakes: this.mistakes,
+      bestCombo: this.bestCombo, elapsed: this.elapsed,
+    });
   }
 
   /** The guided battle is over (finished or skipped): it does not come back, and the dragon's timer starts. */
@@ -312,6 +346,7 @@ export class GameScreen extends Container {
     if (cell === null) return;
     if (this.notesMode) {
       if (this.board.toggleNote(cell, digit)) feedback.select();
+      this.checkpoint();
       return;
     }
     const result = applyMove(this.grid, this.puzzle.solution, cell, digit);
@@ -344,10 +379,21 @@ export class GameScreen extends Container {
     } else {
       this.play(hit, this.playDragonAttack(hit));
     }
+    this.checkpoint();
   }
 
   /** Runs a hit's animation, then ends the battle if that hit brought someone to 0 HP. */
   private play(hit: Hit, animation: Promise<void>): void {
+    if (this.battle.outcome !== 'ongoing' && !this.reward) {
+      this.reward = recordBattle(progress, {
+        difficulty: this.puzzle.difficulty, won: this.battle.outcome === 'won', mistakes: this.mistakes,
+        hpLeft: this.battle.playerHp, maxHp: this.battle.playerMaxHp, seconds: this.elapsed,
+        bestCombo: this.bestCombo, stage: this.options.stage?.id, daily: this.options.daily,
+      });
+      // Progress and removal of the checkpoint share the same localStorage write, before animations.
+      saveActiveBattle(null);
+      saveProgress();
+    }
     // Only the final hit ends the battle; earlier hits may still be landing.
     void animation.then(() => {
       if (!this.destroyed && hit.hpAfter === 0) return this.showEnd(hit);
@@ -439,18 +485,7 @@ export class GameScreen extends Container {
       finalHit.cause === 'mistake'
         ? `Każdy błąd to cios smoka za ${attack} HP.`
         : 'Szybkie cyfry i ukończone linie odpychają atak smoka.';
-    const reward = recordBattle(progress, {
-      difficulty: this.puzzle.difficulty,
-      won,
-      mistakes: this.mistakes,
-      hpLeft: this.battle.playerHp,
-      maxHp: this.battle.playerMaxHp,
-      seconds: this.elapsed,
-      bestCombo: this.bestCombo,
-      stage: this.options.stage?.id,
-      daily: this.options.daily,
-    });
-    saveProgress();
+    const reward = this.reward!;
     if (won) {
       feedback.victory();
     } else {

@@ -161,6 +161,18 @@ export class BoardView extends Container {
     return [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((digit) => bits & (1 << digit));
   }
 
+  /** Copies pencil marks without checking candidates or cleaning neighbouring cells. */
+  saveNotes(): number[] {
+    return [...this.notes];
+  }
+
+  restoreNotes(notes: readonly number[]): void {
+    for (let cell = 0; cell < CELL_COUNT; cell++) {
+      this.notes[cell] = this.board[cell] === 0 ? notes[cell] ?? 0 : 0;
+      this.drawNotes(cell);
+    }
+  }
+
   /** Shows a correct digit with its pop, plus a golden wave through every unit it completed. */
   reveal(cell: number, digit: number, completed: Unit[], owner: DigitOwner = 'mine'): void {
     this.board[cell] = digit;

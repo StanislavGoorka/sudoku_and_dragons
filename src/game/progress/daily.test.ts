@@ -64,6 +64,15 @@ describe('the streak', () => {
     expect(record.wins).toBe(1);
   });
 
+  it('an older resumed challenge does not rewind a newer streak or pay the daily reward again', () => {
+    const record = emptyDaily();
+    winDaily(record, '2026-10-30');
+    winDaily(record, '2026-10-31');
+    const before = { ...record };
+    expect(winDaily(record, '2026-10-30')).toBeNull();
+    expect(record).toEqual(before);
+  });
+
   it('breaks on a missed day but keeps the best', () => {
     const record = emptyDaily();
     winDaily(record, '2026-10-28');

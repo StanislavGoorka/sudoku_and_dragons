@@ -1,6 +1,6 @@
 import type { AuthError, User } from '@supabase/supabase-js';
 import { emptyProgress } from '../progress/progress.ts';
-import { replaceProgress } from '../progress/store.ts';
+import { replaceProgress, saveActiveBattle } from '../progress/store.ts';
 import { forgetCloudBase, syncProgress } from './cloudSave.ts';
 import { randomNickname } from './nickname.ts';
 import { connect, localNickname, OnlineError, supabase, switchedAccount } from './online.ts';
@@ -173,6 +173,7 @@ export async function logOut(): Promise<void> {
   await supabase.auth.signOut({ scope: 'local' });
   forgetCloudBase();
   switchedAccount(randomNickname());
+  saveActiveBattle(null);
   replaceProgress(emptyProgress());
 }
 

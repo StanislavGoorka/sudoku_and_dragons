@@ -1,5 +1,6 @@
 import { profileSuffix } from '../profile.ts';
 import { emptyProgress, parseProgress, type Progress } from './progress.ts';
+import { parseSavedBattle, type SavedBattle } from './battleSave.ts';
 
 const STORAGE_KEY = `sudoku-dragons.progress${profileSuffix}`;
 
@@ -11,6 +12,7 @@ export interface ProgressOwner {
 
 // Unknown for legacy saves. Losing the separate cloud-base key must not turn an account into a guest.
 let owner: ProgressOwner | null = null;
+let battle: SavedBattle | null = null;
 
 function load(): Progress {
   try {
@@ -20,6 +22,7 @@ function load(): Progress {
       return emptyProgress();
     }
     const saved: unknown = JSON.parse(raw);
+    battle = parseSavedBattle((saved as { _soloBattle?: unknown } | null)?._soloBattle);
     const candidate = (saved as { _cloudOwner?: ProgressOwner } | null)?._cloudOwner;
     if (candidate && (candidate.user === null || typeof candidate.user === 'string') && typeof candidate.guest === 'boolean') {
       owner = { user: candidate.user, guest: candidate.guest };
@@ -32,6 +35,16 @@ function load(): Progress {
 
 /** The player's progress, loaded once at start. Change it with the functions in progress.ts, then save. */
 export const progress: Progress = load();
+
+export function activeBattle(): SavedBattle | null {
+  return battle;
+}
+
+/** Quiet checkpoints do not upload progress every second. */
+export function saveActiveBattle(next: SavedBattle | null): boolean {
+  battle = next;
+  return persist();
+}
 
 export function progressOwner(): ProgressOwner | null {
   return owner;
@@ -49,14 +62,19 @@ const replaceListeners: (() => void)[] = [];
 
 /** Storage can be missing or full; progress then lasts until the app closes. */
 export function saveProgress(): boolean {
+  const persisted = persist();
+  for (const listener of saveListeners) listener();
+  return persisted;
+}
+
+function persist(): boolean {
   let persisted = false;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...progress, _cloudOwner: owner }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...progress, _cloudOwner: owner, _soloBattle: battle }));
     persisted = true;
   } catch {
     // Keep playing; nothing else depends on the saved copy.
   }
-  for (const listener of saveListeners) listener();
   return persisted;
 }
 

@@ -78,7 +78,8 @@ export function dailyReward(record: DailyRecord, today: string): number {
 
 /** Records a won challenge. Returns the stars it pays and the streak, or null if today was already won. */
 export function winDaily(record: DailyRecord, today: string): { stars: number; streak: number } | null {
-  if (record.lastWon === today) return null;
+  // A checkpoint from yesterday may finish after a newer win arrived from the cloud.
+  if (record.lastWon !== null && record.lastWon >= today) return null;
   const stars = dailyReward(record, today);
   record.streak = currentStreak(record, today) + 1;
   record.lastWon = today;

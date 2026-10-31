@@ -14,3 +14,12 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
 6. [ ] **Ranking wyzwania dnia** – najlepsze czasy dnia na serwerze i miejsce gracza.
 7. [ ] **Przygotowanie do Google Play** – podpisany AAB, wersje, polityka prywatności, grafiki i opis sklepu.
 8. [ ] **Lżejsza gra** – podział kodu (710 kB na start) na części ładowane, gdy są potrzebne.
+
+## Niezawodność przed publikacją
+
+1. [x] **Wznawianie walki solo** – lokalny zapis planszy, notatek, HP, czasu i licznika ataku; wznowienie
+   z menu po restarcie aplikacji; potwierdzenie przed zastąpieniem walki i atomowy zapis wyniku.
+2. [ ] **Powrót do pojedynku online** – odnalezienie aktywnej walki po restarcie, odświeżenie po
+   odzyskaniu połączenia i czytelny status sieci.
+3. [ ] **Automatyczne testy w CI** – testy jednostkowe, typy, build i testy integracyjne w odizolowanym
+   środowisku Supabase z usuwaniem danych testowych.

@@ -26,7 +26,7 @@ import { ProgressScreen } from './screens/ProgressScreen.ts';
 import { ShopScreen } from './screens/ShopScreen.ts';
 import { dailyChallenge } from './progress/daily.ts';
 import { emptyProgress, isUnlocked, LEVELS, type CosmeticKind } from './progress/progress.ts';
-import { onProgressReplaced, progress, saveProgress } from './progress/store.ts';
+import { activeBattle, onProgressReplaced, progress, saveProgress } from './progress/store.ts';
 import { theme } from './theme.ts';
 import { Backdrop } from './ui/Backdrop.ts';
 
@@ -100,6 +100,11 @@ async function boot(): Promise<void> {
 
   /** A campaign battle: the stage's dragon on a fresh board of its region's difficulty. */
   const startStage = (stage: Stage, seed = randomSeed()) => {
+    const saved = activeBattle();
+    if (saved) {
+      if (saved.stage === stage.id) return resumeBattle();
+      return showMenu(() => startStage(stage, seed));
+    }
     saveStageId(stage.id);
     show(
       new GameScreen(generatePuzzle(seed, stage.region.difficulty), {
@@ -114,6 +119,11 @@ async function boot(): Promise<void> {
 
   /** A battle outside the campaign (a board to reproduce from the URL): the difficulty's dragon, nothing opened. */
   const startBattle = (difficulty: Difficulty, seed = randomSeed()) => {
+    const saved = activeBattle();
+    if (saved) {
+      if (!saved.stage && !saved.daily && saved.puzzle.difficulty === difficulty) return resumeBattle();
+      return showMenu(() => startBattle(difficulty, seed));
+    }
     show(
       new GameScreen(generatePuzzle(seed, difficulty), {
         onRestart: () => startBattle(difficulty),
@@ -130,6 +140,11 @@ async function boot(): Promise<void> {
       new Date(),
       LEVELS.filter((d) => isUnlocked(progress, d)),
     );
+    const saved = activeBattle();
+    if (saved) {
+      if (saved.daily === daily.key) return resumeBattle();
+      return showMenu(startDaily);
+    }
     show(
       new GameScreen(generatePuzzle(daily.seed, daily.difficulty), {
         onRestart: startDaily,
@@ -140,7 +155,19 @@ async function boot(): Promise<void> {
     );
   };
 
-  const showMenu = () => {
+  const resumeBattle = (): void => {
+    const saved = activeBattle();
+    if (!saved) return showMenu();
+    const stage = saved.stage ? stageById(saved.stage) : undefined;
+    show(new GameScreen(saved.puzzle, {
+      resume: saved, stage, daily: saved.daily, onMenu: showMenu,
+      onRestart: saved.daily ? startDaily : stage ? () => startStage(stage) : () => startBattle(saved.puzzle.difficulty),
+      onPlay: (next) => startStage(next),
+    }));
+    screen?.pause?.();
+  };
+
+  const showMenu = (onNewBattle?: () => void): void => {
     show(
       new MenuScreen({
         onPick: (stage) => startStage(stage),
@@ -150,6 +177,8 @@ async function boot(): Promise<void> {
         onProgress: () => showProgress(),
         onShop: () => showShop(),
         onAccount: () => showAccount(),
+        onResume: resumeBattle,
+        onNewBattle,
       }),
     );
   };
@@ -226,7 +255,11 @@ async function boot(): Promise<void> {
       feedback.resume();
     }
   });
+  window.addEventListener('pagehide', () => screen?.pause?.());
   if (Capacitor.isNativePlatform()) {
+    void App.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) screen?.pause?.();
+    });
     void App.addListener('backButton', () => {
       if (!screen?.handleBack?.()) void App.exitApp();
     });

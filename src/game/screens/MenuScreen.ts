@@ -11,7 +11,7 @@ import { DragonView } from '../ui/DragonView.ts';
 import { currentStreak, dailyReward, dayKey } from '../progress/daily.ts';
 import { canBuyNew, currentStage, isStageUnlocked, stageRecord } from '../progress/progress.ts';
 import { starsWord } from '../progress/rewardText.ts';
-import { progress } from '../progress/store.ts';
+import { activeBattle, progress, saveActiveBattle } from '../progress/store.ts';
 import { Modal } from '../ui/Modal.ts';
 import { MusicControl } from '../ui/MusicControl.ts';
 import { Scene } from '../ui/Scene.ts';
@@ -31,6 +31,9 @@ export interface MenuOptions {
   onShop: () => void;
   /** The nickname and the account (log in, register). */
   onAccount: () => void;
+  onResume: () => void;
+  /** A requested new battle would replace the saved one: ask before discarding it. */
+  onNewBattle?: () => void;
 }
 
 const soundLabel = () => `Dźwięki: ${feedback.settings.sound ? 'włączone' : 'wyłączone'}`;
@@ -179,6 +182,20 @@ export class MenuScreen extends Container {
       this.starCounter,
     );
     this.showLevel(0);
+    const saved = activeBattle();
+    if (saved) {
+      const name = saved.daily ? `Wyzwanie dnia · ${saved.daily}` : saved.battle.enemy.name;
+      this.modal = new Modal(options.onNewBattle ? 'Rozpocząć nową walkę?' : 'Wrócić do walki?',
+        `Zapisana walka: ${name}.\nPlansza, notatki i HP czekają na Ciebie.`, [
+          { text: 'Wznów walkę', variant: 'primary', onTap: options.onResume },
+          ...(options.onNewBattle ? [{ text: 'Rozpocznij nową', onTap: () => {
+            saveActiveBattle(null);
+            options.onNewBattle!();
+          } }] : []),
+          { text: 'Zostań w menu', onTap: () => this.closeModal() },
+        ]);
+      this.addChild(this.modal);
+    }
   }
 
   layout(width: number, height: number): void {

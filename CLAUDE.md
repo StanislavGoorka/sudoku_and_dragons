@@ -149,6 +149,13 @@ code and comments are English.
   keeps the player from closing boxes; `moveScore`, `botMove`). Bot duels are not `ranked`: no stars, no
   records, and the end dialog says so; a rematch starts a new board at once.
   `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
+  Solo battles checkpoint locally in `_soloBattle` inside the progress JSON: puzzle, grid, manual notes,
+  selection, HP, enemy charge, elapsed time, mistakes and campaign/daily identity. `progress/battleSave.ts`
+  validates and reconstructs checkpoints with current core rules. Save after moves/notes, once a second,
+  and on pause/background/pagehide; checkpoint writes do not trigger cloud uploads. The menu offers resume
+  and asks before a new battle discards the old one. Returning to the menu preserves it; logout clears it.
+  A final hit records progress and removes the checkpoint in one write before any end animation, preventing
+  a restart from replaying a won battle. Checkpoints are device-local, not part of cloud progress.
   Tutorials (`tutorial.ts`: which were seen, per device in localStorage, and `easyCell`): a player's first battle
   (no battle recorded yet) is guided by `screens/BattleTutorial`, a card with a tip and a pulsing gold ring around
   what it is about (the arena, an easy cell where only one digit fits, the pad, the board, the countdown). Taps go
