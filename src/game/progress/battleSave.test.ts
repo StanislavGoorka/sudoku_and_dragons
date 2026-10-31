@@ -18,6 +18,15 @@ function checkpoint(): SavedBattle {
 }
 
 describe('solo battle checkpoint', () => {
+  it('keeps a boss attack cadence across restart, while legacy checkpoints start at the first attack', () => {
+    const saved = checkpoint();
+    saved.stage = 'peaks-boss'; saved.puzzle = generatePuzzle(42, 'medium'); saved.grid = [...saved.puzzle.givens];
+    saved.battle = createBattle(STAGES.find((s) => s.id === 'peaks-boss')!.enemy);
+    saved.battle.timedAttacks = 2;
+    expect(parseSavedBattle(JSON.parse(JSON.stringify(saved)))?.battle.timedAttacks).toBe(2);
+    delete (saved.battle as Partial<typeof saved.battle>).timedAttacks;
+    expect(parseSavedBattle(saved)?.battle.timedAttacks).toBe(0);
+  });
   it('restores the same board, HP, attack charge, time and manual notes after serialization', () => {
     const saved = checkpoint();
     expect(parseSavedBattle(JSON.parse(JSON.stringify(saved)))).toEqual({ ...saved, daily: undefined });

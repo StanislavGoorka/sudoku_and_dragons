@@ -1,11 +1,11 @@
 import gsap from 'gsap';
-import { Container, Graphics, Rectangle, type DestroyOptions } from 'pixi.js';
+import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.js';
 import {
   advanceTime,
   applyMove,
   createBattle,
   ENEMIES,
-  moveKnockback,
+  battleKnockback, attackInterval, bossHint,
   resolveMove,
   type Battle,
   type Difficulty,
@@ -91,6 +91,8 @@ export class GameScreen extends Container {
   private reward: Reward | null = null;
   private readonly ranked: RankedRun | undefined;
   private readonly rankedMoves: DailyMove[];
+  private readonly bossLabel = new Text({ text: '', style: { fontFamily: theme.fontFamily,
+    fontWeight: '700', fontSize: 13, fill: theme.gold, stroke: { color: theme.panelLip, width: 3 }, align: 'center' } });
   private sinceCheckpoint = 0;
   /** A daily battle announces itself once, at the first layout. */
   private announced = false;
@@ -141,6 +143,8 @@ export class GameScreen extends Container {
     this.hurtFlash.alpha = 0;
 
     this.addChild(this.arena, this.pauseButton, this.notesButton, this.board, this.pad, this.hurtFlash, this.fx);
+    this.bossLabel.anchor.set(0.5, 0); this.bossLabel.eventMode = 'none';
+    this.bossLabel.text = bossHint(this.battle); this.addChild(this.bossLabel);
 
     // A player's very first battle walks them through it.
     const fought = Object.values(progress.levels).some((level) => level.wins + level.losses > 0);
@@ -181,6 +185,8 @@ export class GameScreen extends Container {
 
     this.arena.position.set(left, arenaY);
     this.arena.layout(columnWidth, arenaHeight, buttonSize + 4, buttonSize + 4);
+    this.bossLabel.position.set(width / 2, arenaY + 41);
+    this.bossLabel.style.fontSize = Math.min(13, columnWidth / 25);
     this.board.position.set((width - boardSize) / 2, boardY);
     this.board.layout(boardSize);
     this.pad.position.set(left, padY);
@@ -213,7 +219,8 @@ export class GameScreen extends Container {
     const hit = advanceTime(this.battle, dt);
     const ongoing = this.battle.outcome === 'ongoing';
     if (ongoing) this.elapsed += dt;
-    const { attackEvery } = this.battle.enemy;
+    const attackEvery = attackInterval(this.battle);
+    this.bossLabel.text = this.battle.outcome === 'ongoing' ? bossHint(this.battle) : '';
     const secondsLeft = attackEvery - this.battle.charge;
 
     this.arena.charge.visible = ongoing;
@@ -381,7 +388,7 @@ export class GameScreen extends Container {
       this.play(hit, this.playPlayerAttack(hit, cell, result.completed));
       if (hit.units > 0 && this.battle.outcome === 'ongoing') {
         const at = this.fx.toLocal(this.arena.chargePoint(), this.arena);
-        floatText(this.fx, `+${moveKnockback(hit.units)} s`, { x: at.x + 12, y: at.y - 30 }, {
+        floatText(this.fx, `+${battleKnockback(this.battle, hit.units)} s`, { x: at.x + 12, y: at.y - 30 }, {
           color: this.board.colors.placed,
           fontSize: 16,
         });

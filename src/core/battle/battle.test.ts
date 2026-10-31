@@ -3,6 +3,7 @@ import type { Unit } from '../sudoku/grid.ts';
 import type { MoveResult } from '../sudoku/moves.ts';
 import {
   advanceTime,
+  attackInterval, battleKnockback, bossHint, nextTimedDamage,
   BOX_MULTIPLIER,
   createBattle,
   moveDamage,
@@ -22,6 +23,32 @@ function correct(digit: number, units = 0, solved = false, box = false): MoveRes
 const WRONG: MoveResult = { kind: 'wrong', expected: 1 };
 
 describe('battle', () => {
+  it('a raging boss changes phase without turning a correct hit into an instant attack', () => {
+    const battle = createBattle({ ...ENEMY, pattern: 'rage' });
+    battle.enemyHp = 51; battle.charge = 19;
+    resolveMove(battle, correct(2));
+    expect(attackInterval(battle)).toBe(17);
+    expect(battle.charge).toBeCloseTo(19 * 0.85 - 2);
+    expect(advanceTime(battle, 0.1)).toBeNull();
+    expect(bossHint(battle)).toContain('Furia');
+  });
+  it('a heavy boss announces the third attack before striking for extra damage', () => {
+    const battle = createBattle({ ...ENEMY, pattern: 'heavy' });
+    expect(advanceTime(battle, 20)?.damage).toBe(5);
+    expect(advanceTime(battle, 20)?.damage).toBe(5);
+    expect(bossHint(battle)).toContain('Następny');
+    expect(nextTimedDamage(battle)).toBe(7);
+    expect(advanceTime(battle, 20)?.damage).toBe(7);
+    expect(nextTimedDamage(battle)).toBe(5);
+  });
+  it('a relentless phase reduces plain-digit knockback but keeps the box damage rule', () => {
+    const battle = createBattle({ ...ENEMY, pattern: 'relentless' });
+    battle.enemyHp = 50; battle.charge = 15;
+    expect(battleKnockback(battle, 0)).toBe(1);
+    expect(battleKnockback(battle, 1)).toBe(6);
+    expect(resolveMove(battle, correct(4, 1, false, true))?.damage).toBe(8);
+    expect(battle.charge).toBe(9);
+  });
   it('starts with full HP on both sides', () => {
     expect(createBattle(ENEMY, 30)).toMatchObject({ enemyHp: 100, playerHp: 30, outcome: 'ongoing' });
   });

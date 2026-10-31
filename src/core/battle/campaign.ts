@@ -51,19 +51,19 @@ export const REGIONS: Region[] = [
     { id: 'valley-1', enemy: ENEMIES.easy, design: 'young-dragon' },
     { id: 'valley-2', enemy: enemy('valley-2', 'Szmaragdowy smok', 228, 10, 39, 4), design: 'skin-emerald' },
     { id: 'valley-3', enemy: enemy('valley-3', 'Lodowy smok', 228, 11, 38, 4), design: 'skin-frost' },
-    { id: 'valley-boss', enemy: enemy('valley-boss', 'Strażnik Doliny', 240, 12, 38, 5), design: 'boss-valley', boss: true },
+    { id: 'valley-boss', enemy: { ...enemy('valley-boss', 'Strażnik Doliny', 240, 12, 42, 5), pattern: 'rage' }, design: 'boss-valley', boss: true },
   ]),
   region('peaks', 'Ogniste Szczyty', 'medium', 'dragon', [
     { id: 'peaks-1', enemy: ENEMIES.medium, design: 'dragon' },
     { id: 'peaks-2', enemy: enemy('peaks-2', 'Płomienny smok', 270, 12, 35, 4), design: 'duel-rival' },
     { id: 'peaks-3', enemy: enemy('peaks-3', 'Magmowy smok', 270, 13, 34, 4), design: 'skin-magma' },
-    { id: 'peaks-boss', enemy: enemy('peaks-boss', 'Władca Wulkanu', 285, 14, 34, 5), design: 'boss-volcano', boss: true },
+    { id: 'peaks-boss', enemy: { ...enemy('peaks-boss', 'Władca Wulkanu', 285, 14, 38, 5), pattern: 'heavy' }, design: 'boss-volcano', boss: true },
   ]),
   region('ruins', 'Księżycowe Ruiny', 'hard', 'ancient-dragon', [
     { id: 'ruins-1', enemy: enemy('ruins-1', 'Smok Cienia', 300, 15, 30, 4), design: 'skin-shadow' },
     { id: 'ruins-2', enemy: enemy('ruins-2', 'Burzowy smok', 300, 15, 29, 4), design: 'enemy-storm' },
     { id: 'ruins-3', enemy: enemy('ruins-3', 'Kościany smok', 300, 16, 28, 4), design: 'enemy-bone' },
-    { id: 'ruins-boss', enemy: { ...ENEMIES.hard, id: 'ruins-boss', maxHp: 315, attack: 17, attackEvery: 30, timedAttack: 5 }, design: 'ancient-dragon', boss: true },
+    { id: 'ruins-boss', enemy: { ...ENEMIES.hard, id: 'ruins-boss', maxHp: 315, attack: 17, attackEvery: 35, timedAttack: 5, pattern: 'relentless' }, design: 'ancient-dragon', boss: true },
   ]),
 ];
 

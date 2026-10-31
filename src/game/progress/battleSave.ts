@@ -42,9 +42,10 @@ export function parseSavedBattle(value: unknown): SavedBattle | null {
   if (!Array.isArray(s.notes) || s.notes.length !== 81 || !s.notes.every((bits) => integer(bits, 0, 1022) && !(bits & 1)) ||
       typeof s.notesMode !== 'boolean' || (s.selected !== null && !integer(s.selected, 0, 80)) ||
       !integer(s.mistakes, 0) || !integer(s.bestCombo, 0, 3) || !finite(s.elapsed, 0)) return null;
+  if (s.battle.timedAttacks !== undefined && !integer(s.battle.timedAttacks, 0, 100000)) return null;
   return {
     version: 1, puzzle, stage: s.stage, daily: s.daily, grid: [...s.grid],
-    battle: { ...battle, playerHp: s.battle.playerHp, enemyHp: s.battle.enemyHp, charge: s.battle.charge },
+    battle: { ...battle, playerHp: s.battle.playerHp, enemyHp: s.battle.enemyHp, charge: s.battle.charge, timedAttacks: s.battle.timedAttacks ?? 0 },
     notes: s.notes.map((bits, cell) => s.grid[cell] === 0 ? bits : 0),
     notesMode: s.notesMode, selected: s.selected, mistakes: s.mistakes, bestCombo: s.bestCombo, elapsed: s.elapsed,
     ranked: s.ranked && s.ranked.run?.seed === puzzle.seed && s.ranked.run.difficulty === puzzle.difficulty &&

@@ -72,6 +72,15 @@ const fight = (stageIndex: number, overrides: Partial<BattleResult> = {}): Battl
   win({ difficulty: STAGES[stageIndex].region.difficulty, stage: STAGES[stageIndex].id, ...overrides });
 
 describe('the campaign', () => {
+  it('pays each boss achievement once, including concurrent wins merged from two devices', () => {
+    const base = emptyProgress(), local = emptyProgress(), remote = emptyProgress();
+    const first = recordBattle(local, fight(3));
+    expect(first.achievements.find((a) => a.id === 'boss-valley')?.reward).toBe(5);
+    recordBattle(remote, fight(3));
+    const merged = mergeProgress(base, local, remote);
+    expect(merged.stars).toBe(first.stars * 2 + first.achievements.reduce((sum, a) => sum + a.reward, 0));
+    expect(recordBattle(local, fight(3)).achievements.some((a) => a.id === 'boss-valley')).toBe(false);
+  });
   it('opens one stage at a time, and a region with the boss before it', () => {
     const progress = emptyProgress();
     expect(STAGES.map((stage) => isStageUnlocked(progress, stage))).toEqual(STAGES.map((_, i) => i === 0));

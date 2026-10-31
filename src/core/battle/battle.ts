@@ -11,6 +11,8 @@ export interface EnemyDef {
   attackEvery: number;
   /** Damage of a timed attack. */
   timedAttack: number;
+  /** Campaign bosses only. Plain/daily enemies keep their original rules. */
+  pattern?: 'rage' | 'heavy' | 'relentless';
 }
 
 export const PLAYER_MAX_HP = 50;
@@ -35,6 +37,7 @@ export interface Battle {
   /** Seconds the enemy has charged towards its next timed attack (0 to `enemy.attackEvery`). */
   charge: number;
   outcome: Outcome;
+  timedAttacks: number;
 }
 
 export interface Hit {
@@ -53,7 +56,26 @@ export interface Hit {
 }
 
 export function createBattle(enemy: EnemyDef, playerMaxHp = PLAYER_MAX_HP): Battle {
-  return { enemy, playerMaxHp, enemyHp: enemy.maxHp, playerHp: playerMaxHp, charge: 0, outcome: 'ongoing' };
+  return { enemy, playerMaxHp, enemyHp: enemy.maxHp, playerHp: playerMaxHp, charge: 0, outcome: 'ongoing', timedAttacks: 0 };
+}
+
+export function bossPhase(battle: Battle): boolean { return battle.enemyHp <= battle.enemy.maxHp / 2; }
+export function attackInterval(battle: Battle): number {
+  return battle.enemy.attackEvery * (battle.enemy.pattern === 'rage' && bossPhase(battle) ? 0.85 : 1);
+}
+export function battleKnockback(battle: Battle, units: number): number {
+  return moveKnockback(units) - (battle.enemy.pattern === 'relentless' && bossPhase(battle) ? 1 : 0);
+}
+export function nextTimedDamage(battle: Battle): number {
+  return battle.enemy.timedAttack + (battle.enemy.pattern === 'heavy' && (battle.timedAttacks + 1) % 3 === 0 ? 2 : 0);
+}
+export function bossHint(battle: Battle): string {
+  switch (battle.enemy.pattern) {
+    case 'rage': return bossPhase(battle) ? 'Furia · ataki częściej' : 'Poniżej ½ HP: szybsze ataki';
+    case 'heavy': return (battle.timedAttacks + 1) % 3 === 0 ? 'Następny atak: +2 obrażenia!' : 'Co trzeci atak: +2 obrażenia';
+    case 'relentless': return bossPhase(battle) ? 'Presja · cyfry cofają atak o 1 s' : 'Poniżej ½ HP: słabsze odpychanie';
+    default: return '';
+  }
 }
 
 /** Whether a move's completed units include a 3×3 box. */
@@ -93,11 +115,14 @@ export function resolveMove(battle: Battle, move: MoveResult): Hit | null {
       return hitPlayer(battle, battle.enemy.attack, 'mistake');
 
     case 'correct': {
+      const intervalBefore = attackInterval(battle);
       const units = move.completed.length;
       const boxed = closesBox(move.completed);
       const damage = move.solved ? battle.enemyHp : Math.min(moveDamage(move.digit, boxed), battle.enemyHp);
       battle.enemyHp -= damage;
-      battle.charge = Math.max(0, battle.charge - moveKnockback(units));
+      // Phase entry preserves charge percentage, so dealing a correct hit cannot cause an instant attack.
+      battle.charge *= attackInterval(battle) / intervalBefore;
+      battle.charge = Math.max(0, battle.charge - battleKnockback(battle, units));
       if (battle.enemyHp === 0) battle.outcome = 'won';
       return { target: 'enemy', cause: 'digit', damage, units, boxed, finisher: move.solved, hpAfter: battle.enemyHp };
     }
@@ -111,7 +136,9 @@ export function resolveMove(battle: Battle, move: MoveResult): Hit | null {
 export function advanceTime(battle: Battle, seconds: number): Hit | null {
   if (battle.outcome !== 'ongoing') return null;
   battle.charge += seconds;
-  if (battle.charge < battle.enemy.attackEvery) return null;
+  if (battle.charge < attackInterval(battle)) return null;
   battle.charge = 0;
-  return hitPlayer(battle, battle.enemy.timedAttack, 'timer');
+  const damage = nextTimedDamage(battle);
+  battle.timedAttacks++;
+  return hitPlayer(battle, damage, 'timer');
 }

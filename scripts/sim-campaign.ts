@@ -24,6 +24,7 @@ for (const stage of STAGES.filter((s) => !only || s.id === only)) {
   const columns: string[] = [];
   for (const secondsPerCell of SPEEDS) {
     const hpLeft: number[] = [];
+    const durations: number[] = [];
     let deaths = 0;
     for (let seed = 1; seed <= SEEDS; seed++) {
       const { givens, solution } = generatePuzzle(seed, difficulty);
@@ -31,10 +32,12 @@ for (const stage of STAGES.filter((s) => !only || s.id === only)) {
       const rng = createRng(seed * 31 + secondsPerCell);
       const order = shuffle(givens.flatMap((v, i) => (v === 0 ? [i] : [])), rng);
       const battle = createBattle(enemy);
+      let elapsed = 0;
       for (const cell of order) {
         let think = secondsPerCell * (0.4 + 1.2 * rng());
         while (think > 0 && battle.outcome === 'ongoing') {
           advanceTime(battle, Math.min(0.1, think));
+          elapsed += Math.min(0.1, think);
           think -= 0.1;
         }
         if (battle.outcome !== 'ongoing') break;
@@ -43,9 +46,11 @@ for (const stage of STAGES.filter((s) => !only || s.id === only)) {
       }
       if (battle.outcome === 'lost') deaths++;
       hpLeft.push(battle.playerHp);
+      durations.push(elapsed / 60);
     }
     hpLeft.sort((a, b) => a - b);
-    columns.push(`${secondsPerCell}s: ${String(hpLeft[SEEDS / 2]).padStart(2)} HP${deaths ? ` (${deaths} lost)` : ''}`);
+    durations.sort((a, b) => a - b);
+    columns.push(`${secondsPerCell}s: ${String(hpLeft[SEEDS / 2]).padStart(2)} HP${deaths ? ` (${deaths} lost)` : ''}, ${durations[SEEDS / 2].toFixed(1)} min`);
   }
   const minutes = ((10 * (81 - CLUES[difficulty])) / 60).toFixed(0);
   console.log(

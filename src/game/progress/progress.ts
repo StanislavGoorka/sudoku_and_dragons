@@ -218,6 +218,10 @@ export const ACHIEVEMENTS: Achievement[] = [
     progress: (p) => [REGIONS.filter((r) => (p.stages[r.stages[r.stages.length - 1].id]?.wins ?? 0) > 0).length, REGIONS.length],
   },
   { id: 'veteran', title: 'Weteran', description: 'Wygraj 10 walk ze smokami.', reward: 15, progress: (p) => [Math.min(10, totalWins(p)), 10] },
+  ...REGIONS.map((region, i): Achievement => ({
+    id: `boss-${region.id}`, title: `Mistrz: ${region.name}`, description: `Pokonaj bossa krainy ${region.name}.`,
+    reward: [5, 8, 10][i], progress: (p) => [Math.min(1, p.stages[region.stages.at(-1)!.id]?.wins ?? 0), 1],
+  })),
   { id: 'daily', title: 'Wyzwanie przyjęte', description: 'Wygraj wyzwanie dnia.', reward: 5, progress: (p) => [Math.min(1, p.daily.wins), 1] },
   {
     id: 'daily-week',

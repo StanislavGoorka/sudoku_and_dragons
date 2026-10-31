@@ -364,6 +364,12 @@ code and comments are English.
 
 ## Checking changes in the browser
 
+- Campaign bosses have `EnemyDef.pattern`: rage (15% faster below half HP), heavy (+2 damage every
+  third timed hit), relentless (one second less plain-digit knockback below half HP). Use `attackInterval`,
+  `battleKnockback` and `bossHint` rather than static enemy fields for their UI. Save `timedAttacks` in
+  battle checkpoints; legacy saves default it to zero. Boss achievements pay 5/8/10 once, using normal
+  achievement merge deduplication. Balance measurements and limits are in `BALANCE.md`.
+
 - Daily ranking: `DailyScreen`, `net/daily.ts`, `core/daily.ts` and a separate `daily` referee function.
   Categories use the server's UTC day and wall time (including pauses), with verified move replays.
   Offline daily keeps its local calendar and never enters the ranking. `npm run function:bundle` copies

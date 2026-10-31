@@ -30,5 +30,6 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
 5. [x] **Szybszy start i mniejsze zużycie zasobów** – ładowanie ekranów na żądanie, lżejszy renderer,
    ograniczenie pracy w tle i pomiary produkcyjnego buildu.
 6. [x] **Ranking wyzwania dnia** – weryfikacja po stronie serwera, RLS i ponawianie wyników.
-7. [ ] **Balans i różnorodność kampanii** – krzywa trudności, nagrody, długość walk i wyróżniający się bossowie.
+7. [x] **Balans i różnorodność kampanii** – symulacje 12 etapów, trzy wzorce bossów,
+   łagodniejszy skok finału i jednorazowe nagrody (`BALANCE.md`).
 8. [ ] **Wygoda na telefonach** – małe ekrany, czytelne cyfry/notatki, przyciski i kontrast.
