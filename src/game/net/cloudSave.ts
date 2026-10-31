@@ -2,6 +2,7 @@ import { profileSuffix } from '../profile.ts';
 import { emptyProgress, mergeProgress, parseProgress, recoverProgress, sameProgress, type Progress } from '../progress/progress.ts';
 import { onProgressSaved, progress, progressOwner, replaceProgress, saveProgress, setProgressOwner } from '../progress/store.ts';
 import { supabase, syncProfile } from './online.ts';
+import { reportDiagnostic } from '../diagnostics/index.ts';
 
 /**
  * The progress in the cloud (table `saves`), for whoever is signed in, guest or account. The device
@@ -194,6 +195,7 @@ export function syncProgress(): Promise<void> {
         throw new CloudError('conflict');
       } catch (error) {
         setState('failed');
+        reportDiagnostic('cloud_sync', 'cloud_sync', error);
         throw error;
       }
     });

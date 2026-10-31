@@ -14,6 +14,8 @@ import { starsWord } from '../progress/rewardText.ts';
 import { activeBattle, progress, saveActiveBattle } from '../progress/store.ts';
 import { Modal } from '../ui/Modal.ts';
 import { MusicControl } from '../ui/MusicControl.ts';
+import { setDiagnosticsEnabled } from '../diagnostics/index.ts';
+import { saveSettings } from '../settings.ts';
 import { Scene } from '../ui/Scene.ts';
 import { drawLock } from '../ui/lock.ts';
 import { drawStar, StarCounter } from '../ui/stars.ts';
@@ -38,6 +40,7 @@ export interface MenuOptions {
 
 const soundLabel = () => `Dźwięki: ${feedback.settings.sound ? 'włączone' : 'wyłączone'}`;
 const hapticsLabel = () => `Wibracje: ${feedback.settings.haptics ? 'włączone' : 'wyłączone'}`;
+const diagnosticsLabel = () => `Raporty błędów: ${feedback.settings.diagnostics ? 'włączone' : 'wyłączone'}`;
 
 /** One campaign stage on show: its region's scene with its dragon hovering over it (a dark shape behind a lock until open). */
 interface Shown {
@@ -404,6 +407,12 @@ export class MenuScreen extends Container {
           modal.button(1).setText(hapticsLabel());
         },
       },
+      { text: diagnosticsLabel(), onTap: () => {
+        feedback.settings.diagnostics = !feedback.settings.diagnostics;
+        saveSettings(feedback.settings);
+        setDiagnosticsEnabled(feedback.settings.diagnostics);
+        modal.button(2).setText(diagnosticsLabel());
+      } },
       { text: 'Gotowe', variant: 'primary', onTap: () => this.closeModal() },
     ], theme.text, new MusicControl());
     this.modal = modal;

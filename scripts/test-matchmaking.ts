@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
+import { randomUUID } from 'node:crypto';
 import { createDuel, generatePuzzle } from '../src/core/index.ts';
 
 const host = process.env.PGHOST ?? '127.0.0.1';
@@ -118,6 +119,37 @@ try {
   }
   assert(!('solution' in easy.duel) && !('seed' in easy.duel));
   console.log('ok   only the server can queue players; responses contain no solution');
+
+  // Exercise the diagnostics RPC under actual database roles, with a real JWT subject setting.
+  await observer.query(`create or replace function auth.uid() returns uuid language sql as
+    'select nullif(current_setting(''request.jwt.claim.sub'', true), '''')::uuid'`);
+  await first.query('set role authenticated');
+  await second.query('set role authenticated');
+  await assert.rejects(second.query('select public.report_client_diagnostics($1)', [JSON.stringify([])]), { code: '42501' });
+  for (const client of [first, second]) await client.query("select set_config('request.jwt.claim.sub', $1, false)", [players[0]]);
+  const diagnostic = () => ({ id: randomUUID(), release: 'test-build', platform: 'web', kind: 'runtime', code: 'TypeError',
+    screen: 'menu', operation: 'unhandled', location: 'main-HASH.js:1:42', count: 1, value: null });
+  const send = (client: pg.Client, events: object[]) => client.query('select public.report_client_diagnostics($1) as accepted', [JSON.stringify(events)]);
+  const event = diagnostic();
+  assert.equal((await send(first, [event])).rows[0].accepted, true);
+  await send(first, [event]);
+  assert.equal((await observer.query('select count(*) from private.client_diagnostics')).rows[0].count, '1');
+  await assert.rejects(first.query('select * from private.client_diagnostics'), { code: '42501' });
+  await assert.rejects(send(first, [{ ...diagnostic(), message: 'must-not-be-stored' }]), { code: '22023' });
+  await assert.rejects(send(first, [{ ...diagnostic(), location: 'https://private.test/?token=secret' }]), { code: '23514' });
+  console.log('ok   diagnostics require authentication, hide reports, reject personal/free-form fields and deduplicate retries');
+  for (let remaining = 58; remaining > 0; remaining -= 8) {
+    await send(first, Array.from({ length: Math.min(remaining, 8) }, diagnostic));
+  }
+  const finalTwo = await Promise.all([send(first, [diagnostic()]), send(second, [diagnostic()])]);
+  assert.equal(finalTwo.filter((r) => r.rows[0].accepted).length, 1);
+  assert.equal((await observer.query('select count(*) from private.client_diagnostics')).rows[0].count, '60');
+  console.log('ok   simultaneous diagnostic requests cannot exceed the daily limit');
+  await observer.query("update private.client_diagnostics set received_at = now() - interval '15 days'");
+  await first.query("select set_config('request.jwt.claim.sub', $1, false)", [players[1]]);
+  await send(first, [diagnostic()]);
+  assert.equal((await observer.query('select count(*) from private.client_diagnostics')).rows[0].count, '1');
+  console.log('ok   report retention removes expired diagnostics');
 } finally {
   await Promise.allSettled(clients.map((client) => client.end()));
   if (created) await owner.query(`drop database ${database} with (force)`);

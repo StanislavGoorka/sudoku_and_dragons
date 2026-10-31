@@ -30,6 +30,8 @@ import { emptyProgress, isUnlocked, LEVELS, type CosmeticKind } from './progress
 import { activeBattle, onProgressReplaced, progress, saveProgress } from './progress/store.ts';
 import { theme } from './theme.ts';
 import { Backdrop } from './ui/Backdrop.ts';
+import { APP_RELEASE, flushDiagnostics, reportBootDuration, reportDiagnostic, setDiagnosticScreen } from './diagnostics/index.ts';
+import type { DiagnosticScreen } from './diagnostics/reporter.ts';
 
 /**
  * What every full screen offers to the app shell. A screen is placed inside the safe area,
@@ -97,6 +99,9 @@ async function boot(): Promise<void> {
       screen.destroy({ children: true });
     }
     screen = next;
+    const names = new Map<Function, DiagnosticScreen>([[MenuScreen, 'menu'], [GameScreen, 'battle'], [DuelScreen, 'duel'],
+      [LobbyScreen, 'lobby'], [MapScreen, 'map'], [ShopScreen, 'shop'], [AccountScreen, 'account'], [ProgressScreen, 'progress']]);
+    setDiagnosticScreen(names.get(next.constructor) ?? 'boot');
     feedback.playMusic(next.music ?? 'menu');
     app.stage.addChild(next);
     layoutScreen();
@@ -323,6 +328,7 @@ async function boot(): Promise<void> {
         shop: (kind?: CosmeticKind) => showShop(kind),
         account: () => showAccount(),
         feedback,
+        diagnostics: { report: reportDiagnostic, flush: flushDiagnostics, release: APP_RELEASE },
         /** The saved progress object; after changing it, call save(). */
         state: progress,
         save: saveProgress,
@@ -350,6 +356,7 @@ async function boot(): Promise<void> {
   } else {
     showMenu();
   }
+  reportBootDuration(performance.now());
 }
 
-void boot();
+void boot().catch((error) => reportDiagnostic('runtime', 'boot', error));

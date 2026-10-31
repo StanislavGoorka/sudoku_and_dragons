@@ -23,3 +23,7 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
    odzyskaniu połączenia i czytelny status sieci.
 3. [x] **Automatyczne testy w CI** – testy jednostkowe, typy, build i testy integracyjne w odizolowanym
    środowisku Supabase z usuwaniem danych testowych.
+4. [x] **Monitoring błędów** – prywatne raporty techniczne w Supabase, ograniczona kolejka, limity,
+   deduplikacja, sprzątanie starych wpisów, wyłączenie w ustawieniach i lokalne mapy źródeł.
+5. [ ] **Szybszy start i mniejsze zużycie zasobów** – ładowanie ekranów na żądanie, lżejszy renderer,
+   ograniczenie pracy w tle i pomiary produkcyjnego buildu.

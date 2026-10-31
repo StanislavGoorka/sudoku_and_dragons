@@ -4,6 +4,8 @@ import { profileSuffix } from '../profile.ts';
 import { progress } from '../progress/store.ts';
 import { randomNickname } from './nickname.ts';
 import { SUPABASE_KEY, SUPABASE_URL } from './config.ts';
+import { flushDiagnostics, reportDiagnostic, setDiagnosticTransport } from '../diagnostics/index.ts';
+import type { DiagnosticOperation } from '../diagnostics/reporter.ts';
 
 export interface DuelRow {
   id: string;
@@ -47,6 +49,17 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { storageKey: `sudoku-dragons.auth${suffix}`, persistSession: true, autoRefreshToken: true },
 });
 
+setDiagnosticTransport(async (events) => {
+  if (import.meta.env.DEV && !['127.0.0.1', 'localhost', '[::1]'].includes(new URL(SUPABASE_URL).hostname)) return false;
+  if (!(await supabase.auth.getSession()).data.session) return false;
+  const { error } = await supabase.rpc('report_client_diagnostics', { events }).abortSignal(AbortSignal.timeout(5000));
+  // Invalid/obsolete reports are discarded. Only transient failures are retried, without logging themselves.
+  return !error || ['22023', '23514', '22P02', 'PGRST202'].includes(error.code);
+});
+supabase.auth.onAuthStateChange((_event, session) => {
+  if (session) setTimeout(() => void flushDiagnostics(), 0);
+});
+
 /** Server clock minus ours, in ms, from the last response; turn countdowns use server time. */
 let clockOffset = 0;
 
@@ -64,6 +77,7 @@ async function call<T>(action: string, payload: Record<string, unknown> = {}): P
     } catch {
       // Not a JSON error body: keep 'network'.
     }
+    if (['network', 'server-error', 'sign-in'].includes(code)) reportDiagnostic('duel_request', action as DiagnosticOperation, new OnlineError(code));
     throw new OnlineError(code);
   }
   // The server stamped its time roughly halfway through the round trip.
@@ -220,7 +234,10 @@ export async function fetchDuel(id: string): Promise<DuelRow> {
 export async function findDuel(id: string): Promise<DuelRow | null> {
   const { data, error } = await supabase.from('duels').select().eq('id', id)
     .abortSignal(AbortSignal.timeout(10_000)).maybeSingle();
-  if (error) throw new OnlineError('network');
+  if (error) {
+    reportDiagnostic('duel_request', 'duel_read', new OnlineError('network'));
+    throw new OnlineError('network');
+  }
   return data as DuelRow | null;
 }
 
@@ -229,7 +246,10 @@ export async function findActiveDuel(user: string): Promise<DuelRow | null> {
   const { data, error } = await supabase.from('duels').select().eq('status', 'playing')
     .or(`player0.eq.${user},player1.eq.${user}`).order('updated_at', { ascending: false })
     .limit(1).abortSignal(AbortSignal.timeout(10_000)).maybeSingle();
-  if (error) throw new OnlineError('network');
+  if (error) {
+    reportDiagnostic('duel_request', 'duel_recover', new OnlineError('network'));
+    throw new OnlineError('network');
+  }
   return data as DuelRow | null;
 }
 

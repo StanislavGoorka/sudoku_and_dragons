@@ -1,6 +1,7 @@
 import { profileSuffix } from '../profile.ts';
 import { emptyProgress, parseProgress, recordDuel, type Progress, type Reward } from './progress.ts';
 import { parseSavedBattle, type SavedBattle } from './battleSave.ts';
+import { reportDiagnostic } from '../diagnostics/index.ts';
 
 const STORAGE_KEY = `sudoku-dragons.progress${profileSuffix}`;
 
@@ -85,8 +86,9 @@ function persist(): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...progress, _cloudOwner: owner, _soloBattle: battle, _duelResults: [...duelResults] }));
     persisted = true;
-  } catch {
+  } catch (error) {
     // Keep playing; nothing else depends on the saved copy.
+    reportDiagnostic('storage', 'storage_write', error);
   }
   return persisted;
 }

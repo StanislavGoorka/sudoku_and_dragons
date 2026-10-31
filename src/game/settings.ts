@@ -6,10 +6,12 @@ export interface Settings {
   music: boolean;
   /** 0–1. */
   musicVolume: number;
+  /** Technical reports only; no account data or gameplay payloads. */
+  diagnostics: boolean;
 }
 
 const STORAGE_KEY = 'sudoku-dragons.settings';
-const DEFAULTS: Settings = { sound: true, haptics: true, music: true, musicVolume: 0.6 };
+const DEFAULTS: Settings = { sound: true, haptics: true, music: true, musicVolume: 0.6, diagnostics: true };
 
 /** Saved settings, or the defaults. Storage can be missing or blocked, so failures fall back quietly. */
 export function loadSettings(): Settings {
@@ -19,6 +21,7 @@ export function loadSettings(): Settings {
       sound: typeof saved.sound === 'boolean' ? saved.sound : DEFAULTS.sound,
       haptics: typeof saved.haptics === 'boolean' ? saved.haptics : DEFAULTS.haptics,
       music: typeof saved.music === 'boolean' ? saved.music : DEFAULTS.music,
+      diagnostics: typeof saved.diagnostics === 'boolean' ? saved.diagnostics : DEFAULTS.diagnostics,
       musicVolume:
         typeof saved.musicVolume === 'number' && saved.musicVolume >= 0 && saved.musicVolume <= 1
           ? saved.musicVolume

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run typecheck && vite build",
+    "build": "npm run typecheck && vite build && node scripts/store-sourcemaps.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -24,6 +24,7 @@
     "sim:duel": "node scripts/sim-duel.ts",
     "test:server": "node scripts/test-duel-server.ts",
     "test:matchmaking": "node scripts/test-matchmaking.ts",
+    "diagnostics:resolve": "node scripts/resolve-diagnostic.ts",
     "deploy:web": "npm run build && wrangler pages deploy dist --project-name sudoku-dragons --branch main"
   },
   "dependencies": {
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.0",
+    "@jridgewell/trace-mapping": "0.3.31",
     "@playwright/test": "1.64.1",
     "pg": "^8.23.1",
     "sharp": "^0.35.5",
