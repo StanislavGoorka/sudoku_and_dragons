@@ -57,7 +57,8 @@ test('a failed screen download offers retry and works on a small phone', async (
 
 test('foreground rendering is capped and backgrounding stops frames, music scheduling and the solo timer', async ({ page }) => {
   await page.goto('/'); await ready(page);
-  expect(await page.evaluate(() => window.__game.rendering)).toMatchObject({ active: true, started: true, maxFPS: 30, resolution: 2 });
+  const expectedResolution = await page.evaluate(() => Math.min(window.devicePixelRatio, 2));
+  expect(await page.evaluate(() => window.__game.rendering)).toMatchObject({ active: true, started: true, maxFPS: 30, resolution: expectedResolution });
   await tapButton(page, 'Walcz!'); await ready(page, 'GameScreen');
   expect(await page.evaluate(() => window.__game.rendering.maxFPS)).toBe(60);
   await page.evaluate(() => {
