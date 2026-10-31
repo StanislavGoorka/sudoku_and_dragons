@@ -419,3 +419,8 @@ enabled = true
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/duel/index.ts"
+
+[functions.daily]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/daily/index.ts"

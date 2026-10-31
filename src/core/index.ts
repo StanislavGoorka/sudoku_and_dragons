@@ -8,3 +8,4 @@ export * from './battle/enemies.ts';
 export * from './duel/duel.ts';
 export * from './duel/bot.ts';
 export * from './battle/campaign.ts';
+export * from './daily.ts';

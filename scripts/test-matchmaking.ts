@@ -150,6 +150,28 @@ try {
   await send(first, [diagnostic()]);
   assert.equal((await observer.query('select count(*) from private.client_diagnostics')).rows[0].count, '1');
   console.log('ok   report retention removes expired diagnostics');
+
+  // Only the trusted referee can write ranked results. The public response never reveals account IDs.
+  await assert.rejects(first.query("select public.begin_daily_run($1, current_date, 'easy', 7)", [players[1]]), { code: '42501' });
+  await assert.rejects(first.query("select public.finish_daily_run($1, $1, 0)", [players[1]]), { code: '42501' });
+  const day = (await observer.query("select (now() at time zone 'UTC')::date::text as day")).rows[0].day;
+  const run1 = (await observer.query("select public.begin_daily_run($1,$2,'easy',7) as run", [players[0], day])).rows[0].run;
+  const run2 = (await observer.query("select public.begin_daily_run($1,$2,'easy',7) as run", [players[1], day])).rows[0].run;
+  await assert.rejects(first.query('update public.daily_runs set elapsed_ms = 1'), { code: '42501' });
+  assert.equal((await first.query('select count(*) from public.daily_runs where id = $1', [run1.id])).rows[0].count, '0');
+  await observer.query("update public.daily_runs set started_at = clock_timestamp() - interval '30 seconds' where id = $1", [run1.id]);
+  const finished = (await observer.query('select public.finish_daily_run($1,$2,0) as result', [players[0], run1.id])).rows[0].result;
+  assert(finished.elapsed_ms >= 30000);
+  assert.deepEqual((await observer.query('select public.finish_daily_run($1,$2,0) as result', [players[0], run1.id])).rows[0].result, finished);
+  await observer.query('update public.daily_runs set elapsed_ms = $1 where id = $2', [finished.elapsed_ms, run2.id]);
+  const ranking = (await first.query("select public.daily_leaderboard('easy', $1) as ranking", [day])).rows[0].ranking;
+  assert.equal(ranking.players, 2); assert.equal(ranking.top.length, 2);
+  assert.equal(ranking.own.place, 1); assert(ranking.top.every((r: { place: number }) => r.place === 1));
+  assert(!JSON.stringify(ranking).includes('user_id') && !JSON.stringify(ranking).includes(players[0]));
+  assert.equal((await first.query("select public.daily_leaderboard('hard', $1) as ranking", [day])).rows[0].ranking.players, 0);
+  for (let i = 0; i < 19; i++) await observer.query("select public.begin_daily_run($1,$2,'easy',7)", [players[1], day]);
+  await assert.rejects(observer.query("select public.begin_daily_run($1,$2,'easy',7)", [players[1], day]), { code: 'P0001' });
+  console.log('ok   daily ranking isolates categories, hides IDs, enforces ownership/quotas and records server time once');
 } finally {
   await Promise.allSettled(clients.map((client) => client.end()));
   if (created) await owner.query(`drop database ${database} with (force)`);

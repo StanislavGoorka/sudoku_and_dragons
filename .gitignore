@@ -11,6 +11,7 @@ Thumbs.db
 
 # Generated copy of src/core for the Edge Function (npm run function:bundle)
 supabase/functions/duel/core/
+supabase/functions/daily/core/
 
 # Wrangler's scratch files (npm run deploy:web)
 .wrangler/

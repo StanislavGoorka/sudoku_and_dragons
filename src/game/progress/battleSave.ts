@@ -1,4 +1,6 @@
 import { createBattle, ENEMIES, generatePuzzle, stageById, type Battle, type Difficulty, type Grid, type Puzzle } from '../../core/index.ts';
+import type { DailyMove } from '../../core/index.ts';
+import type { RankedRun } from '../net/daily.ts';
 
 /** Device-local checkpoint. Stored with progress so finishing and paying a battle is one write. */
 export interface SavedBattle {
@@ -14,6 +16,7 @@ export interface SavedBattle {
   mistakes: number;
   bestCombo: number;
   elapsed: number;
+  ranked?: { run: RankedRun; moves: DailyMove[] };
 }
 
 const finite = (n: unknown, min: number, max = Number.MAX_SAFE_INTEGER): n is number =>
@@ -44,5 +47,8 @@ export function parseSavedBattle(value: unknown): SavedBattle | null {
     battle: { ...battle, playerHp: s.battle.playerHp, enemyHp: s.battle.enemyHp, charge: s.battle.charge },
     notes: s.notes.map((bits, cell) => s.grid[cell] === 0 ? bits : 0),
     notesMode: s.notesMode, selected: s.selected, mistakes: s.mistakes, bestCombo: s.bestCombo, elapsed: s.elapsed,
+    ranked: s.ranked && s.ranked.run?.seed === puzzle.seed && s.ranked.run.difficulty === puzzle.difficulty &&
+      s.ranked.run.day === s.daily && /^[0-9a-f-]{36}$/i.test(s.ranked.run.id) && typeof s.ranked.run.user_id === 'string' &&
+      Array.isArray(s.ranked.moves) && s.ranked.moves.length <= 1000 ? structuredClone(s.ranked) : undefined,
   };
 }

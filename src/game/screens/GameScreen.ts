@@ -14,6 +14,7 @@ import {
   type Puzzle,
   type Stage,
   type Unit,
+  type DailyMove,
 } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
 import type { TrackId } from '../audio/tracks.ts';
@@ -36,6 +37,7 @@ import type { SavedBattle } from '../progress/battleSave.ts';
 import { easyCell, lessonSeen, markLessonSeen } from '../tutorial.ts';
 import { BattleTutorial } from './BattleTutorial.ts';
 import { fightLayout } from './fightLayout.ts';
+import { queueDailyResult, flushDailyResults, type RankedRun } from '../net/daily.ts';
 
 export interface GameScreenOptions {
   /** A new battle on the same difficulty. */
@@ -48,6 +50,8 @@ export interface GameScreenOptions {
   /** The day ('YYYY-MM-DD') when this battle is that day's daily challenge. */
   daily?: string;
   resume?: SavedBattle;
+  ranked?: RankedRun;
+  onRanking?: () => void;
 }
 
 function formatTime(seconds: number): string {
@@ -85,6 +89,8 @@ export class GameScreen extends Container {
   private elapsed = 0;
   private endShown = false;
   private reward: Reward | null = null;
+  private readonly ranked: RankedRun | undefined;
+  private readonly rankedMoves: DailyMove[];
   private sinceCheckpoint = 0;
   /** A daily battle announces itself once, at the first layout. */
   private announced = false;
@@ -103,6 +109,8 @@ export class GameScreen extends Container {
     super();
     this.puzzle = puzzle;
     const saved = options.resume;
+    this.ranked = saved?.ranked?.run ?? options.ranked;
+    this.rankedMoves = saved?.ranked?.moves ?? [];
     this.battle = saved ? structuredClone(saved.battle) : createBattle(options.stage?.enemy ?? ENEMIES[puzzle.difficulty]);
     this.grid = [...(saved?.grid ?? puzzle.givens)];
     this.elapsed = saved?.elapsed ?? 0;
@@ -306,6 +314,7 @@ export class GameScreen extends Container {
       grid: [...this.grid], battle: structuredClone(this.battle), notes: this.board.saveNotes(),
       notesMode: this.notesMode, selected: this.board.selected, mistakes: this.mistakes,
       bestCombo: this.bestCombo, elapsed: this.elapsed,
+      ranked: this.ranked ? { run: this.ranked, moves: [...this.rankedMoves] } : undefined,
     });
   }
 
@@ -351,6 +360,7 @@ export class GameScreen extends Container {
     }
     const result = applyMove(this.grid, this.puzzle.solution, cell, digit);
     if (result.kind === 'occupied') return;
+    if (this.ranked) this.rankedMoves.push({ cell, digit, at: Math.round(this.elapsed * 1000) });
     this.tutorial?.played(result.kind === 'correct');
 
     if (result.kind === 'wrong') {
@@ -385,6 +395,11 @@ export class GameScreen extends Container {
   /** Runs a hit's animation, then ends the battle if that hit brought someone to 0 HP. */
   private play(hit: Hit, animation: Promise<void>): void {
     if (this.battle.outcome !== 'ongoing' && !this.reward) {
+      if (this.ranked && this.battle.outcome === 'won') {
+        // Persist before removing the active checkpoint. An uncertain upload retries the same run ID.
+        queueDailyResult(this.ranked, this.rankedMoves);
+        void flushDailyResults().catch(() => {});
+      }
       this.reward = recordBattle(progress, {
         difficulty: this.puzzle.difficulty, won: this.battle.outcome === 'won', mistakes: this.mistakes,
         hpLeft: this.battle.playerHp, maxHp: this.battle.playerMaxHp, seconds: this.elapsed,
@@ -505,6 +520,7 @@ export class GameScreen extends Container {
         ]
       : [{ text: 'Walcz ponownie', variant: 'primary', onTap: () => this.options.onRestart() }];
     actions.push({ text: 'Menu', onTap: () => this.options.onMenu() });
+    if (this.ranked && this.options.onRanking) actions.unshift({ text: 'Ranking dnia', onTap: this.options.onRanking });
     const lines = [...(won ? [] : [hint]), stats, ...rewardLines(reward, progress.stars)];
     const stars = won ? new StarRow(reward.goals) : null;
     this.openModal(

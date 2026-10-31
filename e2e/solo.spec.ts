@@ -49,11 +49,15 @@ test('starting another battle asks before replacing the saved one', async ({ pag
   await ready(page);
   await tapButton(page, 'Zostań w menu');
   await tapButton(page, 'Wyzwanie dnia');
+  await ready(page, 'DailyScreen');
+  await tapButton(page, 'Graj offline');
   await ready(page);
   expect(await page.evaluate(() => window.__game.screen.modal.title.text)).toBe('Rozpocząć nową walkę?');
   await tapButton(page, 'Zostań w menu');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku-dragons.progress')!)._soloBattle.daily)).toBeUndefined();
   await tapButton(page, 'Wyzwanie dnia');
+  await ready(page, 'DailyScreen');
+  await tapButton(page, 'Graj offline');
   await tapButton(page, 'Rozpocznij nową');
   await ready(page, 'GameScreen');
   expect(await page.evaluate(() => window.__game.screen.options.daily)).toMatch(/^\d{4}-\d{2}-\d{2}$/);

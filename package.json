@@ -20,7 +20,7 @@
     "android:run": "npm run android:sync && cap run android",
     "icons": "node scripts/render-icons.ts",
     "dragons": "node scripts/preview-dragons.ts",
-    "function:bundle": "node scripts/bundle-function.ts",
+    "function:bundle": "node scripts/bundle-function.ts && node scripts/bundle-function.ts daily",
     "sim:duel": "node scripts/sim-duel.ts",
     "test:server": "node scripts/test-duel-server.ts",
     "test:matchmaking": "node scripts/test-matchmaking.ts",

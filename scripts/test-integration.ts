@@ -33,6 +33,10 @@ async function stop(child: ChildProcess): Promise<void> {
 }
 
 await run('scripts/bundle-function.ts');
+await new Promise<void>((resolve, reject) => {
+  const child = spawn(process.execPath, ['scripts/bundle-function.ts', 'daily'], { env, stdio: 'inherit', windowsHide: true });
+  child.once('error', reject); child.once('exit', (code) => code === 0 ? resolve() : reject(new Error('Daily bundle failed')));
+});
 await mkdir('test-results/integration', { recursive: true });
 const log = await open('test-results/integration/functions.log', 'w');
 const functions = spawn(process.execPath, [cli, 'functions', 'serve'], {
@@ -57,6 +61,7 @@ try {
   }
   assert(ready, 'Duel function did not become ready; see test-results/integration/functions.log');
   await run('scripts/test-duel-server.ts');
+  await run('scripts/test-daily-server.ts');
 } finally {
   await stop(functions);
   await log.close();

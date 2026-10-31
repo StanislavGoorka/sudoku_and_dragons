@@ -26,6 +26,7 @@ import { Modal } from './ui/Modal.ts';
 import { isAppActive, setAppActive } from './activity.ts';
 import { APP_RELEASE, flushDiagnostics, reportBootDuration, reportDiagnostic, setDiagnosticScreen } from './diagnostics/index.ts';
 import type { DiagnosticScreen } from './diagnostics/reporter.ts';
+import type { RankedRun } from './net/daily.ts';
 
 /**
  * What every full screen offers to the app shell. A screen is placed inside the safe area,
@@ -132,6 +133,7 @@ export async function boot(): Promise<void> {
         setTimeout(() => {
           void import('./net/cloudSave.ts').then(({ startCloudSave }) => startCloudSave())
             .catch((error) => reportDiagnostic('cloud_sync', 'cloud_sync', error));
+          void import('./net/daily.ts').then(({ flushDailyResults }) => flushDailyResults()).catch(() => {});
           if (screenKind === 'menu' && !loading) void recoverOnline();
         }, 0);
       }));
@@ -235,6 +237,7 @@ export async function boot(): Promise<void> {
       const { GameScreen } = await import('./screens/GameScreen.ts');
       return () => new GameScreen(saved.puzzle, {
         resume: saved, stage, daily: saved.daily, onMenu: showMenu,
+        onRanking: showDaily,
         onRestart: saved.daily ? startDaily : stage ? () => startStage(stage) : () => startBattle(saved.puzzle.difficulty),
         onPlay: (next) => startStage(next),
       });
@@ -248,7 +251,7 @@ export async function boot(): Promise<void> {
         onPick: (stage) => startStage(stage),
         onMap: () => showMap(),
         onOnline: () => showLobby(),
-        onDaily: startDaily,
+        onDaily: showDaily,
         onProgress: () => showProgress(),
         onShop: () => showShop(),
         onAccount: () => showAccount(),
@@ -263,6 +266,23 @@ export async function boot(): Promise<void> {
     openScreen('map', async () => {
       const { MapScreen } = await import('./screens/MapScreen.ts');
       return () => new MapScreen({ onBack: showMenu, onPick: (stage) => startStage(stage) });
+    });
+  };
+
+  const showDaily = () => {
+    openScreen('progress', async () => {
+      const { DailyScreen } = await import('./screens/DailyScreen.ts');
+      return () => new DailyScreen({ onBack: showMenu, onOffline: startDaily, onStart: startRankedDaily,
+        level: dailyChallenge(new Date(), LEVELS.filter((d) => isUnlocked(progress, d))).difficulty });
+    });
+  };
+  const startRankedDaily = (run: RankedRun): void => {
+    if (activeBattle()) return showMenu(() => startRankedDaily(run));
+    openScreen('battle', async () => {
+      const { GameScreen } = await import('./screens/GameScreen.ts');
+      return () => new GameScreen(generatePuzzle(Number(run.seed), run.difficulty), {
+        onMenu: showMenu, onRestart: showDaily, onPlay: startStage, daily: run.day, ranked: run, onRanking: showDaily,
+      });
     });
   };
 
@@ -419,6 +439,7 @@ export async function boot(): Promise<void> {
         },
         map: () => showMap(),
         daily: startDaily,
+        ranking: showDaily,
         menu: showMenu,
         lobby: () => showLobby(),
         progress: () => showProgress(),

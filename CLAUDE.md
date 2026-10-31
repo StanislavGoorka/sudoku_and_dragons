@@ -364,6 +364,11 @@ code and comments are English.
 
 ## Checking changes in the browser
 
+- Daily ranking: `DailyScreen`, `net/daily.ts`, `core/daily.ts` and a separate `daily` referee function.
+  Categories use the server's UTC day and wall time (including pauses), with verified move replays.
+  Offline daily keeps its local calendar and never enters the ranking. `npm run function:bundle` copies
+  core to both functions. Preserve the owner-bound pending queue and server-only write RPCs. See `DAILY_RANKING.md`.
+
 - `bootstrap.ts` installs diagnostics and starts `main.boot()`, with a visible startup retry on failure.
   Only the menu loads at startup. Other screens use guarded dynamic imports: construct only after checking
   the navigation generation, so a cancelled download cannot create a battle or subscriptions. Cloud/account

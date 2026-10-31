@@ -11,7 +11,8 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
    (decyzja właściciela: notatki to umiejętność gracza, nie ułatwienie).
 5. [x] **Muzyka w tle** – generowana (Web Audio), spokojna w menu, żywsza w walce i pojedynku; głośność i wyciszenie
    w ustawieniach i w pauzie walki.
-6. [ ] **Ranking wyzwania dnia** – najlepsze czasy dnia na serwerze i miejsce gracza.
+6. [x] **Ranking wyzwania dnia** – wspólne kategorie UTC, walidacja ruchów, czas serwera,
+   najlepsze wyniki i własne miejsce (`DAILY_RANKING.md`).
 7. [ ] **Przygotowanie do Google Play** – podpisany AAB, wersje, polityka prywatności, grafiki i opis sklepu.
 8. [x] **Lżejsza gra** – ekrany ładowane na żądanie, moduły konta po pierwszej klatce menu;
    pomiary i budżet rozmiaru startowego w CI (`PERFORMANCE.md`).
@@ -28,3 +29,6 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
    deduplikacja, sprzątanie starych wpisów, wyłączenie w ustawieniach i lokalne mapy źródeł.
 5. [x] **Szybszy start i mniejsze zużycie zasobów** – ładowanie ekranów na żądanie, lżejszy renderer,
    ograniczenie pracy w tle i pomiary produkcyjnego buildu.
+6. [x] **Ranking wyzwania dnia** – weryfikacja po stronie serwera, RLS i ponawianie wyników.
+7. [ ] **Balans i różnorodność kampanii** – krzywa trudności, nagrody, długość walk i wyróżniający się bossowie.
+8. [ ] **Wygoda na telefonach** – małe ekrany, czytelne cyfry/notatki, przyciski i kontrast.

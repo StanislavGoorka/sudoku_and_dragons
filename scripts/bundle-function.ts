@@ -7,7 +7,7 @@ import { copyFile, mkdir, readdir, unlink } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 
 const FROM = 'src/core';
-const TO = 'supabase/functions/duel/core';
+const TO = `supabase/functions/${process.argv[2] === 'daily' ? 'daily' : 'duel'}/core`;
 
 async function filesIn(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true, recursive: true }).catch(() => []);
