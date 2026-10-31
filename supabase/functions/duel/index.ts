@@ -144,7 +144,7 @@ async function setProfile(uid: string, nickname: string, dragon?: string, effect
 
 /**
  * A duel with a fresh secret board: waiting for a second player, unless `extra` already seats one.
- * `code` is null for random matchmaking and rematches.
+ * `code` is null for rematches. Random matchmaking creates duels inside queue_random_duel instead.
  */
 async function newDuel(
   uid: string,
@@ -219,11 +219,20 @@ async function joinRoom(uid: string, code: string) {
 }
 
 async function queue(uid: string, difficulty: Difficulty) {
-  await cancelWaiting(uid);
-  const { data: claimed, error } = await admin.rpc('claim_random_duel', { p_player: uid, p_difficulty: difficulty });
+  // Claiming an opponent and creating a waiting duel must share one database transaction and lock.
+  // Otherwise two requests can both see an empty queue and each leave a separate waiting duel.
+  const seed = randomInt(2 ** 32);
+  const puzzle = generatePuzzle(seed, difficulty);
+  const firstTurn: Seat = randomInt(2) === 0 ? 0 : 1;
+  const { data, error } = await admin.rpc('queue_random_duel', {
+    p_player: uid,
+    p_difficulty: difficulty,
+    p_state: createDuel(puzzle.givens, firstTurn),
+    p_seed: seed,
+    p_solution: puzzle.solution,
+  });
   if (error) throw error;
-  if (claimed) return { duel: await loadDuel(claimed as string), seat: 1 };
-  return { duel: await newDuel(uid, 'random', difficulty, null), seat: 0 };
+  return data as { duel: DuelRow; seat: Seat };
 }
 
 async function loadDuel(id: string): Promise<DuelRow> {
@@ -320,13 +329,14 @@ async function claimTimeout(uid: string, duelId: string) {
 }
 
 async function leave(uid: string, duelId: string) {
-  // Retries when a move or a timeout claim changes the duel between reading and writing it.
+  // Retries when a join, move or timeout claim changes the duel between reading and writing it.
   for (let attempt = 0; attempt < 3; attempt++) {
     const duel = await loadDuel(duelId);
     const seat = seatOf(duel, uid);
     if (duel.status === 'waiting') {
-      await admin.from('duels').update({ status: 'cancelled' }).eq('id', duelId).eq('status', 'waiting');
-      return { cancelled: true };
+      if (await bump(duel, { status: 'cancelled' })) return { cancelled: true };
+      // A rival may have joined: reload and forfeit the now-playing duel on the next attempt.
+      continue;
     }
     if (duel.status !== 'playing') return { cancelled: false };
     const event = forfeit(duel.state, seat);

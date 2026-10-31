@@ -43,6 +43,10 @@ code and comments are English.
 - `npm run test:server`: end-to-end check of the deployed function with fresh anonymous players (rooms,
   matchmaking, moves, forfeits, rematches, a turn running out, and that nobody can read solutions, other
   players' duels or saves). It waits out one full turn, so it takes about 40 s; run it in the background.
+- `npm run test:matchmaking`: PostgreSQL regression tests of the actual migrations, including
+  simultaneous requests to an empty queue and rollback of an incomplete duel. Standard
+  `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD` select a local test server. Creates and drops its own temporary
+  database and any missing Supabase roles; the app database is never touched.
 - `npm run sim:duel`: bots duel each other; reports how duels end, first-mover advantage, strategy edge.
 - `npm run deploy:web`: build and publish the web version to Cloudflare Pages, project `sudoku-dragons`, at
   https://sudoku-dragons.pages.dev (wrangler, signed in with the owner's Cloudflare account through `wrangler
@@ -84,10 +88,17 @@ code and comments are English.
   [mistakeRate] [difficulty]`: duels end by KO at ~72-81% of the board after ~8-13 turns (harder boards end
   earlier); the first mover wins ~52-58%; tactics still matter (smart bot beats random ~86-91%).
 - `supabase/functions/duel/index.ts`: the referee. Holds each board's solution (`duel_secrets`, no RLS
-  policies, so no client can read it), judges moves with core, writes the new `state` + `last_event` and bumps
-  `version` (updates only the version it read: concurrent writes get 409 `conflict`). Clients only read
-  `duels` (their own, via RLS) and follow them live through Supabase Realtime. Note: a bot that solves the
-  sudoku itself can still play perfectly; hiding the solution stops reading answers, not solving.
+  policies, so no client can read it). Random matchmaking uses the service-only `queue_random_duel` RPC:
+  one transaction-scoped advisory lock covers cancelling the old search, claiming an opponent or
+  creating a waiting duel and its solution. Apply `20261030231258_atomic_matchmaking.sql` before
+  deploying the updated Edge Function; existing clients need no update. The referee judges moves
+  with core, writes the new `state` + `last_event` and bumps
+  `version` (updates only the version it read: concurrent writes get 409 `conflict`).
+  Cancelling a waiting duel checks that same version; if a rival joined first, `leave` reloads and
+  forfeits the playing duel instead. `scripts/duel-leave.test.ts` forces this race and database errors.
+  Clients only read `duels` (their own, via RLS) and follow them live through Supabase Realtime.
+  Note: a bot that solves the sudoku itself can still play perfectly; hiding the solution stops reading
+  answers, not solving.
   Callers are identified with `auth.getClaims` (local signature check, no round trip to Auth). A move loads
   the duel and its solution in one query. A turn that ran out (`timeout`, claimable by either player once the
   deadline passed) starts the next turn at the old deadline, not at the claim, because clients already show it
@@ -242,9 +253,17 @@ code and comments are English.
   comes back. A write goes only over the version it read; when another device wrote in between,
   `mergeProgress(base, local, remote)` (progress.ts, tested) joins the two from the last version both agreed on
   (the base, stored with the account it belongs to): gains are added up, records and purchases kept, stars paid
-  twice for the same thing counted once. With no base for this account (a guest logging in) the base is empty,
-  so the guest's progress is added to the account's. `replaceProgress` (store.ts) swaps the new progress in; the
-  menu redraws.
+  twice for the same thing counted once. The acknowledged base stays in memory when storage fails;
+  a failed write removes an obsolete persisted base. An upload with an uncertain response discards
+  its base too, so retrying does not replay a delta the server may already have accepted.
+  Save ownership (`_cloudOwner`, written together
+  with local progress) identifies a known guest changing accounts: only that case uses an empty base
+  to add the guest's independent progress. Before uploading, the guest is folded into a durably saved
+  account-owned local snapshot; full storage postpones that transfer. A missing/corrupt base on an account or a legacy save uses
+  `recoverProgress`: larger counters, best records and the union of purchases, with the wallet adjusted
+  for retained spending. Unknown overlapping gains cannot safely be added. `replaceProgress` (store.ts)
+  swaps the new progress in; the menu redraws. `net/cloudSave.test.ts` covers checkpoint loss, full
+  storage, restarts, guest transfers, concurrent play and account changes during requests.
 - Player progress (`src/game/progress/`), saved on the device (localStorage, per dev `?profile`) and in the cloud:
   - `progress.ts` is pure and tested: `Progress` (star balance, stars ever earned, per-level wins / losses / best
     stars / best time, duels played and won, flawless wins, best combo, unlocked achievements), `parseProgress`

@@ -151,9 +151,43 @@ check(
 );
 await call(b, 'leave', { duelId: matched.body.duel.id });
 
+// Empty-queue race: two simultaneous requests must find each other, not make two waiting duels.
+const simultaneous = await Promise.all(players.map((player) => call(player, 'queue', { difficulty: 'hard' })));
+const [queuedA, queuedB] = simultaneous;
+check(
+  'simultaneous searches enter the same duel in different seats',
+  simultaneous.every((result) => result.status === 200) &&
+    Boolean(queuedA.body.duel?.id) &&
+    queuedA.body.duel.id === queuedB.body.duel?.id && queuedA.body.seat !== queuedB.body.seat &&
+    simultaneous.some((result) => result.body.duel?.status === 'playing'),
+  simultaneous,
+);
+for (const id of new Set(simultaneous.flatMap((result) => result.body.duel?.id ? [result.body.duel.id] : []))) {
+  await call(a, 'leave', { duelId: id });
+  await call(b, 'leave', { duelId: id });
+}
+
 // A waiting room can be cancelled.
 const lonely = await call(a, 'create', { difficulty: 'hard' });
 check('a waiting room can be cancelled', (await call(a, 'leave', { duelId: lonely.body.duel.id })).body.cancelled === true);
+
+// Cancellation racing a join must leave no playing duel behind, whichever request wins.
+for (let attempt = 0; attempt < 5; attempt++) {
+  const raceRoom = (await call(a, 'create', { difficulty: 'easy' })).body.duel as Duel;
+  const [joining, leaving] = await Promise.all([
+    call(b, 'join', { code: raceRoom.code }),
+    call(a, 'leave', { duelId: raceRoom.id }),
+  ]);
+  const after = await select(a, `duels?id=eq.${raceRoom.id}&select=status,state`);
+  const row = after.rows[0] as Duel;
+  check(`join/cancel race ${attempt + 1}: leaving succeeds`, leaving.status === 200, leaving.body);
+  if (leaving.body.cancelled === true) {
+    check(`join/cancel race ${attempt + 1}: cancellation is real`, row?.status === 'cancelled' && joining.status !== 200, { row, joining });
+  } else {
+    check(`join/cancel race ${attempt + 1}: the host forfeits`,
+      row?.status === 'finished' && row.state.winner === 1 && leaving.body.duel?.status === 'finished', { row, leaving });
+  }
+}
 
 // A turn running out: the next one starts at the deadline, not when the claim arrived.
 const slowRoom = await call(a, 'create', { difficulty: 'easy' });

@@ -452,6 +452,44 @@ export function mergeProgress(base: Progress, local: Progress, remote: Progress)
   return parseProgress(merged);
 }
 
+/**
+ * Recovers overlapping snapshots without a common base. Their independent gains cannot be known,
+ * so keep the larger counters and the union of records/purchases, never add their totals together.
+ * Only a known guest changing accounts is merged additively with an empty base.
+ */
+export function recoverProgress(local: Progress, remote: Progress): Progress {
+  const recovered = mergeProgress(emptyProgress(), local, remote);
+  for (const difficulty of LEVELS) {
+    recovered.levels[difficulty].wins = Math.max(local.levels[difficulty].wins, remote.levels[difficulty].wins);
+    recovered.levels[difficulty].losses = Math.max(local.levels[difficulty].losses, remote.levels[difficulty].losses);
+  }
+  for (const { id } of STAGES) {
+    const record = recovered.stages[id];
+    if (!record) continue;
+    record.wins = Math.max(local.stages[id]?.wins ?? 0, remote.stages[id]?.wins ?? 0);
+    record.losses = Math.max(local.stages[id]?.losses ?? 0, remote.stages[id]?.losses ?? 0);
+  }
+  recovered.duels = {
+    played: Math.max(local.duels.played, remote.duels.played),
+    won: Math.max(local.duels.won, remote.duels.won),
+  };
+  recovered.flawlessWins = Math.max(local.flawlessWins, remote.flawlessWins);
+  recovered.daily.wins = Math.max(local.daily.wins, remote.daily.wins);
+  recovered.starsEarned = Math.max(local.starsEarned, remote.starsEarned);
+
+  // Reconcile the wallet with all retained purchases. Taking the larger balance alone would
+  // refund something bought on the other copy. Preserve spending unknown to this client too.
+  const spentOnCosmetics = (p: Progress) => COSMETIC_KINDS.reduce((sum, kind) => sum +
+    COSMETICS[kind].filter((item) => p[SLOTS[kind].owned].includes(item.id)).reduce((cost, item) => cost + item.price, 0), 0);
+  const otherSpending = Math.max(
+    0,
+    local.starsEarned - local.stars - spentOnCosmetics(local),
+    remote.starsEarned - remote.stars - spentOnCosmetics(remote),
+  );
+  recovered.stars = Math.max(0, recovered.starsEarned - spentOnCosmetics(recovered) - otherSpending);
+  return parseProgress(recovered);
+}
+
 /** The same progress, whatever order things were bought or unlocked in. */
 export function sameProgress(a: Progress, b: Progress): boolean {
   return JSON.stringify(parseProgress(a)) === JSON.stringify(parseProgress(b));
