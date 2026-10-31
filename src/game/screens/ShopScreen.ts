@@ -563,7 +563,7 @@ export class ShopScreen extends Container {
       this.board.position.set(border, border);
       this.board.layout(boardSize);
       this.pad.position.set(0, previewWidth + 5 + 10);
-      this.pad.layout(previewWidth, PAD_HEIGHT);
+      this.pad.layout(previewWidth, PAD_HEIGHT, true);
     } else {
       previewWidth = column;
       previewHeight = Math.max(160, Math.min(room, column * 1.05));

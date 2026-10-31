@@ -85,7 +85,8 @@ export class Button extends Container {
     this.buttonWidth = width;
     this.buttonHeight = height;
     this.lipHeight = Math.max(3, Math.round(Math.min(6, height * 0.1)));
-    this.hitArea = new Rectangle(0, 0, width, height);
+    const targetWidth = Math.max(48, width), targetHeight = Math.max(48, height);
+    this.hitArea = new Rectangle((width - targetWidth) / 2, (height - targetHeight) / 2, targetWidth, targetHeight);
     const faceHeight = height - this.lipHeight;
 
     // Baloo sits a little high in its line box, so text is nudged down.
@@ -98,11 +99,21 @@ export class Button extends Container {
       this.title.style.fontSize = Math.round(Math.min(30, faceHeight * 0.46));
       this.title.position.set(width / 2, faceHeight / 2 + faceHeight * 0.04);
     }
+    this.fitText();
     this.draw();
   }
 
   setText(text: string): void {
     this.title.text = text;
+    this.fitText();
+  }
+
+  private fitText(): void {
+    if (this.buttonWidth <= 0) return;
+    for (const text of [this.title, this.subtitle]) if (text) {
+      text.scale.set(1);
+      text.scale.set(Math.min(1, Math.max(1, this.buttonWidth - 24) / Math.max(1, text.width)));
+    }
   }
 
   /** Another icon, for a button made with one (e.g. a speaker that gets muted). */

@@ -3,6 +3,8 @@ import type { Difficulty } from '../../core/index.ts';
 import { beginDaily, dailyRanking, flushDailyResults, type DailyRanking, type RankedRun } from '../net/daily.ts';
 import { theme } from '../theme.ts';
 import { Button } from '../ui/Button.ts';
+import { Modal } from '../ui/Modal.ts';
+import { activeBattle, saveActiveBattle } from '../progress/store.ts';
 
 const names = { easy: 'Łatwy', medium: 'Średni', hard: 'Trudny' };
 function label(text: string, size = 18): Text {
@@ -24,6 +26,7 @@ export class DailyScreen extends Container {
   private readonly offline: Button;
   private readonly retry: Button;
   private readonly levels: Button[];
+  private modal: Modal | null = null;
   constructor(private readonly options: { onBack: () => void; onOffline: () => void; onStart: (run: RankedRun) => void; level: Difficulty }) {
     super(); this.level = options.level;
     this.back = new Button({ text: 'Wstecz', icon: 'back', onTap: options.onBack });
@@ -34,7 +37,7 @@ export class DailyScreen extends Container {
       if (this.busy) return; this.level = level; void this.load();
     } }));
     for (const t of [this.title, this.status, this.rules, this.rows]) t.anchor.set(0.5, 0);
-    this.rows.style.lineHeight = 34;
+    this.rows.style.lineHeight = 26; this.rows.style.fontSize = 16;
     this.addChild(this.title, this.status, this.rules, this.rows, this.back, ...this.levels, this.play, this.offline, this.retry);
     void this.load();
   }
@@ -46,12 +49,11 @@ export class DailyScreen extends Container {
     this.rules.position.set(width / 2, 107); this.rules.style.wordWrapWidth = column;
     this.levels.forEach((b, i) => { b.position.set(left + i * (column + 8) / 3, 183); b.layout((column - 16) / 3, 46); b.setVariant(this.level === (['easy', 'medium', 'hard'][i]) ? 'primary' : 'secondary'); });
     this.status.position.set(width / 2, 243); this.status.style.wordWrapWidth = column;
-    this.rows.position.set(width / 2, 291); this.rows.style.wordWrapWidth = column;
+    this.rows.position.set(width / 2, 283); this.rows.style.wordWrapWidth = column;
     for (const [i, button] of [this.play, this.offline, this.retry].entries()) {
-      button.position.set(left, height - 16 - (3 - i) * 52); button.layout(column, 44);
+      button.position.set(left, height - 16 - (3 - i) * 56); button.layout(column, 48);
     }
-    // Keep the top list within the room left above actions on short phones.
-    this.rows.scale.set(Math.min(1, Math.max(0.65, (height - 470) / 170)));
+    this.modal?.layout(width, height);
   }
   private showRanking(ranking: DailyRanking): void {
     this.status.text = `${ranking.day} · ${ranking.players} graczy\n${ranking.own ? `Twoje miejsce: ${ranking.own.place} · ${rankedTime(ranking.own.elapsed_ms)}` : 'Nie masz jeszcze wyniku w tej kategorii.'}`;
@@ -68,14 +70,31 @@ export class DailyScreen extends Container {
       this.showRanking(ranking); this.play.setEnabled(true);
     } catch { if (!this.destroyed && generation === this.generation) this.status.text = 'Ranking jest niedostępny.\nSpróbuj ponownie lub zagraj offline.'; }
   }
-  private async start(): Promise<void> {
-    if (this.busy) return; this.busy = true; this.play.setEnabled(false); this.retry.setEnabled(false);
+  private async start(replaceConfirmed = false): Promise<void> {
+    if (this.modal || this.busy) return;
+    if (activeBattle() && !replaceConfirmed) {
+      this.modal = new Modal('Rozpocząć nową walkę?', 'Nowa próba zastąpi zapis solo.\nZegar rankingu ruszy po potwierdzeniu.', [
+        { text: 'Rozpocznij nową', variant: 'primary', onTap: () => {
+          this.closeModal(); void this.start(true);
+        } },
+        { text: 'Anuluj', onTap: () => this.closeModal() },
+      ]);
+      this.addChild(this.modal); this.modal.layout(this.widthNow, this.heightNow); this.modal.show(); return;
+    }
+    this.busy = true; this.play.setEnabled(false); this.retry.setEnabled(false);
     this.status.text = 'Przygotowuję wspólną planszę…';
-    try { const run = await beginDaily(this.level); if (!this.destroyed) this.options.onStart(run); }
+    try {
+      const run = await beginDaily(this.level);
+      if (!this.destroyed) {
+        if (replaceConfirmed) saveActiveBattle(null);
+        this.options.onStart(run);
+      }
+    }
     catch (error) { if (!this.destroyed) this.status.text = (error as { code?: string }).code === 'daily-limit' ? 'Wykorzystano 20 startów na dziś.\nMożesz nadal grać offline.' : 'Nie udało się rozpocząć. Spróbuj ponownie.'; }
     finally { if (!this.destroyed) { this.busy = false; this.play.setEnabled(true); this.retry.setEnabled(true); } }
   }
-  handleKey(event: KeyboardEvent): void { if (event.key === 'Escape') this.options.onBack(); }
-  handleBack(): boolean { this.options.onBack(); return true; }
+  private closeModal(): void { this.modal?.destroy({ children: true }); this.modal = null; }
+  handleKey(event: KeyboardEvent): void { if (event.key === 'Escape') this.handleBack(); }
+  handleBack(): boolean { if (this.modal) this.closeModal(); else this.options.onBack(); return true; }
   override destroy(options?: DestroyOptions): void { this.generation++; super.destroy(options); }
 }

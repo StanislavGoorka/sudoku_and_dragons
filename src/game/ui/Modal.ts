@@ -1,5 +1,5 @@
 import gsap from 'gsap';
-import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
+import { Container, Graphics, Rectangle, Text, type DestroyOptions, type FederatedPointerEvent, type FederatedWheelEvent } from 'pixi.js';
 import { killTweens } from '../fx/tweens.ts';
 import { OVERSCAN } from '../safeArea.ts';
 import { theme } from '../theme.ts';
@@ -28,6 +28,15 @@ const BUTTON_GAP = 10;
 export class Modal extends Container {
   private readonly shade = new Graphics();
   private readonly box = new Container();
+  private readonly viewport = new Container();
+  private readonly clip = new Graphics();
+  private readonly scrollHint = new Text({ text: 'Przewiń, aby zobaczyć całe okno', style: {
+    fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 14, fill: theme.gold,
+  } });
+  private scroll = 0;
+  private maxScroll = 0;
+  private boxY = 0;
+  private drag: { y: number; scroll: number } | null = null;
   private readonly panel = new Graphics();
   private readonly title: Text;
   private readonly message: Text;
@@ -72,12 +81,30 @@ export class Modal extends Container {
     this.shade.eventMode = 'static';
     this.box.addChild(this.panel, this.title, this.message, ...this.buttons);
     if (this.extra) this.box.addChild(this.extra.view);
-    this.addChild(this.shade, this.box);
+    this.viewport.addChild(this.box); this.viewport.mask = this.clip;
+    this.scrollHint.anchor.set(0.5, 0); this.scrollHint.eventMode = 'none';
+    this.addChild(this.shade, this.clip, this.viewport, this.scrollHint);
+    this.eventMode = 'static';
+    this.on('wheel', (event: FederatedWheelEvent) => this.scrollTo(this.scroll + event.deltaY));
+    this.on('pointerdown', (event: FederatedPointerEvent) => {
+      if (!this.maxScroll) return;
+      // Buttons and sliders retain their gestures; scroll by dragging the panel/text/background.
+      for (let target = event.target as Container | null; target && target !== this; target = target.parent) {
+        if (target instanceof Button || (this.extra?.view && this.extra.view === target)) return;
+      }
+      this.drag = { y: event.global.y, scroll: this.scroll };
+    });
+    this.on('globalpointermove', (event: FederatedPointerEvent) => {
+      if (this.drag) this.scrollTo(this.drag.scroll + this.drag.y - event.global.y);
+    });
+    this.on('pointerup', () => { this.drag = null; });
+    this.on('pointerupoutside', () => { this.drag = null; });
   }
 
   layout(screenWidth: number, screenHeight: number): void {
     this.screenWidth = screenWidth;
     this.screenHeight = screenHeight;
+    this.hitArea = new Rectangle(0, 0, screenWidth, screenHeight);
     this.shade
       .clear()
       .rect(-OVERSCAN, -OVERSCAN, screenWidth + OVERSCAN * 2, screenHeight + OVERSCAN * 2)
@@ -113,7 +140,19 @@ export class Modal extends Container {
       .fill(theme.panel)
       .stroke({ width: 3, color: theme.panelLight });
     this.box.pivot.set(width / 2, height / 2);
-    this.box.position.set(screenWidth / 2, screenHeight / 2);
+    const visibleHeight = Math.max(100, screenHeight - 64);
+    this.maxScroll = Math.max(0, height - visibleHeight);
+    this.boxY = this.maxScroll ? 16 + height / 2 : screenHeight / 2;
+    this.box.position.set(screenWidth / 2, this.boxY);
+    this.clip.clear().rect(0, this.maxScroll ? 16 : 0, screenWidth, this.maxScroll ? visibleHeight : screenHeight).fill(0xffffff);
+    this.scrollHint.visible = this.maxScroll > 0;
+    this.scrollHint.position.set(screenWidth / 2, screenHeight - 30);
+    this.scrollTo(this.scroll);
+  }
+
+  private scrollTo(value: number): void {
+    this.scroll = Math.max(0, Math.min(this.maxScroll, value));
+    this.box.y = this.boxY - this.scroll;
   }
 
   /** Replaces the message, e.g. when the rival answers while the dialog is open. */

@@ -32,4 +32,5 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
 6. [x] **Ranking wyzwania dnia** – weryfikacja po stronie serwera, RLS i ponawianie wyników.
 7. [x] **Balans i różnorodność kampanii** – symulacje 12 etapów, trzy wzorce bossów,
    łagodniejszy skok finału i jednorazowe nagrody (`BALANCE.md`).
-8. [ ] **Wygoda na telefonach** – małe ekrany, czytelne cyfry/notatki, przyciski i kontrast.
+8. [x] **Wygoda na telefonach** – większa klawiatura i kontrolki, kontrast, etykiety,
+   przewijanie wysokich okien oraz testy 360×640 / 375×812 (`PHONE_UX.md`).

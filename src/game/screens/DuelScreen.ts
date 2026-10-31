@@ -216,7 +216,7 @@ export class DuelScreen extends Container {
     const boardY = areas.boardY + statusHeight;
     const padY = areas.padY + statusHeight;
     this.connectionLabel.position.set(width / 2, 3);
-    const buttonSize = 36;
+    const buttonSize = 48;
     this.leaveButton.position.set(left + 7, arenaY + 5);
     this.leaveButton.layout(buttonSize, buttonSize);
     this.notesButton.position.set(left + columnWidth - 7 - buttonSize, arenaY + 5);

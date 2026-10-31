@@ -1,4 +1,5 @@
 import { BoardView } from '../ui/BoardView.ts';
+import { padHeight as keypadHeight } from '../ui/padLayout.ts';
 
 /** Where the arena, the board and the number pad go on a fight screen (a battle or a duel). */
 export interface FightLayout {
@@ -19,12 +20,13 @@ const MIN_ARENA = 190;
 
 export function fightLayout(width: number, height: number): FightLayout {
   const margin = 12;
-  const gap = 12;
+  const gap = 10;
   const border = BoardView.BORDER;
   const lip = 5;
   const columnWidth = Math.min(width - margin * 2, 560);
-  const padHeight = Math.round(Math.min(64, Math.max(46, (columnWidth / 9) * 1.25)));
-  const room = height - margin * 2 - MIN_ARENA - gap * 2 - padHeight - border * 2 - lip;
+  const padHeight = keypadHeight(columnWidth);
+  const minimumArena = height < 700 ? 150 : MIN_ARENA;
+  const room = height - margin * 2 - minimumArena - gap * 2 - padHeight - border * 2 - lip;
   const boardSize = Math.max(180, Math.min(columnWidth - border * 2, room));
   const padY = height - margin - padHeight;
   const boardY = padY - gap - lip - border - boardSize;

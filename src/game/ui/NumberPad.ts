@@ -3,6 +3,7 @@ import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.
 import type { BoardColors } from '../boardThemes.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { theme } from '../theme.ts';
+import { padGeometry } from './padLayout.ts';
 
 interface PadKey {
   root: Container;
@@ -14,7 +15,7 @@ interface PadKey {
   done: boolean;
 }
 
-/** Nine chunky keys in a row, in the board theme's colours; a finished digit's key goes dark. */
+/** Nine chunky keys: two rows on phones, one on wide screens; a finished digit's key goes dark. */
 export class NumberPad extends Container {
   private readonly keys: PadKey[] = [];
   private colors: BoardColors;
@@ -56,14 +57,14 @@ export class NumberPad extends Container {
     }
   }
 
-  layout(width: number, height: number): void {
-    const gap = 5;
-    this.keyWidth = (width - gap * 8) / 9;
-    this.keyHeight = height;
-    this.lipHeight = Math.max(3, Math.round(height * 0.08));
+  layout(width: number, height: number, preview = false): void {
+    const geometry = padGeometry(width, height, preview);
+    this.keyWidth = geometry[0].width;
+    this.keyHeight = geometry[0].height;
+    this.lipHeight = Math.max(3, Math.round(this.keyHeight * 0.08));
     this.keys.forEach((key, i) => {
-      key.root.position.set(i * (this.keyWidth + gap), 0);
-      key.root.hitArea = new Rectangle(0, 0, this.keyWidth, height);
+      key.root.position.set(geometry[i].x, geometry[i].y);
+      key.root.hitArea = new Rectangle(0, 0, this.keyWidth, this.keyHeight);
       this.placeLabel(key);
       this.paint(key);
     });
@@ -80,7 +81,7 @@ export class NumberPad extends Container {
     const h = this.keyHeight - this.lipHeight;
     const full = Math.round(Math.min(w * 0.75, this.keyHeight * 0.55));
     if (this.notesMode) {
-      key.label.style.fontSize = Math.round(full * 0.6);
+      key.label.style.fontSize = Math.max(16, Math.round(full * 0.65));
       key.label.position.set(w * 0.34, h * 0.32 + 2);
     } else {
       key.label.style.fontSize = full;

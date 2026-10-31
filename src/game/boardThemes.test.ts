@@ -33,16 +33,14 @@ describe('board themes', () => {
     expect(boardTheme('no-such-theme').id).toBe(DEFAULT_BOARD_THEME);
   });
 
-  // Digits are big and bold, so 3:1 (WCAG large text) on plain cells; highlighted cells only ever
-  // hold digits next to the selection, so a little less there.
+  // Digits and small manual notes must stay readable on highlighted cells too.
   for (const { name, colors: c } of BOARD_THEMES) {
     it(`${name}: every digit reads clearly on every cell`, () => {
       for (const background of [c.cell, c.cellAlt, c.cellPeer, c.cellSameDigit, c.cellSelected]) {
         expect(contrast(c.given, background)).toBeGreaterThanOrEqual(4.5);
       }
       for (const digit of [c.placed, c.opponent]) {
-        for (const background of [c.cell, c.cellAlt]) expect(contrast(digit, background)).toBeGreaterThanOrEqual(3);
-        for (const background of [c.cellPeer, c.cellSameDigit, c.cellSelected]) expect(contrast(digit, background)).toBeGreaterThanOrEqual(2);
+        for (const background of [c.cell, c.cellAlt, c.cellPeer, c.cellSameDigit, c.cellSelected]) expect(contrast(digit, background)).toBeGreaterThanOrEqual(4.5);
       }
       expect(contrast(c.padDigit, c.padKey)).toBeGreaterThanOrEqual(4.5);
     });

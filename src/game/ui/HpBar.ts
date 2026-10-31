@@ -52,6 +52,8 @@ export class HpBar extends Container {
     const middle = BAR_HEIGHT / 2 + 1;
     this.nameText.position.set(12, middle);
     this.valueText.position.set(width - 12, middle);
+    this.nameText.scale.set(1);
+    this.nameText.scale.set(Math.min(1, Math.max(1, width - 32 - this.valueText.width) / Math.max(1, this.nameText.width)));
     this.track
       .clear()
       .roundRect(0, 0, width, BAR_HEIGHT, BAR_HEIGHT / 2)
@@ -62,6 +64,7 @@ export class HpBar extends Container {
 
   setName(name: string): void {
     this.nameText.text = name;
+    if (this.barWidth > 0) this.layout(this.barWidth);
   }
 
   setHp(hp: number): void {

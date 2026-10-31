@@ -14,7 +14,7 @@ function notesFont(): string {
   if (!notesFontReady) {
     BitmapFont.install({
       name: NOTES_FONT,
-      style: { fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 40, fill: 0xffffff },
+      style: { fontFamily: theme.fontFamily, fontWeight: '800', fontSize: 40, fill: 0xffffff },
       chars: '123456789',
       resolution: 2,
     });
@@ -256,8 +256,8 @@ export class BoardView extends Container {
     const s = this.cellSize;
     view.notes.forEach((note, i) => {
       note.visible = (bits & (1 << (i + 1))) !== 0;
-      note.tint = this.palette.placed;
-      note.style.fontSize = Math.max(7, Math.round(s * 0.27));
+      note.tint = this.palette.given;
+      note.style.fontSize = Math.max(8, Math.round(s * 0.31));
       note.position.set(((i % 3) + 0.5) * (s / 3), (Math.floor(i / 3) + 0.5) * (s / 3) + s * 0.02);
     });
   }

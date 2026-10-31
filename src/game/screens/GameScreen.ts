@@ -177,7 +177,7 @@ export class GameScreen extends Container {
     this.screenHeight = height;
 
     const { arenaY, arenaHeight, boardY, boardSize, padY, padHeight, left, columnWidth } = fightLayout(width, height);
-    const buttonSize = 36;
+    const buttonSize = 48;
     this.pauseButton.position.set(left + 7, arenaY + 5);
     this.pauseButton.layout(buttonSize, buttonSize);
     this.notesButton.position.set(left + columnWidth - 7 - buttonSize, arenaY + 5);

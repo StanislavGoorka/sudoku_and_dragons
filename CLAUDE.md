@@ -364,6 +364,12 @@ code and comments are English.
 
 ## Checking changes in the browser
 
+- Phone controls: full keypads use `padHeight`/`padGeometry` (two rows below 480 px); only the shop
+  passes the compact preview flag. Fight controls have 48 px targets; short-screen layout preserves
+  board size by reducing the arena. `Modal` scrolls tall content (drag its panel or wheel), retaining
+  button/slider gestures. Notes use a bold, high-contrast atlas with no candidate assistance. Board
+  text contrast is tested at 4.5:1 even when highlighted. See `PHONE_UX.md` for measurements and limits.
+
 - Campaign bosses have `EnemyDef.pattern`: rage (15% faster below half HP), heavy (+2 damage every
   third timed hit), relentless (one second less plain-digit knockback below half HP). Use `attackInterval`,
   `battleKnockback` and `bossHint` rather than static enemy fields for their UI. Save `timedAttacks` in

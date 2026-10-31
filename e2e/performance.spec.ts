@@ -25,7 +25,7 @@ test('optional screens load on demand and a cancelled import cannot replace the 
   await page.route('**/screens/ShopScreen.ts', async (route) => { requested = true; await gate; await route.continue(); });
   await page.goto('/'); await ready(page);
   const resources = await page.evaluate(() => performance.getEntriesByType('resource').map((e) => e.name));
-  expect(resources.join(' ')).not.toMatch(/\/(Game|Duel|Shop|Map|Account|Lobby|Progress)Screen\.ts/);
+  expect(resources.join(' ')).not.toMatch(/\/(Game|Duel|Shop|Map|Account|Lobby|Progress|Daily)Screen\.ts/);
   await page.evaluate(() => window.__game.shop());
   await expect.poll(() => requested).toBe(true);
   await page.keyboard.press('Escape');

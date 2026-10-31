@@ -64,7 +64,7 @@ try {
     medianFirstFrameMs: samples.map((s) => s.firstFrameMs).sort((a, b) => a - b)[1] }, null, 2));
   if (checkBudget) {
     assert(samples.every((sample) => sample.jsGzipBytes <= 225_000), 'Menu startup JS exceeds the 225 kB gzip budget');
-    assert(samples.every((sample) => !sample.scripts.some((path) => /\/(Game|Duel|Shop|Map|Account|Lobby|Progress)Screen-/.test(path))),
+    assert(samples.every((sample) => !sample.scripts.some((path) => /\/(Game|Duel|Shop|Map|Account|Lobby|Progress|Daily)Screen-/.test(path))),
       'Optional screens were loaded before the menu frame');
   }
 } finally {
