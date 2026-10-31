@@ -1,5 +1,16 @@
 apply plugin: 'com.android.application'
 
+def appVersion = new Properties()
+rootProject.file('../release/android-version.properties').withInputStream { appVersion.load(it) }
+def uploadStore = System.getenv('SUDOKU_UPLOAD_STORE')
+def uploadPassword = System.getenv('SUDOKU_UPLOAD_STORE_PASSWORD')
+def uploadAlias = System.getenv('SUDOKU_UPLOAD_ALIAS')
+def uploadKeyPassword = System.getenv('SUDOKU_UPLOAD_KEY_PASSWORD')
+def signingReady = [uploadStore, uploadPassword, uploadAlias, uploadKeyPassword].every { it }
+if (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') } && !signingReady) {
+    throw new GradleException('Release signing is required. Run scripts/build-android-release.ps1 or supply the four SUDOKU_UPLOAD_* variables. Never use the debug key for a Play bundle.')
+}
+
 android {
     namespace = "com.metrezz.sudokudragons"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +18,8 @@ android {
         applicationId "com.metrezz.sudokudragons"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersion.getProperty('versionCode').toInteger()
+        versionName appVersion.getProperty('versionName')
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +27,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (signingReady) {
+            upload {
+                storeFile file(uploadStore)
+                storePassword uploadPassword
+                keyAlias uploadAlias
+                keyPassword uploadKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (signingReady) signingConfig signingConfigs.upload
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

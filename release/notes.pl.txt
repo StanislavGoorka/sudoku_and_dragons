@@ -1,0 +1,9 @@
+<pl-PL>
+Wersja do testów wewnętrznych:
+• kampania z 12 etapami i trzema różnymi bossami;
+• pojedynki online i trening z botem;
+• dzienny ranking z weryfikacją serwera;
+• zapis i wznawianie walki oraz ręczne notatki;
+• poprawiona wygoda na małych ekranach;
+• usuwanie konta i danych.
+</pl-PL>

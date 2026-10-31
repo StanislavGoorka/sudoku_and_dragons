@@ -23,3 +23,11 @@ test-results/
 playwright-report/
 .cache/
 artifacts/
+
+# Android upload/app signing keys and local signing configuration must never enter Git.
+*.jks
+*.keystore
+*.p12
+*.pfx
+*signing.properties
+*.dpapi

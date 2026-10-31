@@ -364,6 +364,12 @@ code and comments are English.
 
 ## Checking changes in the browser
 
+- Android test release: `release/android-version.properties` owns Android versions. Release tasks
+  require private SUDOKU_UPLOAD_* environment variables; Windows helpers use an ignored upload key
+  and a DPAPI-protected password. Never commit signing material. Store assets are generated from
+  real game screens with synthetic local progress. `release:check -- --artifacts` checks files;
+  the default check also blocks publication while owner/SMTP/Play/device gates are incomplete.
+
 - Account deletion: `delete-account` uses a live Auth user lookup, revokes sessions and hard-deletes
   only the caller. Existing FKs cascade game data. Local progress is cleared only after success.
   `delete-account.html` has an isolated in-memory session; never import cloud save or the game into it.

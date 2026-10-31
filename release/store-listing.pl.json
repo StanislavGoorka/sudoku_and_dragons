@@ -1,0 +1,7 @@
+{
+  "title": "Sudoku & Dragons",
+  "shortDescription": "Rozwiązuj sudoku, pokonuj smoki i rywalizuj w pojedynkach",
+  "fullDescription": "Każda cyfra to cios. W Sudoku & Dragons rozwiązujesz planszę sudoku, aby walczyć ze smokami. Poprawne cyfry zadają obrażenia, a zamknięcie kwadratu 3×3 podwaja siłę ciosu. Błędy kosztują punkty życia. Smok ładuje też własny atak, więc liczy się rytm rozwiązywania.\n\nKAMPANIA\nPrzejdź 12 etapów w trzech krainach: Zielonej Dolinie, Ognistych Szczytach i Księżycowych Ruinach. Każdy boss ma własny sposób walki. Zbieraj gwiazdki, zdobywaj osiągnięcia i wybieraj wygląd planszy, smoka oraz efektów.\n\nPOJEDYNKI\nZagraj na wspólnej planszy z drugim graczem przez internet. Utwórz pokój dla znajomego lub wyszukaj przeciwnika. Dostępny jest też wyraźnie oznaczony trening z botem.\n\nWYZWANIE DNIA\nKażda kategoria trudności otrzymuje wspólną planszę na dzień UTC. Wyniki rankingowe są sprawdzane przez serwer. Tryb offline pozostaje dostępny bez udziału w rankingu.\n\nRĘCZNE NOTATKI\nZapisuj własne kandydaty w polach. Gra nie uzupełnia ich automatycznie i nie skreśla notatek za Ciebie.\n\nPRZERWIJ I WRÓĆ\nRozpoczęta walka solo zapisuje się na urządzeniu. Opcjonalne konto e-mail pozwala synchronizować postęp. Internet jest wymagany do pojedynków, rankingu i synchronizacji; kampania działa offline.\n\nGra jest po polsku. Muzykę, dźwięki, wibracje i raportowanie błędów możesz wyłączyć w ustawieniach.",
+  "category": "GAME_PUZZLE",
+  "defaultLanguage": "pl-PL"
+}

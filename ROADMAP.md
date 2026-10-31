@@ -36,3 +36,5 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
    przewijanie wysokich okien oraz testy 360×640 / 375×812 (`PHONE_UX.md`).
 9. [ ] **Domknięcie konta** – kod usuwania konta, strona web i testy gotowe; pozostaje docelowy SMTP,
    dostarczanie maili, dane administratora i publikacja stron (`ACCOUNT_RELEASE.md`).
+10. [ ] **Wydanie testowe Google Play** – podpisany AAB, wersjonowanie, materiały i plan testów
+    przygotowane (`release/README.md`); pozostają dane właściciela, Play Console i testy urządzeń.
