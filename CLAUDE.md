@@ -40,9 +40,14 @@ code and comments are English.
 - `npm run function:bundle`: copy `src/core` into `supabase/functions/duel/core/` (gitignored) before deploying the
   `duel` function (MCP `deploy_edge_function` with `index.ts` + every `core/**` file, verify_jwt on).
   Redeploy whenever core rules change, or the server judges by old rules.
-- `npm run test:server`: end-to-end check of the deployed function with fresh anonymous players (rooms,
+- `npm run test:integration`: end-to-end check of the local function with fresh anonymous players (rooms,
   matchmaking, moves, forfeits, rematches, a turn running out, and that nobody can read solutions, other
-  players' duels or saves). It waits out one full turn, so it takes about 40 s; run it in the background.
+  players' duels or saves). Requires a running local Supabase stack; starts the function worker and
+  cleans all users it creates. `test:server` is the lower-level runner: explicit loopback test credentials
+  required, no production fallback. It waits out one full turn; see `TESTING.md`.
+- `npm run test:e2e`: Playwright mobile-browser regressions of restart, resume and network recovery.
+  Network faults are deterministic; actual Auth/RLS/function integration runs in the separate local stack.
+  `.github/workflows/ci.yml` runs both suites, types and the build on push/PR without production secrets.
 - `npm run test:matchmaking`: PostgreSQL regression tests of the actual migrations, including
   simultaneous requests to an empty queue and rollback of an incomplete duel. Standard
   `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD` select a local test server. Creates and drops its own temporary
@@ -155,7 +160,8 @@ code and comments are English.
   drive the connection label. Digits wait for reconnection; manual notes remain usable. A successful
   re-read discards uncertain predictions rather than resending them. REST/function calls time out after
   10 s. `recordDuelOnce` stores a local result receipt with progress before end animations, so a resumed
-  finished duel cannot pay twice. Leaving the end screen/forfeiting clears the recovery pointer.
+  finished duel cannot pay twice. Leaving the end screen clears the pointer; forfeiting clears it and
+  records the actual result only after server confirmation. An unreachable forfeit remains resumable.
   `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
   Solo battles checkpoint locally in `_soloBattle` inside the progress JSON: puzzle, grid, manual notes,
   selection, HP, enemy charge, elapsed time, mistakes and campaign/daily identity. `progress/battleSave.ts`

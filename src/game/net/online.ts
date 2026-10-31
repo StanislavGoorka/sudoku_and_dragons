@@ -196,13 +196,19 @@ export const online = {
  * Leaves a duel in the background: gives it up, or stops waiting for a rival. The screen moves on
  * at once; a request that does not get through is tried twice more.
  */
-export function leaveDuel(duelId: string, attempts = 3): void {
-  online.leave(duelId).catch((error: unknown) => {
+export async function leaveDuel(duelId: string, attempts = 3): Promise<DuelRow | undefined> {
+  try {
+    const result = await online.leave(duelId);
+    // The duel may already have ended before this request. Read its actual result in that case.
+    return result.duel ?? (await findDuel(duelId)) ?? undefined;
+  } catch (error: unknown) {
     const code = error instanceof OnlineError ? error.code : 'network';
     if (attempts > 1 && ['network', 'server-error', 'conflict'].includes(code)) {
-      setTimeout(() => leaveDuel(duelId, attempts - 1), 1000);
+      await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+      return leaveDuel(duelId, attempts - 1);
     }
-  });
+    return undefined;
+  }
 }
 
 export async function fetchDuel(id: string): Promise<DuelRow> {

@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Tests, build and browser recovery
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v6
+        if: failure()
+        with:
+          name: browser-diagnostics
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+      - uses: actions/upload-artifact@v6
+        with:
+          name: web-build
+          path: dist/
+          retention-days: 7
+
+  integration:
+    name: Isolated Supabase and matchmaking
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run function:bundle
+      - name: Start disposable local Supabase
+        run: npx supabase start -x studio,postgres-meta,storage-api,imgproxy,mailpit,logflare,vector,supavisor
+      - name: Test concurrent matchmaking in PostgreSQL
+        run: npm run test:matchmaking
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 54322
+          PGUSER: postgres
+          PGPASSWORD: postgres
+      - name: Test the actual Edge Function, Auth and RLS
+        run: npm run test:integration
+      - uses: actions/upload-artifact@v6
+        if: failure()
+        with:
+          name: integration-diagnostics
+          path: test-results/integration/
+          retention-days: 7
+      - name: Remove this job's local containers and data
+        if: always()
+        run: npx supabase stop --project-id sudoku-dragons-ci --no-backup

@@ -14,3 +14,10 @@ supabase/functions/duel/core/
 
 # Wrangler's scratch files (npm run deploy:web)
 .wrangler/
+
+# Local integration stack and browser diagnostics
+supabase/.temp/
+supabase/.branches/
+test-results/
+playwright-report/
+.cache/

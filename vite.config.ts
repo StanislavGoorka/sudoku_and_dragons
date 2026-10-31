@@ -10,7 +10,7 @@ export default defineConfig({
       // The native projects hold thousands of build files. Watching them is slow, and on Windows the
       // watcher's handles keep Gradle, Capacitor and our scripts from deleting or moving folders there.
       // supabase/ is server code the dev server never serves.
-      ignored: ['**/android/**', '**/ios/**', '**/supabase/**'],
+      ignored: ['**/android/**', '**/ios/**', '**/supabase/**', '**/test-results/**', '**/playwright-report/**', '**/.cache/**'],
     },
   },
   build: {

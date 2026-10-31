@@ -9,7 +9,7 @@ import { fireShot } from '../fx/hitEffects.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { DuelSync, type Prediction, type Snapshot } from '../net/duelSync.ts';
 import { onlineDuels, type DuelBackend } from '../net/duelBackend.ts';
-import { errorMessage, OnlineError, type DuelConnectionState, type DuelRow, type Me } from '../net/online.ts';
+import { errorMessage, OnlineError, supabase, type DuelConnectionState, type DuelRow, type Me } from '../net/online.ts';
 import { forgetDuel, rememberDuel } from '../net/duelRecovery.ts';
 import { OVERSCAN } from '../safeArea.ts';
 import { theme } from '../theme.ts';
@@ -622,10 +622,17 @@ export class DuelScreen extends Container {
           onTap: () => {
             this.closeModal();
             // The rival learns it from the server; nothing here waits for that.
-            this.backend.leave(this.duelId);
+            const leaving = this.backend.leave(this.duelId);
             if (this.backend.ranked) {
-              recordDuelOnce(this.me.id, this.duelId, false);
-              forgetDuel(this.duelId);
+              void Promise.resolve(leaving).then(async (row) => {
+                if (!row || (await supabase.auth.getSession()).data.session?.user.id !== this.me.id) return;
+                if (row.state.finished) {
+                  recordDuelOnce(this.me.id, this.duelId, row.state.winner === this.seat);
+                  forgetDuel(this.duelId);
+                } else if (row.status === 'cancelled') forgetDuel(this.duelId);
+              }).catch(() => {});
+              // An unreachable forfeit keeps its pointer: on restart the server decides whether to
+              // resume the duel or show its result. A local button press is not proof of a defeat.
             }
             this.options.onMenu();
           },

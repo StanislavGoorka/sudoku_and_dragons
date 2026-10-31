@@ -24,8 +24,8 @@ export interface DuelBackend {
   now(): number;
   move(duelId: string, cell: number, digit: number): Promise<{ duel: DuelRow; event: DuelEvent }>;
   claimTimeout(duelId: string): Promise<{ duel: DuelRow }>;
-  /** Gives up (or stops waiting), in the background. */
-  leave(duelId: string): void;
+  /** Gives up in the background. Online returns the confirmed row, or nothing when unreachable. */
+  leave(duelId: string): Promise<DuelRow | undefined> | void;
   /** { waiting } until the rival asks too, then the new duel. */
   rematch(duelId: string): Promise<{ waiting?: true; duel?: DuelRow; seat?: Seat }>;
   declineRematch(duelId: string): Promise<unknown>;

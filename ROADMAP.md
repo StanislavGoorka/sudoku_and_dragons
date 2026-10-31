@@ -21,5 +21,5 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
    z menu po restarcie aplikacji; potwierdzenie przed zastąpieniem walki i atomowy zapis wyniku.
 2. [x] **Powrót do pojedynku online** – odnalezienie aktywnej walki po restarcie, odświeżenie po
    odzyskaniu połączenia i czytelny status sieci.
-3. [ ] **Automatyczne testy w CI** – testy jednostkowe, typy, build i testy integracyjne w odizolowanym
+3. [x] **Automatyczne testy w CI** – testy jednostkowe, typy, build i testy integracyjne w odizolowanym
    środowisku Supabase z usuwaniem danych testowych.
