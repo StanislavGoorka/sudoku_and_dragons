@@ -6,7 +6,9 @@ ekranu unieważnia poprzednie pobranie. Wolne pobieranie pokazuje komunikat i po
 oferuje ponowienie. Błąd pobrania/uruchomienia głównego modułu ma też widoczny przycisk ponownego startu.
 
 Konto, synchronizacja chmury i odzyskiwanie pojedynku startują po pierwszej okazji do wyświetlenia
-menu. Nie czekają na wielosekundowy idle timeout; wejście do lobby lub konta ładuje je od razu.
+menu i dwóch kolejnych okazjach do malowania. Samo zamontowanie canvasa i znacznik gotowości mogą
+trafić do tej samej klatki; dodatkowe klatki chronią pierwszy widoczny obraz także na wolnym rendererze CI.
+Nie czekają na wielosekundowy idle timeout; wejście do lobby lub konta ładuje je od razu.
 Synchronizacja nie zamyka otwartego dialogu menu. `game-ready` i diagnostyka `boot-ms` odnoszą się do
 pierwszego ekranu po okazji do renderowania, również przy wejściu bezpośrednio do walki przez URL.
 

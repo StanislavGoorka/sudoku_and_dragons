@@ -130,12 +130,14 @@ export async function boot(): Promise<void> {
         performance.mark('game-ready');
         document.getElementById('startup')?.remove();
         reportBootDuration(performance.now());
-        setTimeout(() => {
+        // Mounting the canvas and marking readiness can share a frame. Give the browser
+        // two further paint opportunities before parsing account SDKs on a slow renderer.
+        requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
           void import('./net/cloudSave.ts').then(({ startCloudSave }) => startCloudSave())
             .catch((error) => reportDiagnostic('cloud_sync', 'cloud_sync', error));
           void import('./net/daily.ts').then(({ flushDailyResults }) => flushDailyResults()).catch(() => {});
           if (screenKind === 'menu' && !loading) void recoverOnline();
-        }, 0);
+        }, 0)));
       }));
     }
   };
