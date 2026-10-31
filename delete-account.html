@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Usuń konto — Sudoku &amp; Dragons</title><link rel="stylesheet" href="/src/web/legal.css"></head>
+<body><main>
+  <a href="/">← Wróć do gry</a><h1>Usuń konto Sudoku &amp; Dragons</h1>
+  <p>Możesz usunąć konto i jego dane bez instalowania aplikacji. Zaloguj się adresem i hasłem konta, które chcesz usunąć.</p>
+  <p>Usuniemy konto, profil, zapis w chmurze, wyniki rankingu i powiązane pojedynki. Operacja jest trwała. Anonimowe raporty techniczne nie zawierają identyfikatora konta i wygasają po 14 dniach (sprzątanie przy kolejnym raporcie).</p>
+  <p>Dane lokalne na innych telefonach pozostają do usunięcia w aplikacji lub przez wyczyszczenie jej danych. Konto gościa bez e-maila usuń na urządzeniu, na którym grasz: Konto → Usuń dane gościa.</p>
+  <form id="delete-form">
+    <label>E-mail<input id="email" type="email" autocomplete="username" required></label>
+    <label>Hasło<input id="password" type="password" autocomplete="current-password" required></label>
+    <label class="check"><input id="confirm" type="checkbox" required> Rozumiem, że konto i dane zostaną trwale usunięte.</label>
+    <button type="submit">Zaloguj i usuń konto bezpowrotnie</button>
+  </form>
+  <p id="result" role="status" aria-live="polite"></p>
+  <details><summary>Nie pamiętam hasła</summary><p>Podaj e-mail konta i wyślij kod. Jeżeli konto istnieje, otrzymasz wiadomość.</p>
+    <form id="recovery-form"><label>Kod z maila<input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}"></label>
+      <label>Nowe hasło<input id="new-password" type="password" autocomplete="new-password" minlength="6"></label>
+      <button id="send-code" type="button">Wyślij kod na podany e-mail</button><button type="submit">Ustaw nowe hasło</button>
+    </form>
+  </details>
+  <p><a href="/privacy.html">Polityka prywatności</a></p>
+</main><script type="module" src="/src/web/deleteAccount.ts"></script></body></html>

@@ -224,7 +224,7 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -245,6 +245,14 @@ otp_expiry = 3600
 # sender_name = "Admin"
 
 # Uncomment to customize email template
+[auth.email.template.email_change]
+subject = "Twój kod do Sudoku & Dragons"
+content_path = "./supabase/email-templates/change-email.html"
+
+[auth.email.template.recovery]
+subject = "Kod do nowego hasła w Sudoku & Dragons"
+content_path = "./supabase/email-templates/reset-password.html"
+
 # [auth.email.template.invite]
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
@@ -424,3 +432,8 @@ entrypoint = "./functions/duel/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/daily/index.ts"
+
+[functions.delete-account]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/delete-account/index.ts"

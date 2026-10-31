@@ -28,6 +28,7 @@ export default defineConfig({
     },
   },
   build: {
+    rollupOptions: { input: { game: 'index.html', deleteAccount: 'delete-account.html', privacy: 'privacy.html' } },
     target: 'es2022',
     sourcemap: 'hidden',
   },

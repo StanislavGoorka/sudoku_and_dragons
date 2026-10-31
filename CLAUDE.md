@@ -364,6 +364,12 @@ code and comments are English.
 
 ## Checking changes in the browser
 
+- Account deletion: `delete-account` uses a live Auth user lookup, revokes sessions and hard-deletes
+  only the caller. Existing FKs cascade game data. Local progress is cleared only after success.
+  `delete-account.html` has an isolated in-memory session; never import cloud save or the game into it.
+  `privacy.html` is a draft until the owner supplies public identity/contact. Hosted SMTP is not yet
+  configured; local email templates do not update hosted Auth. See `ACCOUNT_RELEASE.md`.
+
 - Phone controls: full keypads use `padHeight`/`padGeometry` (two rows below 480 px); only the shop
   passes the compact preview flag. Fight controls have 48 px targets; short-screen layout preserves
   board size by reducing the arena. `Modal` scrolls tall content (drag its panel or wheel), retaining

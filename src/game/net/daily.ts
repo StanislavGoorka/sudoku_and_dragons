@@ -15,6 +15,7 @@ function pending(): Pending[] {
   } catch { return []; }
 }
 function store(rows: Pending[]): void { try { localStorage.setItem(KEY, JSON.stringify(rows)); } catch { /* Play remains local. */ } }
+export function clearDailyResults(): void { try { localStorage.removeItem(KEY); } catch { /* Storage is unavailable. */ } }
 
 async function call<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('daily', { body, timeout: 10_000 });

@@ -62,6 +62,7 @@ try {
   assert(ready, 'Duel function did not become ready; see test-results/integration/functions.log');
   await run('scripts/test-duel-server.ts');
   await run('scripts/test-daily-server.ts');
+  await run('scripts/test-account-server.ts');
 } finally {
   await stop(functions);
   await log.close();

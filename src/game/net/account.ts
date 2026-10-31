@@ -1,6 +1,9 @@
 import type { AuthError, User } from '@supabase/supabase-js';
 import { emptyProgress } from '../progress/progress.ts';
-import { replaceProgress, saveActiveBattle } from '../progress/store.ts';
+import { clearLocalProgress, replaceProgress, saveActiveBattle } from '../progress/store.ts';
+import { clearDiagnosticQueue } from '../diagnostics/index.ts';
+import { clearDailyResults } from './daily.ts';
+import { requestAccountDeletion } from './accountDeletion.ts';
 import { forgetCloudBase, syncProgress } from './cloudSave.ts';
 import { randomNickname } from './nickname.ts';
 import { forgetDuel } from './duelRecovery.ts';
@@ -63,7 +66,8 @@ function checkCode(code: string): void {
 }
 
 /** A registration waiting for its e-mail to be confirmed. The password stays in memory only. */
-let pending: { email: string; password: string } | null = null;
+let pending: { email: string; password: string; confirmedUser?: string } | null = null;
+let recovery: { email: string; user: string } | null = null;
 
 export function pendingEmail(): string | null {
   return pending?.email ?? null;
@@ -88,8 +92,13 @@ export async function register(email: string, password: string): Promise<void> {
 export async function confirmRegistration(code: string): Promise<void> {
   if (!pending) throw new AccountError('unknown');
   checkCode(code);
-  const { error } = await supabase.auth.verifyOtp({ email: pending.email, token: code, type: 'email_change' });
-  if (error) fail(error);
+  if (!pending.confirmedUser) {
+    const registration = pending;
+    const { data, error } = await supabase.auth.verifyOtp({ email: pending.email, token: code, type: 'email_change' });
+    if (error) fail(error);
+    if (pending !== registration) throw new AccountError('account-changed');
+    pending.confirmedUser = data.user!.id;
+  }
   await finishRegistration();
 }
 
@@ -106,6 +115,9 @@ export async function checkRegistration(): Promise<boolean> {
 }
 
 async function finishRegistration(): Promise<void> {
+  if (pending?.confirmedUser && (await supabase.auth.getSession()).data.session?.user.id !== pending.confirmedUser) {
+    throw new AccountError('account-changed');
+  }
   const password = pending!.password;
   const { error } = await supabase.auth.updateUser({ password });
   if (error) fail(error);
@@ -136,18 +148,25 @@ export async function logIn(email: string, password: string): Promise<void> {
 /** Mails a code for a new password (nothing is mailed, and nothing said, if there is no such account). */
 export async function sendResetCode(email: string): Promise<void> {
   checkEmail(email);
+  recovery = null;
   const { error } = await supabase.auth.resetPasswordForEmail(email);
   if (error) fail(error);
 }
 
 /** Sets a new password with the code from the mail, and logs in. */
 export async function resetPassword(email: string, code: string, password: string): Promise<void> {
+  checkEmail(email);
   checkCode(code);
   checkPassword(password);
-  const verify = await supabase.auth.verifyOtp({ email, token: code, type: 'recovery' });
-  if (verify.error) fail(verify.error);
+  const session = (await supabase.auth.getSession()).data.session;
+  if (!recovery || recovery.email !== email || recovery.user !== session?.user.id) {
+    const verify = await supabase.auth.verifyOtp({ email, token: code, type: 'recovery' });
+    if (verify.error) fail(verify.error);
+    recovery = { email, user: verify.data.user!.id };
+  }
   const { error } = await supabase.auth.updateUser({ password });
   if (error) fail(error);
+  recovery = null;
   await afterLogIn();
 }
 
@@ -179,6 +198,21 @@ export async function logOut(): Promise<void> {
   replaceProgress(emptyProgress());
 }
 
+/** Deletes the signed-in account on the server before clearing any local progress. Guests may be local only. */
+export async function deleteAccount(): Promise<void> {
+  const session = (await supabase.auth.getSession()).data.session;
+  if (session) {
+    try { await requestAccountDeletion(supabase); }
+    catch { throw new AccountError('delete-unconfirmed'); }
+    // A response for a previous account must never clear a newly selected player's data.
+    if ((await supabase.auth.getSession()).data.session?.user.id !== session.user.id) throw new AccountError('account-changed');
+  }
+  await supabase.auth.signOut({ scope: 'local' });
+  user = null; pending = null; recovery = null;
+  forgetCloudBase(); forgetDuel(); clearDailyResults();
+  clearLocalProgress(); switchedAccount(randomNickname()); clearDiagnosticQueue();
+}
+
 /** Polish message for an account error. */
 export function accountErrorMessage(error: unknown): string {
   const code = error instanceof AccountError ? error.code : 'unknown';
@@ -187,6 +221,8 @@ export function accountErrorMessage(error: unknown): string {
     'short-password': `Hasło musi mieć co najmniej ${PASSWORD_MIN} znaków.`,
     'bad-code': 'Kod z maila to same cyfry.',
     'signed-in': 'Jesteś już zalogowany.',
+    'delete-unconfirmed': 'Nie potwierdzono usunięcia. Sprawdź połączenie. Jeśli konto już usunięto, logowanie nie będzie możliwe.',
+    'account-changed': 'Zmieniono konto podczas żądania. Odśwież ekran konta.',
     network: 'Brak połączenia z serwerem.',
     invalid_credentials: 'Zły e-mail albo hasło.',
     email_not_confirmed: 'Ten e-mail nie został jeszcze potwierdzony.',

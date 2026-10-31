@@ -25,6 +25,10 @@ export function reportDiagnostic(kind: DiagnosticKind, operation: DiagnosticOper
 }
 export function setDiagnosticScreen(screen: DiagnosticScreen): void { reporter?.setScreen(screen); }
 export function setDiagnosticsEnabled(enabled: boolean): void { reporter?.setEnabled(enabled); }
+export function clearDiagnosticQueue(): void {
+  reporter?.setEnabled(false);
+  reporter?.setEnabled(loadSettings().diagnostics);
+}
 export function reportBootDuration(ms: number): void { reporter?.capture('performance', 'boot', undefined, 'boot-ms', ms); }
 
 /** Configured by the authenticated network module: diagnostics never create an account on their own. */

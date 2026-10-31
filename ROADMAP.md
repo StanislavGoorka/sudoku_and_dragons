@@ -34,3 +34,5 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
    łagodniejszy skok finału i jednorazowe nagrody (`BALANCE.md`).
 8. [x] **Wygoda na telefonach** – większa klawiatura i kontrolki, kontrast, etykiety,
    przewijanie wysokich okien oraz testy 360×640 / 375×812 (`PHONE_UX.md`).
+9. [ ] **Domknięcie konta** – kod usuwania konta, strona web i testy gotowe; pozostaje docelowy SMTP,
+   dostarczanie maili, dane administratora i publikacja stron (`ACCOUNT_RELEASE.md`).

@@ -109,6 +109,15 @@ export function replaceProgress(next: Progress): boolean {
   return persisted;
 }
 
+/** Explicit account/data deletion also clears receipts and the local battle, even if writes are full. */
+export function clearLocalProgress(): void {
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* Storage is unavailable. */ }
+  battle = null;
+  duelResults.clear();
+  owner = { user: null, guest: true };
+  replaceProgress(emptyProgress());
+}
+
 /** Called when the progress was replaced from outside the game (screens showing it may redraw). */
 export function onProgressReplaced(listener: () => void): void {
   replaceListeners.push(listener);

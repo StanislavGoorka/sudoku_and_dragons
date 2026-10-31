@@ -232,13 +232,17 @@ export class AccountScreen extends Container {
         buttons = [
           { text: 'Załóż konto', variant: 'primary', onTap: () => this.openMode('register') },
           { text: 'Mam już konto', variant: 'secondary', onTap: () => this.openMode('login') },
+          { text: 'Usuń dane gościa', variant: 'secondary', onTap: () => this.confirmDelete(2) },
         ];
         break;
       case 'account':
         this.intro.text = `Zalogowano jako ${account.accountEmail() ?? ''}`;
         this.intro.style.fill = theme.text;
         if (!note) [note, noteColor] = [CLOUD_TEXT[cloudState()], theme.textMuted];
-        buttons = [{ text: 'Wyloguj się', variant: 'secondary', onTap: () => this.confirmLogOut() }];
+        buttons = [
+          { text: 'Wyloguj się', variant: 'secondary', onTap: () => this.confirmLogOut() },
+          { text: 'Usuń konto i dane', variant: 'secondary', onTap: () => this.confirmDelete(1) },
+        ];
         break;
       case 'register': {
         this.intro.text = 'Podaj e-mail i wymyśl hasło. Wyślemy kod, który potwierdzi adres.';
@@ -350,6 +354,8 @@ export class AccountScreen extends Container {
       }
     }
 
+    if (mode === 'guest' || mode === 'account') buttons.push({ text: 'Polityka prywatności', variant: 'secondary',
+      onTap: () => location.assign(new URL('privacy.html', document.baseURI).href) });
     for (const field of this.fields) this.form.addChild(field);
     buttons.forEach((spec, index) => {
       const button = new Button({ text: spec.text, variant: spec.variant, onTap: () => this.press(index) });
@@ -460,6 +466,22 @@ export class AccountScreen extends Container {
       this.nickField.value = localNickname();
       this.openMode('guest', 'Wylogowano. Grasz teraz jako gość.');
     });
+  }
+
+  private confirmDelete(index: number): void {
+    if (this.modal) return;
+    const modal = new Modal('Trwale usunąć dane?',
+      'Usuniemy konto, profil, zapis w chmurze, wyniki rankingu oraz powiązane pojedynki. Na tym telefonie zniknie też postęp solo i zakupy za gwiazdki. Tej operacji nie można cofnąć.', [
+        { text: 'Usuń bezpowrotnie', variant: 'primary', onTap: () => {
+          this.closeModal(); this.press(index, async () => {
+            await account.deleteAccount();
+            this.nickField.value = localNickname();
+            this.openMode('guest', 'Konto i dane usunięte. Grasz jako nowy gość.');
+          });
+        } },
+        { text: 'Anuluj', onTap: () => this.closeModal() },
+      ]);
+    this.modal = modal; this.addChild(modal); modal.layout(this.screenWidth, this.screenHeight); modal.show();
   }
 
   private closeModal(): void {
