@@ -14,7 +14,8 @@ import type { TrackId } from './audio/tracks.ts';
 import { DIFFICULTIES, loadDifficulty, saveStageId } from './difficulty.ts';
 import { readSafeArea, type Insets } from './safeArea.ts';
 import type { DuelBackend } from './net/duelBackend.ts';
-import type { DuelRow, Me } from './net/online.ts';
+import { connect, supabase, type DuelRow, type Me } from './net/online.ts';
+import { recoverDuel } from './net/duelRecovery.ts';
 import { startCloudSave } from './net/cloudSave.ts';
 import { AccountScreen } from './screens/AccountScreen.ts';
 import { MapScreen } from './screens/MapScreen.ts';
@@ -42,6 +43,7 @@ interface Screen extends Container {
   handleBack?(): boolean;
   /** The app went to the background. */
   pause?(): void;
+  resume?(): void;
   /** Its background music (the menu's, if not given). */
   readonly music?: TrackId;
 }
@@ -71,6 +73,8 @@ async function boot(): Promise<void> {
   document.getElementById('app')!.appendChild(app.canvas);
 
   let screen: Screen | null = null;
+  let navigation = 0;
+  let needsRecovery = true;
   let insets: Insets = readSafeArea();
   // Covers the whole display, safe-area margins included; screens draw on top of it.
   const backdrop = new Backdrop();
@@ -87,6 +91,7 @@ async function boot(): Promise<void> {
   };
 
   const show = (next: Screen) => {
+    navigation++;
     if (screen) {
       gsap.killTweensOf(screen);
       screen.destroy({ children: true });
@@ -181,6 +186,7 @@ async function boot(): Promise<void> {
         onNewBattle,
       }),
     );
+    if (!onNewBattle && needsRecovery) void recoverOnline();
   };
 
   const showMap = () => {
@@ -212,6 +218,26 @@ async function boot(): Promise<void> {
         backend,
       }),
     );
+  };
+
+  const recoverOnline = async (): Promise<void> => {
+    const expected = navigation;
+    try {
+      const me = await connect();
+      const joined = await recoverDuel(me);
+      const session = (await supabase.auth.getSession()).data.session;
+      // A late read must never interrupt another screen or restore the previous account's match.
+      if (navigation !== expected || session?.user.id !== me.id) return;
+      needsRecovery = false;
+      if (!joined) return;
+      if (joined.duel.status === 'waiting') {
+        show(new LobbyScreen({ onStart: startDuel, onMenu: showMenu, resume: { ...joined, me } }));
+      } else {
+        startDuel(joined.duel, joined.seat, me);
+      }
+    } catch {
+      // Offline solo play stays available; the lobby and returning to the app retry recovery.
+    }
   };
 
   // resizeTo applies the new size on the next frame, so lay out when the size actually changes.
@@ -253,17 +279,24 @@ async function boot(): Promise<void> {
       feedback.suspend();
     } else {
       feedback.resume();
+      screen?.resume?.();
+      if (screen instanceof MenuScreen) void recoverOnline();
     }
   });
   window.addEventListener('pagehide', () => screen?.pause?.());
   if (Capacitor.isNativePlatform()) {
     void App.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) screen?.pause?.();
+      else {
+        screen?.resume?.();
+        if (screen instanceof MenuScreen) void recoverOnline();
+      }
     });
     void App.addListener('backButton', () => {
       if (!screen?.handleBack?.()) void App.exitApp();
     });
   }
+  window.addEventListener('online', () => { if (screen instanceof MenuScreen) void recoverOnline(); });
 
   // The cloud save can bring in progress from another device; the menu shows stars and unlocked levels.
   onProgressReplaced(() => {

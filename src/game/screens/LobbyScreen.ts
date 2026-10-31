@@ -8,6 +8,7 @@ import {
   leaveDuel,
   localNickname,
   online,
+  supabase,
   watchDuel,
   type DuelRow,
   type Joined,
@@ -15,6 +16,7 @@ import {
 } from '../net/online.ts';
 import { DESIGNS } from '../art/dragonArt.ts';
 import { BotDuel } from '../net/botDuel.ts';
+import { forgetDuel, recoverDuel, rememberDuel } from '../net/duelRecovery.ts';
 import type { DuelBackend } from '../net/duelBackend.ts';
 import { chosenSkin, chosenTheme } from '../progress/progress.ts';
 import { progress } from '../progress/store.ts';
@@ -30,6 +32,7 @@ export interface LobbyOptions {
   /** A duel to open: online (judged by the server), or with `backend` a bot to train with. */
   onStart: (duel: DuelRow, seat: Seat, me: Me, backend?: DuelBackend) => void;
   onMenu: () => void;
+  resume?: Joined & { me: Me };
 }
 
 /** `duelId` and `code` are null while the server is still making the duel. */
@@ -79,10 +82,16 @@ export class LobbyScreen extends Container {
     this.options = options;
     this.backButton = new Button({ text: 'Wstecz', icon: 'back', onTap: () => this.handleBack() });
     this.addChild(this.content, this.backButton);
-    this.connect();
     this.render();
+    if (options.resume) {
+      this.ready = Promise.resolve(options.resume.me);
+      const { me, ...joined } = options.resume;
+      this.handleJoined(joined, me, joined.duel.mode === 'room'
+        ? { kind: 'room', duelId: joined.duel.id, code: joined.duel.code }
+        : { kind: 'searching', duelId: joined.duel.id });
+    } else this.connect();
     // Before the first duel, while no turn clock is running yet.
-    if (!lessonSeen('duel')) this.showRules();
+    if (!options.resume && !lessonSeen('duel')) this.showRules();
   }
 
   layout(width: number, height: number): void {
@@ -166,7 +175,18 @@ export class LobbyScreen extends Container {
 
   /** Signs in in the background; the lobby works meanwhile and requests wait for it. */
   private connect(): void {
-    const ready = connect();
+    const ready = connect().then(async (me) => {
+      const joined = await recoverDuel(me);
+      if ((await supabase.auth.getSession()).data.session?.user.id !== me.id) throw new Error('account-changed');
+      if (!this.destroyed && joined) {
+        this.attempt++;
+        this.closeRules();
+        this.handleJoined(joined, me, joined.duel.mode === 'room'
+          ? { kind: 'room', duelId: joined.duel.id, code: joined.duel.code }
+          : { kind: 'searching', duelId: joined.duel.id });
+      }
+      return me;
+    });
     this.ready = ready;
     ready.catch((error: unknown) => {
       // An idle lobby shows the failure at once; a request under way reports it itself.
@@ -439,6 +459,7 @@ export class LobbyScreen extends Container {
       return;
     }
     let joined: Joined;
+    if (!current()) return;
     try {
       joined = await send();
     } catch (error) {
@@ -454,16 +475,21 @@ export class LobbyScreen extends Container {
 
   /** Starts the duel right away, or waits for an opponent while showing `waitingView`. */
   private handleJoined(joined: Joined, me: Me, waitingView: View): void {
-    if (joined.duel.status === 'playing') {
+    if (this.destroyed) return;
+    rememberDuel(joined.duel, me);
+    if (joined.duel.status === 'playing' || joined.duel.status === 'finished') {
       this.options.onStart(joined.duel, joined.seat, me);
       return;
     }
     this.show(waitingView);
+    const waitingAttempt = this.attempt;
     const onRow = (row: DuelRow) => {
+      if (this.destroyed || this.attempt !== waitingAttempt) return;
       if (row.status === 'playing') {
         this.stopWaiting();
         this.options.onStart(row, joined.seat, me);
       } else if (row.status === 'cancelled') {
+        forgetDuel(row.id);
         this.stopWaiting();
         this.show({ kind: 'home' });
       }
@@ -501,7 +527,10 @@ export class LobbyScreen extends Container {
     this.stopWaiting();
     this.show({ kind: 'home' });
     // A stale waiting duel is cancelled by the server anyway after 30 minutes.
-    if (view.duelId) leaveDuel(view.duelId);
+    if (view.duelId) {
+      forgetDuel(view.duelId);
+      leaveDuel(view.duelId);
+    }
   }
 
   private cancelJoin(code: string): void {

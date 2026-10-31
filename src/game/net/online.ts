@@ -56,7 +56,7 @@ export function serverNow(): number {
 
 async function call<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
   const sentAt = Date.now();
-  const { data, error } = await supabase.functions.invoke('duel', { body: { action, ...payload } });
+  const { data, error } = await supabase.functions.invoke('duel', { body: { action, ...payload }, timeout: 10_000 });
   if (error) {
     let code = 'network';
     try {
@@ -206,9 +206,25 @@ export function leaveDuel(duelId: string, attempts = 3): void {
 }
 
 export async function fetchDuel(id: string): Promise<DuelRow> {
-  const { data, error } = await supabase.from('duels').select().eq('id', id).single();
+  const row = await findDuel(id);
+  if (!row) throw new OnlineError('no-such-duel');
+  return row;
+}
+
+export async function findDuel(id: string): Promise<DuelRow | null> {
+  const { data, error } = await supabase.from('duels').select().eq('id', id)
+    .abortSignal(AbortSignal.timeout(10_000)).maybeSingle();
   if (error) throw new OnlineError('network');
-  return data as DuelRow;
+  return data as DuelRow | null;
+}
+
+/** Explicit player filter in addition to RLS; no local ID is required to resume a playing duel. */
+export async function findActiveDuel(user: string): Promise<DuelRow | null> {
+  const { data, error } = await supabase.from('duels').select().eq('status', 'playing')
+    .or(`player0.eq.${user},player1.eq.${user}`).order('updated_at', { ascending: false })
+    .limit(1).abortSignal(AbortSignal.timeout(10_000)).maybeSingle();
+  if (error) throw new OnlineError('network');
+  return data as DuelRow | null;
 }
 
 /** Profiles read this session, so a rematch shows the rival's name, dragon and effect at once. */
@@ -234,16 +250,27 @@ export async function fetchProfile(playerId: string): Promise<Profile> {
  * Calls `onRow` with every new version of the duel as it changes on the server, starting with
  * the current one once the live connection is up. Returns a function that stops watching.
  */
-export function watchDuel(id: string, onRow: (row: DuelRow) => void): () => void {
+export type DuelConnectionState = 'connecting' | 'connected' | 'offline';
+
+export function watchDuel(id: string, onRow: (row: DuelRow) => void, onConnection?: (state: DuelConnectionState) => void): () => void {
+  let active = true;
+  onConnection?.('connecting');
+  const receive = (row: DuelRow) => {
+    if (!active) return;
+    onRow(row);
+    onConnection?.('connected');
+  };
   const channel = supabase
     .channel(`duel-${id}`)
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'duels', filter: `id=eq.${id}` }, (payload) =>
-      onRow(payload.new as DuelRow),
+      receive(payload.new as DuelRow),
     )
     .subscribe((status) => {
-      if (status === 'SUBSCRIBED') void fetchDuel(id).then(onRow, () => {});
+      if (!active) return;
+      if (status === 'SUBSCRIBED') void fetchDuel(id).then(receive, () => { if (active) onConnection?.('offline'); });
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') onConnection?.('offline');
     });
-  return () => void supabase.removeChannel(channel);
+  return () => { active = false; void supabase.removeChannel(channel); };
 }
 
 /** Polish message for an online error code. */

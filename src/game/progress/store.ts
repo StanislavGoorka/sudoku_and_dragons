@@ -1,5 +1,5 @@
 import { profileSuffix } from '../profile.ts';
-import { emptyProgress, parseProgress, type Progress } from './progress.ts';
+import { emptyProgress, parseProgress, recordDuel, type Progress, type Reward } from './progress.ts';
 import { parseSavedBattle, type SavedBattle } from './battleSave.ts';
 
 const STORAGE_KEY = `sudoku-dragons.progress${profileSuffix}`;
@@ -13,6 +13,7 @@ export interface ProgressOwner {
 // Unknown for legacy saves. Losing the separate cloud-base key must not turn an account into a guest.
 let owner: ProgressOwner | null = null;
 let battle: SavedBattle | null = null;
+let duelResults = new Set<string>();
 
 function load(): Progress {
   try {
@@ -23,6 +24,8 @@ function load(): Progress {
     }
     const saved: unknown = JSON.parse(raw);
     battle = parseSavedBattle((saved as { _soloBattle?: unknown } | null)?._soloBattle);
+    const results = (saved as { _duelResults?: unknown } | null)?._duelResults;
+    if (Array.isArray(results)) duelResults = new Set(results.filter((id): id is string => typeof id === 'string'));
     const candidate = (saved as { _cloudOwner?: ProgressOwner } | null)?._cloudOwner;
     if (candidate && (candidate.user === null || typeof candidate.user === 'string') && typeof candidate.guest === 'boolean') {
       owner = { user: candidate.user, guest: candidate.guest };
@@ -44,6 +47,16 @@ export function activeBattle(): SavedBattle | null {
 export function saveActiveBattle(next: SavedBattle | null): boolean {
   battle = next;
   return persist();
+}
+
+/** A restarted end screen cannot count the same online result again. Receipt and reward are atomic. */
+export function recordDuelOnce(user: string, id: string, won: boolean): Reward | null {
+  const key = `${user}:${id}`;
+  if (duelResults.has(key)) return null;
+  duelResults.add(key);
+  const reward = recordDuel(progress, won);
+  saveProgress();
+  return reward;
 }
 
 export function progressOwner(): ProgressOwner | null {
@@ -70,7 +83,7 @@ export function saveProgress(): boolean {
 function persist(): boolean {
   let persisted = false;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...progress, _cloudOwner: owner, _soloBattle: battle }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...progress, _cloudOwner: owner, _soloBattle: battle, _duelResults: [...duelResults] }));
     persisted = true;
   } catch {
     // Keep playing; nothing else depends on the saved copy.

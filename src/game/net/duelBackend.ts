@@ -9,6 +9,7 @@ import {
   watchDuel,
   type DuelRow,
   type Profile,
+  type DuelConnectionState,
 } from './online.ts';
 
 /**
@@ -30,7 +31,7 @@ export interface DuelBackend {
   declineRematch(duelId: string): Promise<unknown>;
   fetchDuel(duelId: string): Promise<DuelRow>;
   /** Calls `onRow` with every new version of the duel; returns a function that stops it. */
-  watch(duelId: string, onRow: (row: DuelRow) => void): () => void;
+  watch(duelId: string, onRow: (row: DuelRow) => void, onConnection?: (state: DuelConnectionState) => void): () => void;
   fetchProfile(playerId: string): Promise<Profile>;
   knownProfile(playerId: string): Profile | undefined;
 }

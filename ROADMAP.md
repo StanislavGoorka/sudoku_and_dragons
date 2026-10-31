@@ -19,7 +19,7 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
 
 1. [x] **Wznawianie walki solo** – lokalny zapis planszy, notatek, HP, czasu i licznika ataku; wznowienie
    z menu po restarcie aplikacji; potwierdzenie przed zastąpieniem walki i atomowy zapis wyniku.
-2. [ ] **Powrót do pojedynku online** – odnalezienie aktywnej walki po restarcie, odświeżenie po
+2. [x] **Powrót do pojedynku online** – odnalezienie aktywnej walki po restarcie, odświeżenie po
    odzyskaniu połączenia i czytelny status sieci.
 3. [ ] **Automatyczne testy w CI** – testy jednostkowe, typy, build i testy integracyjne w odizolowanym
    środowisku Supabase z usuwaniem danych testowych.

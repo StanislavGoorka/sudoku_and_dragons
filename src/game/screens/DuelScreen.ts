@@ -9,7 +9,8 @@ import { fireShot } from '../fx/hitEffects.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { DuelSync, type Prediction, type Snapshot } from '../net/duelSync.ts';
 import { onlineDuels, type DuelBackend } from '../net/duelBackend.ts';
-import { errorMessage, OnlineError, type DuelRow, type Me } from '../net/online.ts';
+import { errorMessage, OnlineError, type DuelConnectionState, type DuelRow, type Me } from '../net/online.ts';
+import { forgetDuel, rememberDuel } from '../net/duelRecovery.ts';
 import { OVERSCAN } from '../safeArea.ts';
 import { theme } from '../theme.ts';
 import { BoardView } from '../ui/BoardView.ts';
@@ -17,9 +18,9 @@ import { Button } from '../ui/Button.ts';
 import { DuelArena } from '../ui/DuelArena.ts';
 import { Modal } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
-import { chosenEffect, chosenSkin, chosenTheme, recordDuel } from '../progress/progress.ts';
+import { chosenEffect, chosenSkin, chosenTheme, type Reward } from '../progress/progress.ts';
 import { rewardLines } from '../progress/rewardText.ts';
-import { progress, saveProgress } from '../progress/store.ts';
+import { progress, recordDuelOnce } from '../progress/store.ts';
 import { fightLayout } from './fightLayout.ts';
 
 export interface DuelScreenOptions {
@@ -121,6 +122,14 @@ export class DuelScreen extends Container {
   private readonly rivalTimer: number;
   private screenWidth = 0;
   private screenHeight = 0;
+  private connection: DuelConnectionState = 'connected';
+  private refreshing = false;
+  private reward: Reward | null = null;
+  private readonly connectionLabel = new Text({ text: '', style: {
+    fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 14, fill: theme.textMuted,
+  } });
+  private readonly onOnline = () => this.resume();
+  private readonly onOffline = () => this.setConnection('offline');
 
   constructor(row: DuelRow, me: Me, seat: Seat, options: DuelScreenOptions) {
     super();
@@ -129,6 +138,7 @@ export class DuelScreen extends Container {
     this.me = me;
     this.seat = seat;
     this.options = options;
+    if (this.backend.ranked) rememberDuel(row, me);
     // The board has one solution, so the client finds it too; it only predicts with it.
     const solution = solve(row.state.board);
     if (!solution) throw new Error(`Duel ${row.id} has an unsolvable board`);
@@ -157,12 +167,15 @@ export class DuelScreen extends Container {
     this.hurtFlash.eventMode = 'none';
     this.hurtFlash.alpha = 0;
     this.addChild(this.arena, this.leaveButton, this.notesButton, this.board, this.pad, this.hurtFlash, this.fx);
+    this.connectionLabel.anchor.set(0.5, 0);
+    this.connectionLabel.visible = this.backend.ranked;
+    this.addChild(this.connectionLabel);
 
-    this.stopWatching = this.backend.watch(this.duelId, (next) => this.applyRow(next));
+    this.stopWatching = this.backend.watch(this.duelId, (next) => this.applyRow(next), (state) => this.setConnection(state));
     // A safety net for missed live updates: during the duel, and after it while a rematch is still possible.
     this.pollTimer = window.setInterval(() => {
       if (this.sending || this.switching || this.rematch.declined) return;
-      void this.backend.fetchDuel(this.duelId).then((next) => this.applyRow(next), () => {});
+      void this.refresh();
     }, 4000);
     if (rivalId) {
       void this.backend.fetchProfile(rivalId).then((profile) => {
@@ -177,14 +190,31 @@ export class DuelScreen extends Container {
     this.rivalTimer = window.setTimeout(() => {
       if (!this.arena.rivalShown) this.showRivalDragon(null);
     }, RIVAL_PROFILE_WAIT_MS);
+    this.showState(this.state);
     this.updateTurn(false);
+    if (this.backend.ranked) {
+      window.addEventListener('online', this.onOnline);
+      window.addEventListener('offline', this.onOffline);
+      this.setConnection(navigator.onLine ? 'connecting' : 'offline');
+      void this.refresh();
+    }
+    if (row.state.finished) {
+      if (!this.arena.rivalShown) this.arena.showRival(rivalDesign(null));
+      void this.showEnd(row.last_event);
+    }
   }
 
   layout(width: number, height: number): void {
     this.screenWidth = width;
     this.screenHeight = height;
 
-    const { arenaY, arenaHeight, boardY, boardSize, padY, padHeight, left, columnWidth } = fightLayout(width, height);
+    const statusHeight = this.backend.ranked ? 24 : 0;
+    const areas = fightLayout(width, height - statusHeight);
+    const { arenaHeight, boardSize, padHeight, left, columnWidth } = areas;
+    const arenaY = areas.arenaY + statusHeight;
+    const boardY = areas.boardY + statusHeight;
+    const padY = areas.padY + statusHeight;
+    this.connectionLabel.position.set(width / 2, 3);
     const buttonSize = 36;
     this.leaveButton.position.set(left + 7, arenaY + 5);
     this.leaveButton.layout(buttonSize, buttonSize);
@@ -205,7 +235,7 @@ export class DuelScreen extends Container {
   /** Every frame: a turn that ran out, the turn countdown and its last-seconds ticks. */
   update(deltaMs: number): void {
     if (this.switching) return;
-    this.checkDeadline();
+    if (this.connection === 'connected') this.checkDeadline();
     const { state, turnStartedAt } = this.sync.shown;
     if (state.finished || turnStartedAt === null) return;
     const total = DUEL_RULES.turnSeconds;
@@ -265,6 +295,8 @@ export class DuelScreen extends Container {
   }
 
   override destroy(options?: DestroyOptions): void {
+    window.removeEventListener('online', this.onOnline);
+    window.removeEventListener('offline', this.onOffline);
     this.stopWatching();
     window.clearInterval(this.pollTimer);
     window.clearTimeout(this.sendTimer);
@@ -274,6 +306,39 @@ export class DuelScreen extends Container {
     killTweens(this.board, this.pad);
     if (this.intro) killTweens(this.intro.scale);
     super.destroy(options);
+  }
+
+  /** A mobile app can miss every Realtime update while suspended. Re-read before accepting input. */
+  resume(): void {
+    if (!this.backend.ranked || this.destroyed) return;
+    this.setConnection('connecting');
+    void this.refresh();
+  }
+
+  private setConnection(state: DuelConnectionState): void {
+    if (this.destroyed || !this.backend.ranked) return;
+    const previous = this.connection;
+    this.connection = state;
+    this.connectionLabel.text = state === 'connected' ? 'Połączono' : state === 'connecting'
+      ? 'Łączę ponownie…' : 'Brak połączenia · czekam na internet';
+    this.connectionLabel.style.fill = state === 'connected' ? theme.textMuted : theme.gold;
+    if (state === 'connected' && previous !== 'connected') {
+      // The last request may already have landed. Never replay uncertain input after reconnection.
+      this.rollBack(null);
+      this.pump();
+    }
+  }
+
+  private async refresh(): Promise<void> {
+    if (this.refreshing || this.destroyed || this.switching) return;
+    this.refreshing = true;
+    try {
+      const row = await this.backend.fetchDuel(this.duelId);
+      this.applyRow(row);
+      this.setConnection('connected');
+    } catch {
+      this.setConnection('offline');
+    } finally { this.refreshing = false; }
   }
 
   /**
@@ -293,12 +358,16 @@ export class DuelScreen extends Container {
 
   private handleDigit(digit: number): void {
     if (this.modal || this.switching) return;
-    this.checkDeadline();
+    if (this.connection === 'connected') this.checkDeadline();
     if (this.state.finished) return;
     const cell = this.board.selected;
     if (cell === null || this.board.board[cell] !== 0) return;
     if (this.notesMode) {
       if (this.board.toggleNote(cell, digit)) feedback.select();
+      return;
+    }
+    if (this.connection !== 'connected') {
+      this.toast('Czekam na połączenie', theme.gold);
       return;
     }
     if (this.state.turn !== this.seat) {
@@ -339,7 +408,7 @@ export class DuelScreen extends Container {
 
   /** Sends the next prediction to the server. One at a time, so the server sees them in order. */
   private pump(): void {
-    if (this.sending || this.destroyed || this.switching) return;
+    if (this.sending || this.destroyed || this.switching || this.connection !== 'connected') return;
     const prediction = this.sync.nextToSend();
     if (!prediction) return;
     const delay = prediction.sendAt - this.backend.now();
@@ -365,7 +434,10 @@ export class DuelScreen extends Container {
   /** A request failed: see what the server has now, then try again or take the predictions back. */
   private async handleRefusal(prediction: Prediction, error: unknown): Promise<void> {
     // The action may have landed after all, or the duel moved on without it.
-    await this.backend.fetchDuel(this.duelId).then((row) => this.applyRow(row), () => {});
+    await this.backend.fetchDuel(this.duelId).then((row) => {
+      this.applyRow(row);
+      this.setConnection('connected');
+    }, () => this.setConnection('offline'));
     if (this.destroyed || this.switching || !this.sync.isPending(prediction)) return;
     const code = error instanceof OnlineError ? error.code : 'network';
     if (RETRIED.has(code) && prediction.retries < 3) {
@@ -552,8 +624,8 @@ export class DuelScreen extends Container {
             // The rival learns it from the server; nothing here waits for that.
             this.backend.leave(this.duelId);
             if (this.backend.ranked) {
-              recordDuel(progress, false);
-              saveProgress();
+              recordDuelOnce(this.me.id, this.duelId, false);
+              forgetDuel(this.duelId);
             }
             this.options.onMenu();
           },
@@ -583,6 +655,8 @@ export class DuelScreen extends Container {
     const winner = this.state.winner;
     const won = winner === this.seat;
     const draw = winner === null;
+    // Persist before waiting for a hit/death animation, including on a restored finished duel.
+    if (this.backend.ranked) this.reward = recordDuelOnce(this.me.id, this.duelId, won);
     // Let the last hit land (shown when it was played, maybe before the server confirmed it),
     // then the loser's dragon falls.
     const since = (performance.now() - (this.finishShownAt ?? performance.now())) / 1000;
@@ -600,9 +674,7 @@ export class DuelScreen extends Container {
       this.endMessage = event.seat === this.seat ? 'Poddałeś pojedynek.' : `${this.rivalName} opuścił pojedynek.`;
     }
     if (this.backend.ranked) {
-      const reward = recordDuel(progress, won);
-      saveProgress();
-      this.endMessage = [this.endMessage, ...rewardLines(reward, progress.stars)].join('\n');
+      if (this.reward) this.endMessage = [this.endMessage, ...rewardLines(this.reward, progress.stars)].join('\n');
     } else {
       this.endMessage += '\nTrening z botem nie daje gwiazdek.';
     }
@@ -755,6 +827,7 @@ export class DuelScreen extends Container {
 
   /** Leaving the end screen tells the rival not to wait for a rematch. */
   private leaveEnd(go: () => void): void {
+    if (this.backend.ranked) forgetDuel(this.duelId);
     if (!this.switching && !this.rematch.declined && !this.rematch.next) {
       void this.backend.declineRematch(this.duelId).catch(() => {});
     }

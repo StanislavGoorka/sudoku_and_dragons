@@ -148,6 +148,14 @@ code and comments are English.
   tested: `BOT_LEVELS` by difficulty set the mistake rate, think time and whether it plays for damage and
   keeps the player from closing boxes; `moveScore`, `botMove`). Bot duels are not `ranked`: no stars, no
   records, and the end dialog says so; a rematch starts a new board at once.
+  `net/duelRecovery.ts` remembers only a duel ID plus its owner. Startup, foreground/online and entering
+  the lobby recover the match under RLS; a lost local pointer falls back to the account's latest playing
+  duel. Waiting rooms and results reached while away resume too. Navigation and account checks discard
+  late recovery responses. Realtime status, browser network events, foreground refresh and a 4 s poll
+  drive the connection label. Digits wait for reconnection; manual notes remain usable. A successful
+  re-read discards uncertain predictions rather than resending them. REST/function calls time out after
+  10 s. `recordDuelOnce` stores a local result receipt with progress before end animations, so a resumed
+  finished duel cannot pay twice. Leaving the end screen/forfeiting clears the recovery pointer.
   `GameScreen` asks `core` what a move does, then plays it out; the views never decide game rules.
   Solo battles checkpoint locally in `_soloBattle` inside the progress JSON: puzzle, grid, manual notes,
   selection, HP, enemy charge, elapsed time, mistakes and campaign/daily identity. `progress/battleSave.ts`

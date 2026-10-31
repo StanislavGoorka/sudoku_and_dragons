@@ -3,6 +3,7 @@ import { emptyProgress } from '../progress/progress.ts';
 import { replaceProgress, saveActiveBattle } from '../progress/store.ts';
 import { forgetCloudBase, syncProgress } from './cloudSave.ts';
 import { randomNickname } from './nickname.ts';
+import { forgetDuel } from './duelRecovery.ts';
 import { connect, localNickname, OnlineError, supabase, switchedAccount } from './online.ts';
 
 /**
@@ -174,6 +175,7 @@ export async function logOut(): Promise<void> {
   forgetCloudBase();
   switchedAccount(randomNickname());
   saveActiveBattle(null);
+  forgetDuel();
   replaceProgress(emptyProgress());
 }
 
