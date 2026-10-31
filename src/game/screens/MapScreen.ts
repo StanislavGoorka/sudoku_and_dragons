@@ -6,7 +6,7 @@ import { lookOf } from '../enemies.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { currentStage, isStageUnlocked, stageRecord } from '../progress/progress.ts';
 import { progress } from '../progress/store.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { Button } from '../ui/Button.ts';
 import { DragonView } from '../ui/DragonView.ts';
 import { drawLock } from '../ui/lock.ts';
@@ -31,10 +31,10 @@ const NODES: [number, number][] = [
 /** A finger that moved this far is scrolling, not tapping a node. */
 const DRAG_SLOP = 8;
 
-function label(text: string, fontSize: number, fill: number, fontWeight: '500' | '700' | '800' = '800'): Text {
+function label(text: string, fontSize: number, fill: number, fontWeight: '500' | '700' | '600' = '600'): Text {
   return new Text({
     text,
-    style: { fontFamily: theme.fontFamily, fontWeight, fontSize, fill, stroke: { color: theme.panelLip, width: 4, join: 'round' } },
+    style: { fontFamily: theme.fontFamily, fontWeight, fontSize, fill },
   });
 }
 
@@ -63,20 +63,16 @@ class StageNode extends Container {
     this.bossLabel?.anchor.set(0.5, 1);
     this.addChild(this.frame, this.mask_, this.dragon, this.marks);
     if (this.bossLabel) this.addChild(this.bossLabel);
-    if (this.next) gsap.fromTo(this.frame, { alpha: 1 }, { alpha: 0.55, duration: 0.7, yoyo: true, repeat: -1, ease: 'sine.inOut' });
   }
 
   layout(radius: number): void {
     const r = this.stage.boss ? radius * 1.22 : radius;
-    const ring = this.next ? theme.gold : this.open ? 0xffffff : theme.panelLip;
+    const ring = this.next ? theme.buttonPrimary : theme.panelLight;
     this.frame
       .clear()
-      .circle(0, 4, r + 4)
-      .fill(theme.panelLip)
-      .circle(0, 0, r + 4)
-      .fill(ring)
       .circle(0, 0, r)
-      .fill(this.open ? theme.panelLight : theme.hpTrack);
+      .fill(theme.panel)
+      .stroke({ width: this.next ? 2 : 1, color: ring });
     this.mask_.clear().circle(0, 0, r).fill(0xffffff);
     this.dragon.layout(r * 2.3);
     this.dragon.position.set(-r * 0.05, r * 0.15);
@@ -102,6 +98,7 @@ class RegionPanel extends Container {
   readonly region: Region;
   readonly nodes: StageNode[];
   private readonly scene: Scene;
+  private readonly panel = new Graphics();
   private readonly path = new Graphics();
   private readonly title: Text;
   private readonly count: Text;
@@ -112,6 +109,7 @@ class RegionPanel extends Container {
     super();
     this.region = region;
     this.scene = new Scene(SCENES[region.scene] ?? SCENES.dragon);
+    this.scene.visible = false;
     this.title = label(region.name, 22, theme.text);
     const won = region.stages.filter((stage) => stageRecord(progress, stage).wins > 0).length;
     this.count = label(`${won}/${region.stages.length}`, 18, won === region.stages.length ? theme.gold : theme.text);
@@ -128,13 +126,14 @@ class RegionPanel extends Container {
     const before = STAGES[STAGES.indexOf(first) - 1];
     this.note = isStageUnlocked(progress, first) ? null : label(`Pokonaj bossa: ${before.enemy.name}`, 15, theme.textMuted, '700');
     this.note?.anchor.set(0.5, 0.5);
-    this.addChild(this.scene, this.path, ...this.nodes, this.shade, this.title, this.count);
+    this.addChild(this.scene, this.panel, this.path, ...this.nodes, this.shade, this.title, this.count);
     if (this.note) this.addChild(this.note);
   }
 
   layout(width: number): void {
     const h = PANEL_HEIGHT;
     this.scene.layout(width, h, 22);
+    this.panel.clear().roundRect(0, 0, width, h, 12).fill(theme.panel).stroke({ width: 1, color: theme.panelLight });
     this.title.position.set(14, 10);
     this.count.position.set(width - 14, 12);
     const radius = Math.max(22, Math.min(34, width * 0.075));
@@ -149,11 +148,7 @@ class RegionPanel extends Container {
       const a = points[i];
       const b = points[i + 1];
       const lit = stageRecord(progress, this.region.stages[i]).wins > 0;
-      for (let t = 0.18; t <= 0.82; t += 0.08) {
-        const x = a.x + (b.x - a.x) * t;
-        const y = a.y + (b.y - a.y) * t - Math.sin(t * Math.PI) * 14;
-        this.path.circle(x, y, 3.2).fill({ color: lit ? theme.gold : 0xffffff, alpha: lit ? 1 : 0.55 });
-      }
+      this.path.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ width: 1, color: lit ? theme.buttonPrimary : theme.panelLight });
     }
     this.shade.clear();
     if (this.note) {
@@ -175,10 +170,9 @@ export class MapScreen extends Container {
     text: 'Mapa',
     style: {
       fontFamily: theme.fontFamily,
-      fontWeight: '800',
-      fontSize: 34,
+      fontWeight: '600',
+      fontSize: 28,
       fill: theme.text,
-      stroke: { color: theme.panelLip, width: 6, join: 'round' },
     },
   });
   private readonly summary: Text;

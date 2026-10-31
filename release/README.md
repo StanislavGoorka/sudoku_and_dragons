@@ -66,7 +66,7 @@ poprzednie środowisko po zakończeniu. Nie dodawaj haseł do argumentów Gradle
    rzeczywistych pojedynków fantasy oraz docelowe grupy wiekowe. Nie podawaj haseł własnego konta.
 5. Wstaw teksty i materiały, publiczne linki polityki/usuwania oraz kontakt. Zweryfikuj wymagania Play
    widoczne dla tego konta w dniu uploadu, zwłaszcza target API i weryfikację dewelopera.
-6. Zacznij od testu wewnętrznego. Wyślij AAB wersji 2, dodaj testerów i przeczytaj raport pre-launch.
+6. Zacznij od testu wewnętrznego. Wyślij AAB w wersji z `android-version.properties`, dodaj testerów i przeczytaj raport pre-launch.
    Lista sprawdzeń urządzeń jest w `testing.md`. Nie zaznaczaj testów jako zaliczonych przed wynikami.
 7. Następnie test zamknięty. Dla nowych kont osobistych objętych tą zasadą Google wymaga obecnie
    co najmniej 12 testerów zapisanych nieprzerwanie przez 14 dni przed wnioskiem o dostęp produkcyjny.

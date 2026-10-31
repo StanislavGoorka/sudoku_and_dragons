@@ -1,12 +1,12 @@
 import { Container, Graphics, Rectangle, Text, type FederatedPointerEvent } from 'pixi.js';
 import { feedback } from '../audio/feedback.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { Button } from './Button.ts';
 import type { ModalExtra } from './Modal.ts';
 
 const BUTTON = 48;
-const KNOB = 15;
-const TRACK = 14;
+const KNOB = 9;
+const TRACK = 4;
 /** Below the "Muzyka" line. */
 const ROW_Y = 34;
 
@@ -19,7 +19,7 @@ export class MusicControl implements ModalExtra {
   readonly height = ROW_Y + BUTTON;
   private readonly title = new Text({
     text: 'Muzyka',
-    style: { fontFamily: theme.fontFamily, fontWeight: '800', fontSize: 20, fill: theme.text },
+    style: { fontFamily: theme.fontFamily, fontWeight: '600', fontSize: 17, fill: theme.text },
   });
   private readonly value = new Text({
     text: '',
@@ -92,21 +92,16 @@ export class MusicControl implements ModalExtra {
     this.value.text = on ? `${Math.round(volume * 100)}%` : 'wyciszona';
     this.mute.setIcon(on ? 'speaker' : 'muted');
     const knobX = this.sliderX + volume * this.sliderWidth;
-    const fill = on ? theme.gold : theme.textMuted;
+    const fill = on ? theme.buttonPrimary : theme.textMuted;
     this.bar
       .clear()
       .roundRect(this.sliderX - KNOB, -TRACK / 2, this.sliderWidth + KNOB * 2, TRACK, TRACK / 2)
       .fill(theme.panelLip)
       .roundRect(this.sliderX - KNOB, -TRACK / 2, knobX - this.sliderX + KNOB * 2, TRACK, TRACK / 2)
       .fill({ color: fill, alpha: on ? 1 : 0.5 });
-    // A chunky knob with a lip, like the buttons.
     this.knob
       .clear()
-      .circle(knobX, 3, KNOB)
-      .fill(on ? theme.buttonPrimaryLip : theme.buttonSecondaryLip)
       .circle(knobX, 0, KNOB)
-      .fill(on ? 0xffffff : theme.textMuted)
-      .circle(knobX, 0, KNOB * 0.42)
-      .fill({ color: fill, alpha: on ? 1 : 0.6 });
+      .fill(fill);
   }
 }

@@ -24,7 +24,8 @@ import {
 } from '../progress/progress.ts';
 import { starsWord } from '../progress/rewardText.ts';
 import { progress, saveProgress } from '../progress/store.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
+import { theme as artTheme } from '../theme.ts';
 import { verticalGradient } from '../ui/Backdrop.ts';
 import { BoardView } from '../ui/BoardView.ts';
 import { Button } from '../ui/Button.ts';
@@ -81,7 +82,7 @@ interface SwatchLook {
 function themeLook(item: Cosmetic): SwatchLook {
   const c = boardTheme(item.id).colors;
   const cell = new Graphics();
-  const digit = new Text({ text: '5', style: { fontFamily: theme.fontFamily, fontWeight: '800', fill: c.placed } });
+  const digit = new Text({ text: '5', style: { fontFamily: artTheme.fontFamily, fontWeight: '800', fill: c.placed } });
   digit.anchor.set(0.5);
   const picture = new Container();
   picture.addChild(cell, digit);
@@ -160,7 +161,7 @@ class Swatch extends Container {
     this.look.picture.mask = this.clip;
     this.price = new Text({
       text: String(item.price),
-      style: { fontFamily: theme.fontFamily, fontWeight: '800', fontSize: 14, fill: theme.text },
+      style: { fontFamily: theme.fontFamily, fontWeight: '600', fontSize: 14, fill: theme.text },
     });
     this.price.anchor.set(0, 0.5);
     this.addChild(this.ring, this.lip, this.face, this.clip, this.look.picture, this.badge, this.priceStar, this.price);
@@ -188,7 +189,7 @@ class Swatch extends Container {
     const size = this.size;
     const owned = owns(progress, this.kind, this.item);
     this.ring.clear();
-    if (previewed) this.ring.roundRect(-4, -4, size + 8, size + 12, 15).stroke({ width: 3, color: 0xffffff });
+    if (previewed) this.ring.roundRect(-4, -4, size + 8, size + 8, 10).stroke({ width: 1.5, color: theme.buttonPrimary });
     this.badge.clear();
     if (isChosen(progress, this.kind, this.item)) {
       const r = Math.max(8, size * 0.2);
@@ -235,7 +236,7 @@ class ShelfTabs extends Container {
       const face = new Graphics();
       const text = new Text({
         text: SHELVES[kind].tab,
-        style: { fontFamily: theme.fontFamily, fontWeight: '800', fontSize: 17, fill: theme.text },
+        style: { fontFamily: theme.fontFamily, fontWeight: '600', fontSize: 17, fill: theme.text },
       });
       text.anchor.set(0.5);
       const dot = new Graphics();
@@ -266,19 +267,19 @@ class ShelfTabs extends Container {
     const inset = 4;
     // Smaller letters when three tabs share a narrow pill.
     const fontSize = half < 80 ? 15 : 17;
-    this.track.clear().roundRect(0, 0, w, h, h / 2).fill({ color: theme.panelLip, alpha: 0.85 });
+    this.track.clear().roundRect(0, 0, w, h, 8).fill(theme.panel).stroke({ width: 1, color: theme.panelLight });
     this.tabs.forEach(({ kind, tab, face, text, dot }, i) => {
       const open = kind === this.selected;
       tab.position.set(i * half, 0);
       tab.hitArea = new Rectangle(0, 0, half, h);
       face.clear();
-      if (open) face.roundRect(inset, inset, half - inset * 2, h - inset * 2, (h - inset * 2) / 2).fill(theme.gold);
-      text.style.fill = open ? theme.buttonPrimaryText : theme.text;
+      if (open) face.roundRect(inset, inset, half - inset * 2, h - inset * 2, 5).fill(theme.panelLight);
+      text.style.fill = open ? theme.text : theme.textMuted;
       text.style.fontSize = fontSize;
       text.position.set(half / 2, h / 2);
       dot.clear();
       if (!open && canBuyNew(progress, kind)) {
-        dot.circle(half / 2 + text.width / 2 + 7, h / 2 - 9, 5).fill(theme.gold).stroke({ width: 2, color: theme.panelLip });
+        dot.circle(half / 2 + text.width / 2 + 7, h / 2 - 9, 3).fill(theme.buttonPrimary);
       }
     });
   }
@@ -353,7 +354,7 @@ class EffectPreview extends Container {
     super();
     this.effect = effect;
     this.colors = colors;
-    this.digit = new Text({ text: '5', style: { fontFamily: theme.fontFamily, fontWeight: '800', fill: colors.placed } });
+    this.digit = new Text({ text: '5', style: { fontFamily: artTheme.fontFamily, fontWeight: '800', fill: colors.placed } });
     this.digit.anchor.set(0.5);
     this.fx.eventMode = 'none';
     this.addChild(this.scene, this.target, this.tile, this.digit, this.fx);
@@ -442,10 +443,9 @@ export class ShopScreen extends Container {
     text: 'Sklep',
     style: {
       fontFamily: theme.fontFamily,
-      fontWeight: '800',
-      fontSize: 34,
+      fontWeight: '600',
+      fontSize: 28,
       fill: theme.text,
-      stroke: { color: theme.panelLip, width: 6, join: 'round' },
     },
   });
   private readonly stars = new StarCounter(progress.stars);
@@ -461,10 +461,9 @@ export class ShopScreen extends Container {
     text: '',
     style: {
       fontFamily: theme.fontFamily,
-      fontWeight: '800',
+      fontWeight: '600',
       fontSize: 28,
       fill: theme.text,
-      stroke: { color: theme.panelLip, width: 5, join: 'round' },
     },
   });
   private readonly status = new Text({

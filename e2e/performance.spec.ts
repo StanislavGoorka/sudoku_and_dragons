@@ -55,6 +55,23 @@ test('a failed screen download offers retry and works on a small phone', async (
   expect(await page.evaluate(() => window.__game.feedback.settings.diagnostics)).toBe(false);
 });
 
+test('a background progress refresh cannot destroy a menu button during a press', async ({ page }) => {
+  await page.goto('/'); await ready(page);
+  const point = await page.evaluate(() => {
+    const s = window.__game.screen; (window as any).__pressedMenu = s;
+    const b = s.dailyButton; return b.toGlobal({ x: b.buttonWidth / 2, y: b.buttonHeight / 2 });
+  });
+  await page.mouse.move(point.x, point.y); await page.mouse.down();
+  await page.evaluate(async () => {
+    const path = '/src/game/progress/store.ts';
+    const { replaceProgress } = await import(/* @vite-ignore */ path);
+    replaceProgress(window.__game.state);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  });
+  expect(await page.evaluate(() => window.__game.screen === (window as any).__pressedMenu)).toBe(true);
+  await page.mouse.up(); await ready(page, 'DailyScreen');
+});
+
 test('foreground rendering is capped and backgrounding stops frames, music scheduling and the solo timer', async ({ page }) => {
   await page.goto('/'); await ready(page);
   const expectedResolution = await page.evaluate(() => Math.min(window.devicePixelRatio, 2));

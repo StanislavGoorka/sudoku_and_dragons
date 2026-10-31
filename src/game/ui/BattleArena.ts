@@ -2,7 +2,7 @@ import { Container, type PointData } from 'pixi.js';
 import type { EnemyDef } from '../../core/index.ts';
 import type { DragonDesign } from '../art/dragonArt.ts';
 import type { EnemyLook } from '../enemies.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { ChargeMeter } from './ChargeMeter.ts';
 import { DragonView } from './DragonView.ts';
 import { HpBar } from './HpBar.ts';

@@ -1,7 +1,7 @@
 import { Container, Graphics, Rectangle, Text, type FederatedPointerEvent, type FederatedWheelEvent } from 'pixi.js';
 import { ACHIEVEMENTS, isAchieved, LEVELS, type Achievement } from '../progress/progress.ts';
 import { progress } from '../progress/store.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { Button } from '../ui/Button.ts';
 import { drawStar, StarCounter } from '../ui/stars.ts';
 
@@ -17,7 +17,7 @@ function formatTime(seconds: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
-function label(text: string, fontSize: number, fill: number, fontWeight: '500' | '700' | '800' = '500'): Text {
+function label(text: string, fontSize: number, fill: number, fontWeight: '500' | '700' | '600' = '500'): Text {
   return new Text({ text, style: { fontFamily: theme.fontFamily, fontSize, fontWeight, fill } });
 }
 
@@ -38,21 +38,20 @@ class AchievementRow extends Container {
     this.done = isAchieved(progress, achievement);
     const [current, target] = achievement.progress(progress);
     this.fraction = Math.min(1, current / target);
-    this.title = label(achievement.title, 16, this.done ? theme.text : theme.textMuted, '800');
+    this.title = label(achievement.title, 16, this.done ? theme.text : theme.textMuted, '600');
     this.description = label(achievement.description, 13, theme.textMuted);
-    this.side = label(this.done ? `+${achievement.reward}` : `${current}/${target}`, 15, this.done ? theme.gold : theme.textMuted, '800');
+    this.side = label(this.done ? `+${achievement.reward}` : `${current}/${target}`, 15, this.done ? theme.gold : theme.textMuted, '600');
     this.side.anchor.set(1, 0.5);
     this.addChild(this.bg, this.medal, this.title, this.description, this.bar, this.side, this.sideStar);
   }
 
   layout(width: number): void {
     const h = ROW_HEIGHT;
-    this.bg.clear().roundRect(0, 0, width, h, 16).fill(this.done ? theme.panel : { color: theme.panel, alpha: 0.55 });
+    this.bg.clear().roundRect(0, 0, width, h, 9).fill(theme.panel).stroke({ width: 1, color: theme.panelLight });
     // A gold medal with a star when done, an empty dark one otherwise.
     const mx = 34;
     const my = h / 2;
-    this.medal.clear().circle(mx, my, 21).fill(this.done ? theme.buttonPrimaryLip : theme.hpTrack);
-    this.medal.circle(mx, my - 2, 19).fill(this.done ? theme.gold : theme.panelLip);
+    this.medal.clear().circle(mx, my - 2, 19).stroke({ width: 1, color: theme.panelLight });
     drawStar(this.medal, mx, my - 2, 11, this.done);
 
     const textX = 66;
@@ -79,7 +78,7 @@ class AchievementRow extends Container {
 export class ProgressScreen extends Container {
   private readonly options: ProgressOptions;
   private readonly backButton: Button;
-  private readonly title = label('Postępy', 34, theme.text, '800');
+  private readonly title = label('Postępy', 28, theme.text, '600');
   private readonly stars = new StarCounter(progress.stars);
   private readonly statsPanel = new Graphics();
   private readonly stats: { value: Text; caption: Text }[];
@@ -97,7 +96,6 @@ export class ProgressScreen extends Container {
     this.options = options;
     this.backButton = new Button({ text: 'Wstecz', icon: 'back', onTap: options.onBack });
     this.title.anchor.set(0.5, 0);
-    this.title.style.stroke = { color: theme.panelLip, width: 6, join: 'round' };
 
     const wins = LEVELS.reduce((sum, d) => sum + progress.levels[d].wins, 0);
     const times = LEVELS.map((d) => progress.levels[d].bestTime).filter((t): t is number => t !== null);
@@ -106,7 +104,7 @@ export class ProgressScreen extends Container {
       [`${progress.duels.won}/${progress.duels.played}`, 'pojedynki'],
       [times.length ? formatTime(Math.min(...times)) : '–', 'najlepszy czas'],
     ].map(([value, caption]) => {
-      const valueText = label(value, 26, theme.text, '800');
+      const valueText = label(value, 26, theme.text, '600');
       const captionText = label(caption, 13, theme.textMuted);
       valueText.anchor.set(0.5, 0);
       captionText.anchor.set(0.5, 0);
@@ -114,7 +112,7 @@ export class ProgressScreen extends Container {
     });
 
     const done = ACHIEVEMENTS.filter((a) => isAchieved(progress, a)).length;
-    this.heading = label(`Osiągnięcia ${done}/${ACHIEVEMENTS.length}`, 20, theme.text, '800');
+    this.heading = label(`Osiągnięcia ${done}/${ACHIEVEMENTS.length}`, 20, theme.text, '600');
     // Done first (newest on top), then the rest in their usual order.
     const sorted = [...ACHIEVEMENTS].sort((a, b) => (progress.achievements[b.id] ?? 0) - (progress.achievements[a.id] ?? 0));
     this.rows = sorted.map((achievement) => new AchievementRow(achievement));
@@ -146,7 +144,7 @@ export class ProgressScreen extends Container {
 
     const panelY = 130;
     const panelHeight = 74;
-    this.statsPanel.clear().roundRect(left, panelY + 5, column, panelHeight, 18).fill(theme.panelLip).roundRect(left, panelY, column, panelHeight, 18).fill(theme.panel);
+    this.statsPanel.clear().roundRect(left, panelY, column, panelHeight, 10).fill(theme.panel).stroke({ width: 1, color: theme.panelLight });
     this.stats.forEach(({ value, caption }, i) => {
       const x = left + (column / 3) * (i + 0.5);
       value.position.set(x, panelY + 10);

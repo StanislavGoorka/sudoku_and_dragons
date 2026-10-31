@@ -1,7 +1,7 @@
 import { Container, Text, type DestroyOptions } from 'pixi.js';
 import type { Difficulty } from '../../core/index.ts';
 import { beginDaily, dailyRanking, flushDailyResults, type DailyRanking, type RankedRun } from '../net/daily.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { Button } from '../ui/Button.ts';
 import { Modal } from '../ui/Modal.ts';
 import { activeBattle, saveActiveBattle } from '../progress/store.ts';

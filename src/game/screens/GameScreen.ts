@@ -22,7 +22,7 @@ import { lookOf } from '../enemies.ts';
 import { burst, floatText, launchOrb, shake, stopEffects, wait } from '../fx/effects.ts';
 import { fireShot } from '../fx/hitEffects.ts';
 import { OVERSCAN } from '../safeArea.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { BattleArena } from '../ui/BattleArena.ts';
 import { BoardView } from '../ui/BoardView.ts';
 import { Button } from '../ui/Button.ts';
@@ -92,7 +92,7 @@ export class GameScreen extends Container {
   private readonly ranked: RankedRun | undefined;
   private readonly rankedMoves: DailyMove[];
   private readonly bossLabel = new Text({ text: '', style: { fontFamily: theme.fontFamily,
-    fontWeight: '700', fontSize: 13, fill: theme.gold, stroke: { color: theme.panelLip, width: 3 }, align: 'center' } });
+    fontWeight: '500', fontSize: 13, fill: theme.text, stroke: { color: theme.panel, width: 2 }, align: 'center' } });
   private sinceCheckpoint = 0;
   /** A daily battle announces itself once, at the first layout. */
   private announced = false;

@@ -364,6 +364,10 @@ code and comments are English.
 
 ## Checking changes in the browser
 
+- UI uses `uiTheme.ts`; `theme.ts` remains the original art/board/effects theme. Preserve that
+  boundary: avoid propagating UI fonts or colours into BoardView, DragonView, art or fx. Shop digit
+  previews explicitly keep the art font. Flat controls retain 48 px targets. See `UI_REDESIGN.md`.
+
 - Android test release: `release/android-version.properties` owns Android versions. Release tasks
   require private SUDOKU_UPLOAD_* environment variables; Windows helpers use an ignored upload key
   and a DPAPI-protected password. Never commit signing material. Store assets are generated from

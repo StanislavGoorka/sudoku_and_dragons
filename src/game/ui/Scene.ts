@@ -1,5 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { theme } from '../theme.ts';
+import { uiTheme } from '../uiTheme.ts';
 import { glowGradient, verticalGradient } from './Backdrop.ts';
 
 /** The backdrop of a fight: a sky, a light in it, and two rows of hills. */
@@ -85,7 +86,7 @@ export class Scene extends Container {
     this.eventMode = 'none';
   }
 
-  layout(width: number, height: number, radius = 20): void {
+  layout(width: number, height: number, radius = 12): void {
     this.sceneHeight = height;
     this.clip.clear().roundRect(0, 0, width, height, radius).fill(0xffffff);
     this.sky.clear().rect(0, 0, width, height).fill(this.skyFill);
@@ -117,7 +118,7 @@ export class Scene extends Container {
       .closePath()
       .fill(this.look.hillsFront);
 
-    this.frame.clear().roundRect(0, 0, width, height, radius).stroke({ width: 3, color: theme.panelLip });
+    this.frame.clear().roundRect(0, 0, width, height, radius).stroke({ width: 1, color: uiTheme.panelLight });
   }
 
   /** The ground line, in scene coordinates. */

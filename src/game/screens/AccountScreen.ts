@@ -5,7 +5,7 @@ import { cloudState, onCloudState, syncProgress, type CloudState } from '../net/
 import { cleanNickname, NICKNAME_MAX } from '../net/nickname.ts';
 import { localNickname, setNickname } from '../net/online.ts';
 import { OVERSCAN } from '../safeArea.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { Button, type ButtonVariant } from '../ui/Button.ts';
 import { Modal } from '../ui/Modal.ts';
 import { TextField } from '../ui/TextField.ts';
@@ -38,7 +38,7 @@ const CLOUD_TEXT: Record<CloudState, string> = {
   failed: 'Nie udało się zapisać postępu. Spróbuję znowu po następnej grze.',
 };
 
-function text(value: string, fontSize: number, fill: number, fontWeight: '500' | '700' | '800' = '500'): Text {
+function text(value: string, fontSize: number, fill: number, fontWeight: '500' | '700' | '600' = '500'): Text {
   return new Text({
     text: value,
     style: { fontFamily: theme.fontFamily, fontSize, fontWeight, fill, wordWrap: true, lineHeight: Math.round(fontSize * 1.3) },
@@ -54,7 +54,7 @@ function text(value: string, fontSize: number, fill: number, fontWeight: '500' |
 export class AccountScreen extends Container {
   private readonly options: AccountOptions;
   private readonly backButton: Button;
-  private readonly title = text('Konto', 34, theme.text, '800');
+  private readonly title = text('Konto', 28, theme.text, '600');
   /** Everything under the header; slides up over the keyboard. */
   private readonly content = new Container();
   private readonly contentMask = new Graphics();
@@ -86,7 +86,6 @@ export class AccountScreen extends Container {
     this.options = options;
     this.backButton = new Button({ text: 'Wstecz', icon: 'back', onTap: () => this.handleBack() });
     this.title.anchor.set(0.5, 0);
-    this.title.style.stroke = { color: theme.panelLip, width: 6, join: 'round' };
     this.title.style.wordWrap = false;
 
     this.nickField = new TextField({

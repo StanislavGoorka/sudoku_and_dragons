@@ -5,7 +5,7 @@ import { feedback } from '../audio/feedback.ts';
 import { loadStageId, saveStageId } from '../difficulty.ts';
 import { lookOf } from '../enemies.ts';
 import { killTweens } from '../fx/tweens.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { Button } from '../ui/Button.ts';
 import { DragonView } from '../ui/DragonView.ts';
 import { currentStreak, dailyReward, dayKey } from '../progress/daily.ts';
@@ -46,6 +46,7 @@ const diagnosticsLabel = () => `Raporty błędów: ${feedback.settings.diagnosti
 interface Shown {
   root: Container;
   scene: Scene;
+  panel: Graphics;
   dragon: DragonView;
   lock: Graphics | null;
 }
@@ -57,23 +58,23 @@ interface Shown {
  */
 export class MenuScreen extends Container {
   private readonly titleTop = new Text({
-    text: 'Sudoku',
+    text: 'Sudoku & Dragons',
     style: {
       fontFamily: theme.fontFamily,
-      fontWeight: '800',
-      fontSize: 46,
+      fontWeight: '600',
+      fontSize: 28,
+      letterSpacing: -0.7,
       fill: theme.text,
-      stroke: { color: theme.panelLip, width: 7, join: 'round' },
     },
   });
   private readonly titleBottom = new Text({
-    text: '& Dragons',
+    text: 'KAMPANIA',
     style: {
       fontFamily: theme.fontFamily,
-      fontWeight: '800',
-      fontSize: 34,
-      fill: theme.gold,
-      stroke: { color: theme.panelLip, width: 6, join: 'round' },
+      fontWeight: '500',
+      fontSize: 11,
+      letterSpacing: 2,
+      fill: theme.textMuted,
     },
   });
   private readonly stageArea = new Container();
@@ -84,15 +85,14 @@ export class MenuScreen extends Container {
     text: '',
     style: {
       fontFamily: theme.fontFamily,
-      fontWeight: '800',
-      fontSize: 28,
+      fontWeight: '600',
+      fontSize: 22,
       fill: theme.text,
-      stroke: { color: theme.panelLip, width: 5, join: 'round' },
     },
   });
   private readonly levelInfo = new Text({
     text: '',
-    style: { fontFamily: theme.fontFamily, fontWeight: '500', fontSize: 16, fill: theme.textMuted },
+    style: { fontFamily: theme.fontFamily, fontWeight: '400', fontSize: 13, fill: theme.textMuted },
   });
   /** The most stars won on the shown level. */
   private readonly bestStars = new Graphics();
@@ -131,6 +131,7 @@ export class MenuScreen extends Container {
     this.index = STAGES.indexOf(last && isStageUnlocked(progress, last) ? last : currentStage(progress));
     this.starCounter = new StarCounter(progress.stars, options.onProgress);
     for (const text of [this.titleTop, this.titleBottom, this.levelName, this.levelInfo]) text.anchor.set(0.5, 0);
+    this.titleTop.anchor.x = 0; this.titleBottom.anchor.x = 0;
 
     this.prevButton = new Button({ text: 'Poprzedni', icon: 'back', onTap: () => this.flip(-1) });
     this.nextButton = new Button({ text: 'Następny', icon: 'back', onTap: () => this.flip(1) });
@@ -158,7 +159,7 @@ export class MenuScreen extends Container {
     this.accountButton = new Button({ text: 'Konto', icon: 'user', onTap: options.onAccount });
     this.mapButton = new Button({ text: 'Mapa', icon: 'map', onTap: options.onMap });
     this.shopDot.visible = canBuyNew(progress);
-    this.shopDot.circle(40, 5, 7).fill(theme.gold).stroke({ width: 2.5, color: theme.panelLip });
+    this.shopDot.circle(40, 5, 3).fill(theme.buttonPrimary);
     this.shopDot.eventMode = 'none';
     this.shopButton.addChild(this.shopDot);
 
@@ -225,15 +226,12 @@ export class MenuScreen extends Container {
     this.mapButton.position.set(margin + this.starCounter.pillWidth + 10, 12);
     this.mapButton.layout(44, 44);
 
-    // The logo sits between the left and right buttons when it fits there, else under them.
-    const besideRow = Math.min(width / 2 - (this.mapButton.x + 44), this.accountButton.x - width / 2) - 8;
-    const titleTop = this.titleTop.width / 2 <= besideRow ? Math.max(18, height * 0.035) : 12 + 44 + 4;
-    this.titleTop.position.set(width / 2, titleTop);
-    this.titleBottom.position.set(width / 2, titleTop + this.titleTop.height * 0.78);
+    this.titleTop.position.set(left, 82);
+    this.titleBottom.position.set(left, 124);
 
     // From the bottom up: the daily challenge and online side by side, play, level texts, dots; the stage takes what is left.
-    const onlineHeight = 62;
-    const playHeight = 70;
+    const onlineHeight = 60;
+    const playHeight = 56;
     const onlineY = height - margin - onlineHeight;
     const playY = onlineY - gap - playHeight;
     const half = (column - gap) / 2;
@@ -241,7 +239,7 @@ export class MenuScreen extends Container {
     this.dailyButton.layout(half, onlineHeight);
     this.onlineButton.position.set(left + half + gap, onlineY);
     this.onlineButton.layout(half, onlineHeight);
-    this.dailyDot.clear().circle(half - 8, 4, 7).fill(theme.gold).stroke({ width: 2.5, color: theme.panelLip });
+    this.dailyDot.clear().circle(half - 12, 12, 3).fill(theme.buttonPrimary);
     this.playButton.position.set(left, playY);
     this.playButton.layout(column, playHeight);
     const infoY = playY - 16 - 22;
@@ -252,18 +250,18 @@ export class MenuScreen extends Container {
 
     const stageTop = this.titleBottom.y + this.titleBottom.height + 14;
     this.stageWidth = column;
-    this.stageHeight = Math.max(150, Math.min(400, nameY - 12 - stageTop));
+    this.stageHeight = Math.max(150, Math.min(340, nameY - 12 - stageTop));
     this.stageArea.position.set(left, stageTop);
     this.stageArea.hitArea = new Rectangle(0, 0, this.stageWidth, this.stageHeight);
     if (this.stage) this.layoutStage(this.stage);
 
     const arrow = 46;
     const arrowY = stageTop + this.stageHeight / 2 - arrow / 2;
-    this.prevButton.position.set(Math.max(4, left - arrow / 2 + 4), arrowY);
+    this.prevButton.position.set(left + 12, arrowY);
     this.prevButton.layout(arrow, arrow);
     // The same arrow, mirrored, points right.
     this.nextButton.scale.x = -1;
-    this.nextButton.position.set(Math.min(width - 4, left + column + arrow / 2 - 4), arrowY);
+    this.nextButton.position.set(left + column - 12, arrowY);
     this.nextButton.layout(arrow, arrow);
     this.drawBestStars();
 
@@ -294,7 +292,7 @@ export class MenuScreen extends Container {
   }
 
   override destroy(options?: DestroyOptions): void {
-    killTweens(this.titleTop, this.titleBottom, this.stageArea, this.playButton, this.onlineButton, this.dailyButton, this.levelName.scale);
+    killTweens(this.titleTop, this.titleBottom, this.stageArea, this.playButton, this.onlineButton, this.dailyButton, this.levelName);
     if (this.stage) killTweens(this.stage.root);
     super.destroy(options);
   }
@@ -337,12 +335,14 @@ export class MenuScreen extends Container {
     const stage: Shown = {
       root,
       scene: new Scene(look.scene),
+      panel: new Graphics(),
       dragon: new DragonView(look.design),
       lock: open ? null : new Graphics(),
     };
     // A locked dragon is only a dark shape, still hovering.
     if (!open) stage.dragon.tint = 0x1b1338;
-    root.addChild(stage.scene, stage.dragon);
+    stage.scene.visible = false;
+    root.addChild(stage.scene, stage.panel, stage.dragon);
     if (stage.lock) root.addChild(stage.lock);
     this.stageArea.addChild(root);
     this.stage = stage;
@@ -372,12 +372,14 @@ export class MenuScreen extends Container {
       : `Pokonaj najpierw: ${STAGES[this.index - 1].enemy.name}`;
     this.playButton.setText(open ? 'Walcz!' : 'Zablokowany');
     this.playButton.setEnabled(open);
-    if (from !== 0) gsap.fromTo(this.levelName.scale, { x: 0.85, y: 0.85 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(3)' });
+    if (from !== 0) gsap.fromTo(this.levelName, { alpha: 0 }, { alpha: 1, duration: 0.18 });
     this.drawBestStars();
   }
 
   private layoutStage(stage: Shown): void {
     stage.scene.layout(this.stageWidth, this.stageHeight, 24);
+    stage.panel.clear().roundRect(0, 0, this.stageWidth, this.stageHeight, 12).fill(theme.panel)
+      .stroke({ width: 1, color: theme.panelLight });
     const ground = stage.scene.groundY() + 4;
     stage.dragon.layout(Math.max(48, Math.min(this.stageWidth * 0.8, (ground - 12) * 1.05)));
     stage.dragon.position.set(this.stageWidth / 2 + this.stageWidth * 0.03, ground - stage.dragon.footOffset());
@@ -429,11 +431,8 @@ export class MenuScreen extends Container {
   }
 
   private playEntrance(): void {
-    gsap.from(this.titleTop, { alpha: 0, y: this.titleTop.y - 24, duration: 0.5, ease: 'back.out(2)' });
-    gsap.from(this.titleBottom, { alpha: 0, y: this.titleBottom.y - 24, duration: 0.5, delay: 0.08, ease: 'back.out(2)' });
-    gsap.from(this.stageArea, { alpha: 0, duration: 0.5, delay: 0.1 });
-    gsap.from(this.playButton, { alpha: 0, y: this.playButton.y + 30, duration: 0.45, delay: 0.2, ease: 'power2.out' });
-    gsap.from(this.dailyButton, { alpha: 0, y: this.dailyButton.y + 30, duration: 0.45, delay: 0.28, ease: 'power2.out' });
-    gsap.from(this.onlineButton, { alpha: 0, y: this.onlineButton.y + 30, duration: 0.45, delay: 0.32, ease: 'power2.out' });
+    for (const item of [this.titleTop, this.titleBottom, this.stageArea, this.playButton, this.dailyButton, this.onlineButton]) {
+      gsap.from(item, { alpha: 0, duration: 0.2, ease: 'power1.out' });
+    }
   }
 }

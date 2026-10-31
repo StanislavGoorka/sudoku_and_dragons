@@ -61,7 +61,7 @@ export class NumberPad extends Container {
     const geometry = padGeometry(width, height, preview);
     this.keyWidth = geometry[0].width;
     this.keyHeight = geometry[0].height;
-    this.lipHeight = Math.max(3, Math.round(this.keyHeight * 0.08));
+    this.lipHeight = 0;
     this.keys.forEach((key, i) => {
       key.root.position.set(geometry[i].x, geometry[i].y);
       key.root.hitArea = new Rectangle(0, 0, this.keyWidth, this.keyHeight);
@@ -109,9 +109,9 @@ export class NumberPad extends Container {
   private paint(key: PadKey): void {
     const w = this.keyWidth;
     const h = this.keyHeight - this.lipHeight;
-    const radius = Math.min(12, w * 0.3);
+    const radius = 8;
     const c = this.colors;
-    key.lip.clear().roundRect(0, this.lipHeight, w, h, radius).fill(key.done ? c.padKeyDoneLip : c.padKeyLip);
+    key.lip.clear();
     key.bg.clear().roundRect(0, 0, w, h, radius).fill(key.done ? c.padKeyDone : c.padKey);
     key.label.style.fill = key.done ? c.padDigitDone : c.padDigit;
     key.root.cursor = key.done ? 'default' : 'pointer';

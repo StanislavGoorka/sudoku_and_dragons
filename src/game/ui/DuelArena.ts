@@ -3,7 +3,7 @@ import { Container, Graphics, Text, type DestroyOptions, type PointData } from '
 import type { DragonDesign } from '../art/dragonArt.ts';
 import { rivalDesign } from '../dragonSkins.ts';
 import { killTweens } from '../fx/tweens.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { ChargeMeter } from './ChargeMeter.ts';
 import { DragonView } from './DragonView.ts';
 import { HpBar } from './HpBar.ts';
@@ -30,7 +30,7 @@ export class DuelArena extends Container {
   private readonly turnPill = new Graphics();
   private readonly turnText = new Text({
     text: '',
-    style: { fontFamily: theme.fontFamily, fontWeight: '800', fontSize: 15, fill: theme.text, align: 'center', lineHeight: 17 },
+    style: { fontFamily: theme.fontFamily, fontWeight: '600', fontSize: 13, fill: theme.text, align: 'center', lineHeight: 17 },
   });
   private mine = false;
 
@@ -141,7 +141,7 @@ export class DuelArena extends Container {
     const { x, y } = this.turnText.position;
     this.turnPill
       .clear()
-      .roundRect(x - w / 2, y - h / 2, w, h, h / 2)
-      .fill(this.mine ? { color: theme.gold } : { color: theme.hpTrack, alpha: 0.7 });
+      .roundRect(x - w / 2, y - h / 2, w, h, 6)
+      .fill(this.mine ? { color: theme.buttonPrimary } : { color: theme.panel, alpha: 0.96 });
   }
 }

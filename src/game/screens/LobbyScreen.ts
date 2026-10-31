@@ -21,7 +21,7 @@ import { forgetDuel, recoverDuel, rememberDuel } from '../net/duelRecovery.ts';
 import type { DuelBackend } from '../net/duelBackend.ts';
 import { chosenSkin, chosenTheme } from '../progress/progress.ts';
 import { progress } from '../progress/store.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { lessonSeen, markLessonSeen } from '../tutorial.ts';
 import { Button } from '../ui/Button.ts';
 import { Modal } from '../ui/Modal.ts';
@@ -217,7 +217,7 @@ export class LobbyScreen extends Container {
 
     const view = this.view;
     if (view.kind === 'home' || view.kind === 'searching') this.addHero();
-    const title = this.addText('Pojedynek online', 34, theme.text, '800');
+    const title = this.addText('Pojedynek online', 34, theme.text, '600');
     title.style.stroke = { color: theme.panelLip, width: 6, join: 'round' };
     switch (view.kind) {
       case 'offline':
@@ -250,7 +250,7 @@ export class LobbyScreen extends Container {
 
       case 'room':
         this.addText('Kod pokoju', 16, theme.textMuted);
-        this.addText(view.code ? view.code.split('').join(' ') : '· · · ·', 56, theme.gold, '800');
+        this.addText(view.code ? view.code.split('').join(' ') : '· · · ·', 56, theme.gold, '600');
         this.addText(
           view.code ? 'Podaj go znajomemu.\nPojedynek ruszy, gdy dołączy.' : 'Tworzę pokój…\nZaraz pojawi się kod.',
           15,
@@ -262,7 +262,7 @@ export class LobbyScreen extends Container {
       case 'join': {
         this.addText('Wpisz kod pokoju', 16, theme.textMuted);
         const slots = view.code.padEnd(4, '_').split('').join(' ');
-        this.addText(slots, 52, theme.gold, '800');
+        this.addText(slots, 52, theme.gold, '600');
         this.addNumberPad();
         if (view.message) this.addText(view.message, 15, theme.error);
         this.addButton('Dołącz', () => this.join(view.code), { variant: 'primary', enabled: view.code.length === 4 });
@@ -273,7 +273,7 @@ export class LobbyScreen extends Container {
 
       case 'joining':
         this.addText('Kod pokoju', 16, theme.textMuted);
-        this.addText(view.code.split('').join(' '), 52, theme.gold, '800');
+        this.addText(view.code.split('').join(' '), 52, theme.gold, '600');
         this.addWaiting('Dołączam');
         this.addButton('Anuluj', () => this.cancelJoin(view.code));
         break;
@@ -307,7 +307,7 @@ export class LobbyScreen extends Container {
     });
   }
 
-  private addText(text: string, fontSize: number, fill: number, fontWeight: '400' | '700' | '800' = '400'): Text {
+  private addText(text: string, fontSize: number, fill: number, fontWeight: '400' | '700' | '600' = '400'): Text {
     const label = new Text({
       text,
       style: { fontFamily: theme.fontFamily, fontSize, fontWeight, fill, align: 'center', wordWrap: true },

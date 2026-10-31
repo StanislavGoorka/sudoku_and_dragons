@@ -81,6 +81,7 @@ export async function boot(): Promise<void> {
   let loadingTimer: ReturnType<typeof setTimeout> | undefined;
   let needsRecovery = true;
   let menuNeedsRefresh = false;
+  const activePointers = new Set<number>();
   let firstScreen = true;
   let insets: Insets = readSafeArea();
   // Covers the whole display, safe-area margins included; screens draw on top of it.
@@ -362,7 +363,7 @@ export async function boot(): Promise<void> {
   // The ticker caps a frame at 100 ms (minFPS = 10), and stops while the page is hidden,
   // so the dragon's attack timer pauses instead of firing a burst after a long break.
   app.ticker.add((ticker) => {
-    if (menuNeedsRefresh && !loading && screen instanceof MenuScreen && !screen.modalOpen) showMenu();
+    if (menuNeedsRefresh && !activePointers.size && !loading && screen instanceof MenuScreen && !screen.modalOpen) showMenu();
     screen?.update?.(ticker.deltaMS);
 
     sinceInsetCheck += ticker.deltaMS;
@@ -382,7 +383,10 @@ export async function boot(): Promise<void> {
   });
 
   // Browsers start audio only after a user gesture, so every tap or key press may unlock it.
-  window.addEventListener('pointerdown', () => feedback.unlock());
+  window.addEventListener('pointerdown', (event) => { activePointers.add(event.pointerId); feedback.unlock(); }, { capture: true });
+  window.addEventListener('pointerup', (event) => activePointers.delete(event.pointerId), { capture: true });
+  window.addEventListener('pointercancel', (event) => activePointers.delete(event.pointerId), { capture: true });
+  window.addEventListener('blur', () => activePointers.clear());
   window.addEventListener('keydown', (event) => {
     feedback.unlock();
     if (loading) { if (event.key === 'Escape') showMenu(); return; }
@@ -395,6 +399,7 @@ export async function boot(): Promise<void> {
     if (active === isAppActive()) return;
     setAppActive(active);
     if (!active) {
+      activePointers.clear();
       screen?.pause?.();
       feedback.suspend();
       app.stop();

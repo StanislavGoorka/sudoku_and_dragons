@@ -1,5 +1,5 @@
 import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 
 export interface TextFieldOptions {
   /** Shown above the box. */
@@ -60,9 +60,10 @@ export class TextField extends Container {
       border: 'none',
       outline: 'none',
       background: 'transparent',
-      color: hex(theme.textDark),
-      caretColor: hex(theme.buttonSecondary),
-      font: `700 19px ${theme.fontFamily}`,
+      color: hex(theme.text),
+      caretColor: hex(theme.buttonPrimary),
+      colorScheme: 'dark',
+      font: `400 17px ${theme.fontFamily}`,
       userSelect: 'text',
       webkitUserSelect: 'text',
       touchAction: 'manipulation',
@@ -143,10 +144,8 @@ export class TextField extends Container {
     const y = CAPTION_HEIGHT;
     this.box
       .clear()
-      .roundRect(0, y + LIP, w, BOX_HEIGHT, 16)
-      .fill(theme.panelLip)
-      .roundRect(0, y, w, BOX_HEIGHT, 16)
-      .fill(0xfdf8ff);
-    if (this.focused) this.box.roundRect(0, y, w, BOX_HEIGHT, 16).stroke({ width: 3, color: theme.gold });
+      .roundRect(0, y, w, BOX_HEIGHT, 8)
+      .fill(theme.buttonSecondary)
+      .stroke({ width: 1, color: this.focused ? theme.buttonPrimary : theme.panelLight });
   }
 }

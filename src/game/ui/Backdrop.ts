@@ -1,5 +1,5 @@
 import { Container, FillGradient, Graphics } from 'pixi.js';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 
 /** `color` fading from `alpha` in the middle to nothing at the edge. */
 export function glowGradient(color: number, alpha: number): FillGradient {
@@ -31,22 +31,17 @@ export function verticalGradient(colors: number[]): FillGradient {
   });
 }
 
-/** Behind every screen and the safe-area margins: a violet night with a soft glow up top. */
+/** Quiet, opaque UI background. Gradient helpers above remain unchanged for game artwork. */
 export class Backdrop extends Container {
   private readonly sky = new Graphics();
-  private readonly glow = new Graphics();
-  private readonly skyFill = verticalGradient([theme.backdropTop, theme.backdropBottom]);
-  private readonly glowFill = glowGradient(theme.backdropGlow, 0.35);
 
   constructor() {
     super();
     this.eventMode = 'none';
-    this.addChild(this.sky, this.glow);
+    this.addChild(this.sky);
   }
 
   layout(width: number, height: number): void {
-    this.sky.clear().rect(0, 0, width, height).fill(this.skyFill);
-    const r = Math.max(width, height) * 0.6;
-    this.glow.clear().ellipse(width / 2, 0, r, r * 0.55).fill(this.glowFill);
+    this.sky.clear().rect(0, 0, width, height).fill(theme.background);
   }
 }

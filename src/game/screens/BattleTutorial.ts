@@ -1,7 +1,7 @@
 import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.js';
 import { killTweens } from '../fx/tweens.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { Button } from '../ui/Button.ts';
 
 /** Where the tutorial points, in the battle screen's coordinates. */

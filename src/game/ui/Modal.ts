@@ -2,7 +2,7 @@ import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions, type FederatedPointerEvent, type FederatedWheelEvent } from 'pixi.js';
 import { killTweens } from '../fx/tweens.ts';
 import { OVERSCAN } from '../safeArea.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { Button, type ButtonVariant } from './Button.ts';
 
 export interface ModalAction {
@@ -20,8 +20,6 @@ export interface ModalExtra {
 
 const PADDING = 24;
 const BUTTON_HEIGHT = 56;
-/** The panel's darker lip below it. */
-const LIP = 7;
 const BUTTON_GAP = 10;
 
 /** A dimmed full-screen layer with a panel: title, optional extra, message and stacked buttons. Blocks input below it. */
@@ -52,11 +50,10 @@ export class Modal extends Container {
       text: title,
       style: {
         fontFamily: theme.fontFamily,
-        fontWeight: '800',
-        fontSize: 30,
-        lineHeight: 34,
+        fontWeight: '600',
+        fontSize: 24,
+        lineHeight: 30,
         fill: titleColor,
-        stroke: { color: theme.panelLip, width: 4, join: 'round' },
         align: 'center',
         wordWrap: true,
       },
@@ -65,9 +62,9 @@ export class Modal extends Container {
       text: message,
       style: {
         fontFamily: theme.fontFamily,
-        fontWeight: '500',
-        fontSize: 17,
-        lineHeight: 22,
+        fontWeight: '400',
+        fontSize: 16,
+        lineHeight: 24,
         fill: theme.textMuted,
         align: 'center',
         wordWrap: true,
@@ -134,11 +131,9 @@ export class Modal extends Container {
 
     this.panel
       .clear()
-      .roundRect(0, LIP, width, height, 24)
-      .fill(theme.panelLip)
-      .roundRect(0, 0, width, height, 24)
+      .roundRect(0, 0, width, height, 14)
       .fill(theme.panel)
-      .stroke({ width: 3, color: theme.panelLight });
+      .stroke({ width: 1, color: theme.panelLight });
     this.box.pivot.set(width / 2, height / 2);
     const visibleHeight = Math.max(100, screenHeight - 64);
     this.maxScroll = Math.max(0, height - visibleHeight);
@@ -169,7 +164,7 @@ export class Modal extends Container {
   /** Fades the shade in and pops the panel. */
   show(): void {
     gsap.fromTo(this, { alpha: 0 }, { alpha: 1, duration: 0.25 });
-    gsap.fromTo(this.box.scale, { x: 0.85, y: 0.85 }, { x: 1, y: 1, duration: 0.35, ease: 'back.out(2)' });
+    gsap.fromTo(this.box.scale, { x: 0.98, y: 0.98 }, { x: 1, y: 1, duration: 0.2, ease: 'power2.out' });
   }
 
   override destroy(options?: DestroyOptions): void {

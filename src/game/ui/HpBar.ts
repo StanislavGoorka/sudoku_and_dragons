@@ -1,6 +1,6 @@
 import gsap from 'gsap';
 import { Container, Graphics, Text, type DestroyOptions, type PointData } from 'pixi.js';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 
 const BAR_HEIGHT = 24;
 
@@ -10,10 +10,9 @@ function barText(text: string, align: 'left' | 'right'): Text {
     text,
     style: {
       fontFamily: theme.fontFamily,
-      fontWeight: '800',
-      fontSize: 14,
+      fontWeight: '600',
+      fontSize: 12,
       fill: theme.text,
-      stroke: { color: theme.hpTrack, width: 3, join: 'round' },
     },
   });
   label.anchor.set(align === 'left' ? 0 : 1, 0.5);
@@ -56,9 +55,8 @@ export class HpBar extends Container {
     this.nameText.scale.set(Math.min(1, Math.max(1, width - 32 - this.valueText.width) / Math.max(1, this.nameText.width)));
     this.track
       .clear()
-      .roundRect(0, 0, width, BAR_HEIGHT, BAR_HEIGHT / 2)
-      .fill({ color: theme.hpTrack, alpha: 0.85 })
-      .stroke({ width: 2, color: theme.hpTrack });
+      .roundRect(0, 0, width, BAR_HEIGHT, 5)
+      .fill({ color: theme.panel, alpha: 0.96 });
     this.redraw();
   }
 
@@ -93,20 +91,17 @@ export class HpBar extends Container {
 
   private redraw(): void {
     if (this.destroyed) return;
-    this.drawSegment(this.trail, this.shown.trail, theme.hpTrail, false);
-    this.drawSegment(this.fill, this.shown.fill, this.color, true);
+    this.drawSegment(this.trail, this.shown.trail, theme.hpTrail);
+    this.drawSegment(this.fill, this.shown.fill, this.color);
   }
 
-  private drawSegment(g: Graphics, ratio: number, color: number, shine: boolean): void {
+  private drawSegment(g: Graphics, ratio: number, color: number): void {
     g.clear();
-    const inset = 3;
-    const height = BAR_HEIGHT - inset * 2;
-    const width = (this.barWidth - inset * 2) * ratio;
+    const inset = 0;
+    const height = 3;
+    const width = this.barWidth * ratio;
     if (width < 1) return;
     const radius = Math.min(height, width) / 2;
-    g.roundRect(inset, inset, width, height, radius).fill(color);
-    if (shine && width > 8) {
-      g.roundRect(inset + 3, inset + 2, width - 6, height * 0.35, radius / 2).fill({ color: 0xffffff, alpha: 0.3 });
-    }
+    g.roundRect(inset, BAR_HEIGHT - height, width, height, radius).fill(color);
   }
 }

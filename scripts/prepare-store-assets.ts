@@ -54,20 +54,20 @@ try {
   await page.waitForFunction(() => (window as any).__game?.screen?.constructor.name === 'GameScreen');
   await capture('04-boss.png');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500">
-    <defs><linearGradient id="sky" x2="1" y2="1"><stop stop-color="#211539"/><stop offset="1" stop-color="#4e315e"/></linearGradient></defs>
+    <defs><linearGradient id="sky" x2="1" y2="1"><stop stop-color="#0d1117"/><stop offset="1" stop-color="#151c25"/></linearGradient></defs>
     <rect width="1024" height="500" fill="url(#sky)"/>
-    <circle cx="840" cy="240" r="280" fill="#ffd074" opacity=".07"/>
-    <path d="M610 0V500M650 0V500M690 0V500M570 120H1024M570 240H1024M570 360H1024" stroke="#ffd074" opacity=".08" stroke-width="2"/>
-    <text x="64" y="92" fill="#a9dce9" font-family="Arial" font-size="20" letter-spacing="3">LOGIKA SPOTYKA POJEDYNKI</text>
-    <text x="60" y="184" fill="#fff3da" font-family="Arial" font-weight="bold" font-size="64">Sudoku &amp;</text>
-    <text x="60" y="260" fill="#ffd074" font-family="Arial" font-weight="bold" font-size="72">Dragons</text>
-    <text x="64" y="328" fill="#fff3da" font-family="Arial" font-size="32">Każda cyfra to cios</text>
-    <text x="64" y="406" fill="#d7cbe6" font-family="Arial" font-size="22">Kampania · Pojedynki · Wyzwanie dnia</text>
-    <rect x="716" y="18" width="264" height="464" rx="18" fill="#100d20" stroke="#ffd074" stroke-width="3"/>
+    <circle cx="840" cy="240" r="280" fill="#b7d9ca" opacity=".07"/>
+    <path d="M610 0V500M650 0V500M690 0V500M570 120H1024M570 240H1024M570 360H1024" stroke="#b7d9ca" opacity=".08" stroke-width="2"/>
+    <text x="64" y="92" fill="#9ca9b9" font-family="Arial" font-size="20" letter-spacing="3">LOGIKA SPOTYKA POJEDYNKI</text>
+    <text x="60" y="184" fill="#eef2f6" font-family="Arial" font-weight="bold" font-size="64">Sudoku &amp;</text>
+    <text x="60" y="260" fill="#b7d9ca" font-family="Arial" font-weight="bold" font-size="72">Dragons</text>
+    <text x="64" y="328" fill="#eef2f6" font-family="Arial" font-size="32">Każda cyfra to cios</text>
+    <text x="64" y="406" fill="#9ca9b9" font-family="Arial" font-size="22">Kampania · Pojedynki · Wyzwanie dnia</text>
+    <rect x="716" y="18" width="264" height="464" rx="18" fill="#100d20" stroke="#b7d9ca" stroke-width="3"/>
   </svg>`;
   await writeFile(resolve(dir, 'feature-graphic.svg'), svg);
   const shot = await sharp(await readFile(resolve(dir, '02-battle-notes.png'))).resize(252, 448).png().toBuffer();
-  await sharp(Buffer.from(svg)).composite([{ input: shot, left: 722, top: 26 }]).flatten({ background: '#211539' }).removeAlpha().png().toFile(resolve(dir, 'feature-graphic.png'));
+  await sharp(Buffer.from(svg)).composite([{ input: shot, left: 722, top: 26 }]).flatten({ background: '#0d1117' }).removeAlpha().png().toFile(resolve(dir, 'feature-graphic.png'));
   await sharp('assets/icon-512.png').ensureAlpha().png().toFile(resolve(dir, 'icon-512.png'));
   console.log('Generated four 1080×1920 game screens, a 1024×500 feature graphic and a 512×512 icon.');
 } finally {

@@ -13,7 +13,7 @@ import { onlineDuels, type DuelBackend } from '../net/duelBackend.ts';
 import { errorMessage, OnlineError, supabase, type DuelConnectionState, type DuelRow, type Me } from '../net/online.ts';
 import { forgetDuel, rememberDuel } from '../net/duelRecovery.ts';
 import { OVERSCAN } from '../safeArea.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 import { BoardView } from '../ui/BoardView.ts';
 import { Button } from '../ui/Button.ts';
 import { DuelArena } from '../ui/DuelArena.ts';
@@ -795,10 +795,9 @@ export class DuelScreen extends Container {
       text: 'Rewanż!',
       style: {
         fontFamily: theme.fontFamily,
-        fontWeight: '800',
+        fontWeight: '600',
         fontSize: 50,
         fill: theme.gold,
-        stroke: { color: theme.panelLip, width: 7, join: 'round' },
       },
     });
     const subtitle = new Text({
@@ -808,7 +807,6 @@ export class DuelScreen extends Container {
         fontWeight: '700',
         fontSize: 18,
         fill: theme.text,
-        stroke: { color: theme.panelLip, width: 4, join: 'round' },
       },
     });
     title.anchor.set(0.5, 1);

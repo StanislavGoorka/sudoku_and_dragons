@@ -3,9 +3,9 @@ import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.
 import { feedback } from '../audio/feedback.ts';
 import { killTweens } from '../fx/tweens.ts';
 import type { StarGoal } from '../progress/progress.ts';
-import { theme } from '../theme.ts';
+import { uiTheme as theme } from '../uiTheme.ts';
 
-const STAR_EDGE = 0xb06a0a;
+const STAR_EDGE = 0x9f8956;
 
 /** A plump five-pointed star centred on (cx, cy): gold with a darker edge, or an empty dark slot. */
 export function drawStar(g: Graphics, cx: number, cy: number, r: number, filled = true): Graphics {
@@ -16,11 +16,9 @@ export function drawStar(g: Graphics, cx: number, cy: number, r: number, filled 
     points.push(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
   }
   if (filled) {
-    g.poly(points).fill(theme.gold).stroke({ width: r * 0.2, color: STAR_EDGE, join: 'round' });
-    // A shine on the upper left arm.
-    g.circle(cx - r * 0.22, cy - r * 0.2, r * 0.14).fill({ color: 0xffffff, alpha: 0.6 });
+    g.poly(points).fill(0xd2b778).stroke({ width: 1, color: STAR_EDGE, join: 'round' });
   } else {
-    g.poly(points).fill(theme.hpTrack).stroke({ width: r * 0.2, color: theme.panelLight, join: 'round' });
+    g.poly(points).stroke({ width: 1, color: theme.panelLight, join: 'round' });
   }
   return g;
 }
@@ -36,7 +34,7 @@ export class StarCounter extends Container {
     super();
     this.value = new Text({
       text: String(stars),
-      style: { fontFamily: theme.fontFamily, fontWeight: '800', fontSize: 18, fill: theme.text },
+      style: { fontFamily: theme.fontFamily, fontWeight: '600', fontSize: 16, fill: theme.text },
     });
     this.value.anchor.set(0, 0.5);
     this.addChild(this.bg, this.icon, this.value);
@@ -52,7 +50,7 @@ export class StarCounter extends Container {
 
   layout(height: number): void {
     this.pillHeight = height;
-    this.value.style.fontSize = Math.round(height * 0.5);
+    this.value.style.fontSize = Math.round(height * 0.38);
     this.draw();
   }
 
@@ -68,10 +66,10 @@ export class StarCounter extends Container {
   private draw(): void {
     const h = this.pillHeight;
     const w = this.pillWidth;
-    this.bg.clear().roundRect(0, 0, w, h, h / 2).fill({ color: theme.hpTrack, alpha: 0.75 }).stroke({ width: 2, color: theme.panelLight });
-    drawStar(this.icon.clear(), h * 0.55, h / 2, h * 0.34);
+    this.bg.clear().roundRect(0, 0, w, h, 8).fill(theme.panel).stroke({ width: 1, color: theme.panelLight });
+    drawStar(this.icon.clear(), h * 0.55, h / 2, h * 0.2);
     this.value.position.set(h * 1.0, h / 2 + 1);
-    this.hitArea = new Rectangle(0, 0, w, h);
+    this.hitArea = new Rectangle(0, Math.min(0, (h - 48) / 2), w, Math.max(48, h));
   }
 }
 
