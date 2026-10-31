@@ -25,6 +25,7 @@
     "test:server": "node scripts/test-duel-server.ts",
     "test:matchmaking": "node scripts/test-matchmaking.ts",
     "diagnostics:resolve": "node scripts/resolve-diagnostic.ts",
+    "perf:startup": "node scripts/measure-startup.ts",
     "deploy:web": "npm run build && wrangler pages deploy dist --project-name sudoku-dragons --branch main"
   },
   "dependencies": {

@@ -22,9 +22,12 @@ class Feedback {
   private synth: Synth | null = null;
   private music: Music | null = null;
   private track: TrackId | null = null;
+  private suspended = false;
+  private musicTimer: ReturnType<typeof setInterval> | undefined;
   private readonly native = Capacitor.isNativePlatform();
 
   unlock(): void {
+    if (this.suspended) return;
     if (!this.ctx) {
       this.ctx = new AudioContext();
       this.synth = new Synth(this.ctx);
@@ -32,18 +35,22 @@ class Feedback {
       this.applyMusic();
       this.music.play(this.track);
       // The music schedules itself a bar ahead on the audio clock; this only keeps it fed.
-      window.setInterval(() => this.music?.update(), 100);
+      this.updateMusicTimer();
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
   }
 
   /** The app went to the background: stop the audio thread to save battery. */
   suspend(): void {
+    this.suspended = true;
+    this.updateMusicTimer();
     if (this.ctx?.state === 'running') void this.ctx.suspend();
   }
 
   /** Back from the background: the music goes on (the page was allowed sound before, so no tap is needed). */
   resume(): void {
+    this.suspended = false;
+    this.updateMusicTimer();
     if (this.ctx?.state === 'suspended') void this.ctx.resume();
   }
 
@@ -51,6 +58,7 @@ class Feedback {
   playMusic(track: TrackId | null): void {
     this.track = track;
     this.music?.play(track);
+    this.updateMusicTimer();
   }
 
   /** Mute or unmute. Unmuted at no volume, the music comes back at half. */
@@ -159,6 +167,13 @@ class Feedback {
   private applyMusic(): void {
     this.music?.setVolume(this.settings.musicVolume);
     this.music?.setEnabled(this.settings.music && this.settings.musicVolume > 0);
+    this.updateMusicTimer();
+  }
+
+  private updateMusicTimer(): void {
+    const needed = !this.suspended && this.music?.needsUpdate;
+    if (needed && !this.musicTimer) this.musicTimer = setInterval(() => { this.music?.update(); this.updateMusicTimer(); }, 100);
+    else if (!needed && this.musicTimer) { clearInterval(this.musicTimer); this.musicTimer = undefined; }
   }
 
   private play(sound: (synth: Synth) => void): void {

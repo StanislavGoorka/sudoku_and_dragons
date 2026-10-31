@@ -1,4 +1,5 @@
 import { Container, Text, type DestroyOptions } from 'pixi.js';
+import { isAppActive } from '../activity.ts';
 import { DUEL_RULES, type Difficulty, type Seat } from '../../core/index.ts';
 import { DIFFICULTIES, DIFFICULTY_INFO, loadDifficulty, saveDifficulty } from '../difficulty.ts';
 import {
@@ -76,6 +77,9 @@ export class LobbyScreen extends Container {
   private pollTimer: number | null = null;
   private screenWidth = 0;
   private screenHeight = 0;
+  private refreshWaiting: (() => void) | null = null;
+
+  resume(): void { this.refreshWaiting?.(); }
 
   constructor(options: LobbyOptions) {
     super();
@@ -496,10 +500,14 @@ export class LobbyScreen extends Container {
     };
     this.stopWatching = watchDuel(joined.duel.id, onRow);
     // In case the live connection misses the moment someone joins.
-    this.pollTimer = window.setInterval(() => void fetchDuel(joined.duel.id).then(onRow, () => {}), 3000);
+    this.refreshWaiting = () => {
+      if (isAppActive()) void fetchDuel(joined.duel.id).then(onRow, () => {});
+    };
+    this.pollTimer = window.setInterval(this.refreshWaiting, 3000);
   }
 
   private stopWaiting(): void {
+    this.refreshWaiting = null;
     this.stopWatching?.();
     this.stopWatching = null;
     if (this.pollTimer !== null) window.clearInterval(this.pollTimer);

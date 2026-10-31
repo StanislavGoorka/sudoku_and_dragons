@@ -36,6 +36,9 @@ export class Music {
   private wanted: TrackId | null = null;
   private enabled = true;
 
+  /** Keep scheduling only while playing or waiting to disconnect a faded track. */
+  get needsUpdate(): boolean { return this.current !== null || this.fading.length > 0; }
+
   constructor(ctx: BaseAudioContext, destination: AudioNode = ctx.destination) {
     this.ctx = ctx;
     this.master = ctx.createGain();

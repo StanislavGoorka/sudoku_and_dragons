@@ -13,7 +13,8 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
    w ustawieniach i w pauzie walki.
 6. [ ] **Ranking wyzwania dnia** – najlepsze czasy dnia na serwerze i miejsce gracza.
 7. [ ] **Przygotowanie do Google Play** – podpisany AAB, wersje, polityka prywatności, grafiki i opis sklepu.
-8. [ ] **Lżejsza gra** – podział kodu (710 kB na start) na części ładowane, gdy są potrzebne.
+8. [x] **Lżejsza gra** – ekrany ładowane na żądanie, moduły konta po pierwszej klatce menu;
+   pomiary i budżet rozmiaru startowego w CI (`PERFORMANCE.md`).
 
 ## Niezawodność przed publikacją
 
@@ -25,5 +26,5 @@ Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy je
    środowisku Supabase z usuwaniem danych testowych.
 4. [x] **Monitoring błędów** – prywatne raporty techniczne w Supabase, ograniczona kolejka, limity,
    deduplikacja, sprzątanie starych wpisów, wyłączenie w ustawieniach i lokalne mapy źródeł.
-5. [ ] **Szybszy start i mniejsze zużycie zasobów** – ładowanie ekranów na żądanie, lżejszy renderer,
+5. [x] **Szybszy start i mniejsze zużycie zasobów** – ładowanie ekranów na żądanie, lżejszy renderer,
    ograniczenie pracy w tle i pomiary produkcyjnego buildu.

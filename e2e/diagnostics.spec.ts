@@ -19,8 +19,9 @@ test('global errors are sent as technical fields and the player can opt out', as
     if (url.pathname.includes('/functions/')) return route.fulfill({ json: { nickname: 'Test', serverTime: Date.now() }, headers });
     return route.fulfill({ json: [], headers });
   });
+  await page.clock.install();
   await page.goto('/'); await ready(page);
-  await page.clock.setFixedTime(new Date(Date.now() + 61_000));
+  await page.clock.setSystemTime(new Date(Date.now() + 61_000));
   await page.addScriptTag({ content: "throw new TypeError('private@example.test password=secret');" });
   await expect.poll(() => page.evaluate(() => localStorage.getItem('sudoku-dragons.diagnostics'))).toContain('TypeError');
   await page.evaluate(() => window.__game.diagnostics.flush());
@@ -29,9 +30,10 @@ test('global errors are sent as technical fields and the player can opt out', as
   expect(reports.find((r) => r.code === 'TypeError')?.screen).toBe('menu');
   await tapButton(page, 'Ustawienia');
   await tapButton(page, 'Raporty błędów: włączone');
+  await expect.poll(() => page.evaluate(() => window.__game.feedback.settings.diagnostics)).toBe(false);
   const before = reports.length;
   await page.evaluate(() => window.__game.diagnostics.report('runtime', 'unhandled', new RangeError('private')));
-  await page.clock.setFixedTime(new Date(Date.now() + 125_000));
+  await page.clock.setSystemTime(new Date(Date.now() + 125_000));
   await page.evaluate(() => window.__game.diagnostics.flush());
   expect(reports).toHaveLength(before);
   expect(await page.evaluate(() => localStorage.getItem('sudoku-dragons.diagnostics'))).toBeNull();

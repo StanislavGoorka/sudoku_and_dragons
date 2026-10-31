@@ -364,6 +364,15 @@ code and comments are English.
 
 ## Checking changes in the browser
 
+- `bootstrap.ts` installs diagnostics and starts `main.boot()`, with a visible startup retry on failure.
+  Only the menu loads at startup. Other screens use guarded dynamic imports: construct only after checking
+  the navigation generation, so a cancelled download cannot create a battle or subscriptions. Cloud/account
+  modules load after a menu paint; active duel recovery still runs immediately afterwards. Preserve that order.
+  Cloud progress refresh waits for menu dialogs to close. Pixi explicitly imports events and skips automatic
+  environment extensions; Graphics/Text/BitmapText register their own pipes. Rendering: resolution at most 2,
+  menu 30 FPS, fights 60 FPS. Browser visibility and native app state jointly stop the main ticker and music
+  scheduling in the background. See `PERFORMANCE.md`; `npm run perf:startup -- --check` guards startup JS in CI.
+
 - `diagnostics/` captures only technical codes and sanitized source locations. Reports use the authenticated
   `report_client_diagnostics` RPC, a private definer, a daily quota and 14-day cleanup on ingestion. No raw messages,
   account details, payloads or board data. Queue is bounded and opt-out clears it. See `MONITORING.md`.

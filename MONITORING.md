@@ -1,7 +1,7 @@
 # Monitoring techniczny
 
 Raporty obejmują wyjątki JavaScript, nieudane operacje synchronizacji i pojedynków, problemy zapisu oraz
-czas przygotowania aplikacji. Zdarzenie zawiera wersję buildu, platformę, ekran, operację, kod z zamkniętej
+czas startu do pierwszego pokazanego ekranu (`game-ready`, po okazji do renderowania). Zdarzenie zawiera wersję buildu, platformę, ekran, operację, kod z zamkniętej
 listy i maksymalnie trzy lokalizacje `plik.js:wiersz:kolumna`. Nie zawiera komunikatu wyjątku, pełnych URL,
 adresu e-mail, nicka, ID gracza, tokenów, planszy, rozwiązania ani treści żądania. Ten mechanizm nie zastępuje
 raportów natywnych awarii procesu Androida i ANR w Google Play.

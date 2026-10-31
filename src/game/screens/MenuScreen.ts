@@ -111,6 +111,8 @@ export class MenuScreen extends Container {
   private readonly shopButton: Button;
   private readonly shopDot = new Graphics();
   private modal: Modal | null = null;
+  /** A delayed cloud refresh must not close settings or a saved-battle question. */
+  get modalOpen(): boolean { return this.modal !== null; }
   private readonly onPick: (stage: Stage) => void;
   private index: number;
   private stageWidth = 0;

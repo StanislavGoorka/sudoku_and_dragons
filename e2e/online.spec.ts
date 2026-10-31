@@ -162,8 +162,10 @@ test('a late forfeit records the server win instead of a guessed local defeat', 
 test('a delayed recovery cannot interrupt a solo battle chosen meanwhile', async ({ page }) => {
   const server = await backend(page);
   server.delay();
+  const reading = page.waitForRequest((request) => new URL(request.url()).pathname === '/rest/v1/duels');
   await page.goto('/');
   await ready(page);
+  await reading;
   await tapButton(page, 'Walcz!');
   await ready(page, 'GameScreen');
   server.release();

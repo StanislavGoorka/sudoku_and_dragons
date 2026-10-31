@@ -16,6 +16,8 @@ synchronizację, odzyskiwanie zapisów i wymuszone wyścigi przy anulowaniu poko
 na ekranie telefonu i sprawdza prawdziwe kliknięcia oraz klawiaturę: zapis i wznowienie solo, ochronę przed
 przypadkowym zastąpieniem walki, restart podczas zwycięstwa, odnalezienie pojedynku bez lokalnego ID,
 ponowne połączenie i jednokrotną nagrodę, pokój oczekujący i spóźnione odpowiedzi serwera.
+Obejmuje też prywatność diagnostyki, wyłączenie raportów, ładowanie ekranów na żądanie, anulowane lub
+zerwane pobieranie z ponowieniem, limity renderowania i zatrzymanie pracy w tle (375×812 i 360×640).
 
 Scenariusze przeglądarkowe sterują transportem sieciowym, aby powtarzalnie wymuszać awarie. Korzystają
 z istniejącego mostka DEV tylko do odczytu stanu i geometrii canvasa (oraz przygotowania końcowego ciosu).
@@ -40,7 +42,8 @@ npx supabase stop --project-id sudoku-dragons-ci --no-backup
 ```
 
 `test:matchmaking` otwiera niezależne połączenia do prawdziwego PostgreSQL i tworzy własną tymczasową bazę.
-Sprawdza parowanie równoczesnych zgłoszeń, anulowanie starego wyszukiwania, rollback i uprawnienia RPC.
+Sprawdza parowanie równoczesnych zgłoszeń, anulowanie starego wyszukiwania, rollback i uprawnienia RPC,
+a także walidację diagnostyki, RLS, deduplikację, konkurencyjny limit dzienny i sprzątanie raportów.
 Zawsze usuwa swoją bazę i tylko te role, które sam utworzył. Można użyć także lokalnego PostgreSQL bez Dockera.
 
 `test:integration` odczytuje klucze lokalnego stosu przez CLI, uruchamia worker funkcji i czeka na odpowiedź
@@ -57,9 +60,14 @@ konfigurację klienta do ręcznej gry z lokalnym backendem.
 
 `.github/workflows/ci.yml` działa dla push, pull request i ręcznego uruchomienia. Dwa zadania obejmują:
 
-- testy, typy, build i osiem scenariuszy przeglądarkowych;
+- testy, typy, build, budżet startowego JS i scenariusze przeglądarkowe;
 - tymczasowy Supabase, realne testy współbieżności PostgreSQL i integrację funkcji z Auth/RLS.
 
 CI nie potrzebuje sekretów projektu produkcyjnego. Sprzątanie stosu wykonuje się także po błędzie.
 Build jest artefaktem workflow; przy błędzie zostają raport i ślady Playwright albo log workera funkcji.
 Workflow nie publikuje aplikacji i nie wdraża zmian do Supabase.
+
+`npm run perf:startup -- --check` sprawdza produkcyjny build w świeżych kontekstach przeglądarki, przy
+spowolnieniu CPU i sieci. Zatrzyma CI po przekroczeniu 225 kB gzip startowego JS lub przedwczesnym
+załadowaniu dodatkowych ekranów. Czas startu jest wynikiem pomiaru, bez sztywnego limitu zależnego od
+obciążenia runnera. Metoda, wyniki i ograniczenia: `PERFORMANCE.md`.

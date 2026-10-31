@@ -2,6 +2,7 @@ import gsap from 'gsap';
 import { Container, Graphics, Text, type DestroyOptions } from 'pixi.js';
 import { closesBox, DUEL_RULES, otherSeat, solve, type DuelEvent, type DuelState, type Seat, type Unit } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
+import { isAppActive } from '../activity.ts';
 import type { TrackId } from '../audio/tracks.ts';
 import { rivalDesign } from '../dragonSkins.ts';
 import { floatText, shake, stopEffects, wait } from '../fx/effects.ts';
@@ -174,7 +175,7 @@ export class DuelScreen extends Container {
     this.stopWatching = this.backend.watch(this.duelId, (next) => this.applyRow(next), (state) => this.setConnection(state));
     // A safety net for missed live updates: during the duel, and after it while a rematch is still possible.
     this.pollTimer = window.setInterval(() => {
-      if (this.sending || this.switching || this.rematch.declined) return;
+      if (!isAppActive() || this.sending || this.switching || this.rematch.declined) return;
       void this.refresh();
     }, 4000);
     if (rivalId) {
