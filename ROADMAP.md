@@ -1,5 +1,7 @@
 # Plan rozwoju
 
+Następna piątka dużych zadań, bez wdrożeń na platformy: [rozwój rozgrywki 11–15](GAMEPLAY_ROADMAP.md).
+
 Duże zadania w kolejności. Każde zadanie to osobny commit (albo kilka, gdy jest duże).
 
 1. [x] **Samouczek** – prowadzona pierwsza walka (wybór pola, cyfra, ciosy, licznik smoka; licznik stoi na czas
