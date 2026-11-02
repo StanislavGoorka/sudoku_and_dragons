@@ -16,17 +16,28 @@ import {
   type EnemyDef,
 } from '../src/core/index.ts';
 
+const GENERATOR_VERSION = Number(process.argv.find(arg => arg.startsWith('--version='))?.split('=')[1] ?? 2) as 1 | 2;
+if (![1,2].includes(GENERATOR_VERSION)) throw new Error('Unsupported generator version');
+const puzzles = new Map<string, ReturnType<typeof generatePuzzle>>();
+function puzzleFor(seed: number, difficulty: Parameters<typeof generatePuzzle>[1]) {
+  const key = `${difficulty}/${seed}`;
+  if (!puzzles.has(key)) puzzles.set(key, generatePuzzle(seed, difficulty, GENERATOR_VERSION));
+  return puzzles.get(key)!;
+}
+console.log(`Generator v${GENERATOR_VERSION}`);
+
 const SEEDS = 120;
 const SPEEDS = [5, 8, 10, 12, 14, 16, 20];
 
-const only = process.argv[2] as Difficulty | undefined;
+const positional = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
+const only = positional[0] as Difficulty | undefined;
 const difficulties: Difficulty[] = only ? [only] : ['easy', 'medium', 'hard'];
 
 for (const difficulty of difficulties) {
   const enemy: EnemyDef = {
     ...ENEMIES[difficulty],
-    attackEvery: Number(process.argv[3] ?? ENEMIES[difficulty].attackEvery),
-    timedAttack: Number(process.argv[4] ?? ENEMIES[difficulty].timedAttack),
+    attackEvery: Number(positional[1] ?? ENEMIES[difficulty].attackEvery),
+    timedAttack: Number(positional[2] ?? ENEMIES[difficulty].timedAttack),
   };
   console.log(`${difficulty}: ${enemy.name}, attack every ${enemy.attackEvery} s for ${enemy.timedAttack} HP`);
 
@@ -34,7 +45,7 @@ for (const difficulty of difficulties) {
     const hpLeft: number[] = [];
     let deaths = 0;
     for (let seed = 1; seed <= SEEDS; seed++) {
-      const { givens, solution } = generatePuzzle(seed, difficulty);
+      const { givens, solution } = puzzleFor(seed, difficulty);
       const board = [...givens];
       const rng = createRng(seed * 31 + secondsPerCell);
       const order = shuffle(givens.flatMap((v, i) => (v === 0 ? [i] : [])), rng);

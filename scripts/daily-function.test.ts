@@ -37,7 +37,7 @@ describe('daily Edge Function referee', () => {
     expect(run.user_id).toBe('owner');
     expect((await server.send({ action: 'finish', runId: run.id, moves: [] })).status).toBe(400);
     expect((await server.send({ action: 'finish', runId: run.id, moves: [] }, 'other')).status).toBe(404);
-    const puzzle = generatePuzzle(run.seed, 'easy'), grid = [...puzzle.givens], battle = createBattle(ENEMIES.easy), moves = [];
+    const puzzle = generatePuzzle(run.seed, 'easy', 1), grid = [...puzzle.givens], battle = createBattle(ENEMIES.easy), moves = [];
     for (let cell = 0; cell < 81 && battle.outcome === 'ongoing'; cell++) if (!grid[cell]) {
       moves.push({ cell, digit: puzzle.solution[cell], at: 0 });
       resolveMove(battle, applyMove(grid, puzzle.solution, cell, puzzle.solution[cell]));

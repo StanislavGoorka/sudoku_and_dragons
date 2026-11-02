@@ -38,6 +38,7 @@ export interface LobbyOptions {
 
 /** `duelId` and `code` are null while the server is still making the duel. */
 type View =
+  | { kind: 'preparing-bot' }
   | { kind: 'offline'; message: string }
   | { kind: 'home'; message?: string }
   | { kind: 'searching'; duelId: string | null }
@@ -69,6 +70,7 @@ export class LobbyScreen extends Container {
   private clock = 0;
   /** Bumped by every request and every cancel: an answer that comes back to a newer attempt is let go. */
   private attempt = 0;
+  private botAbort: AbortController | null = null;
   /** Round button in the top-left corner: the same as Back. */
   private readonly backButton: Button;
   private stopWatching: (() => void) | null = null;
@@ -128,6 +130,8 @@ export class LobbyScreen extends Container {
       this.cancelWaiting();
     } else if (view.kind === 'joining') {
       this.cancelJoin(view.code);
+    } else if (view.kind === 'preparing-bot') {
+      this.cancelBot();
     } else if (view.kind === 'join') {
       this.show({ kind: 'home' });
     } else {
@@ -149,6 +153,7 @@ export class LobbyScreen extends Container {
   }
 
   override destroy(options?: DestroyOptions): void {
+    this.botAbort?.abort(); this.botAbort = null;
     this.stopWaiting();
     super.destroy(options);
   }
@@ -220,6 +225,10 @@ export class LobbyScreen extends Container {
     const title = this.addText('Pojedynek online', 34, theme.text, '600');
     title.style.stroke = { color: theme.panelLip, width: 6, join: 'round' };
     switch (view.kind) {
+      case 'preparing-bot':
+        this.addWaiting('Przygotowuję trening');
+        this.addButton('Anuluj', () => this.cancelBot());
+        break;
       case 'offline':
         this.addText(view.message, 16, theme.error);
         this.addButton('Spróbuj ponownie', () => {
@@ -519,12 +528,24 @@ export class LobbyScreen extends Container {
    * a search under way is given up.
    */
   private startBot(): void {
+    if (this.view.kind === 'preparing-bot') return;
     if (this.view.kind === 'searching' || this.view.kind === 'room') this.cancelWaiting();
-    this.attempt++;
+    const attempt = ++this.attempt;
     const nickname = this.nickname;
     const bot = new BotDuel(this.difficulty, 'you');
-    const { duel, seat } = bot.start();
-    this.options.onStart(duel, seat, { id: 'you', nickname }, bot);
+    this.show({ kind: 'preparing-bot' });
+    const abort = new AbortController(); this.botAbort = abort;
+    void bot.start(abort.signal).then(({ duel, seat }) => {
+      if (this.destroyed || this.attempt !== attempt) return;
+      this.options.onStart(duel, seat, { id: 'you', nickname }, bot);
+    }).catch(() => {
+      if (!this.destroyed && this.attempt === attempt) this.show({ kind: 'offline', message: 'Nie udało się przygotować treningu. Spróbuj ponownie.' });
+    }).finally(() => { if (this.botAbort === abort) this.botAbort = null; });
+  }
+
+  private cancelBot(): void {
+    this.attempt++; this.botAbort?.abort(); this.botAbort = null;
+    this.show({ kind: 'home' });
   }
 
   /** Back to the lobby at once; the server is told in the background. */

@@ -9,7 +9,7 @@ import { Capacitor } from '@capacitor/core';
 import gsap from 'gsap';
 import { Application, type Container } from 'pixi.js';
 import 'pixi.js/events';
-import { generatePuzzle, stageById, type Difficulty, type Seat, type Stage } from '../core/index.ts';
+import { CURRENT_GENERATOR_VERSION, RANKED_DAILY_GENERATOR_VERSION, stageById, type Difficulty, type GeneratorVersion, type Seat, type Stage } from '../core/index.ts';
 import { feedback } from './audio/feedback.ts';
 import type { TrackId } from './audio/tracks.ts';
 import { DIFFICULTIES, loadDifficulty, saveStageId } from './difficulty.ts';
@@ -81,6 +81,7 @@ export async function boot(): Promise<void> {
   let loading = false;
   let loadingModal: Modal | null = null;
   let loadingTimer: ReturnType<typeof setTimeout> | undefined;
+  let loadingAbort: AbortController | undefined;
   let needsRecovery = true;
   let menuNeedsRefresh = false;
   const activePointers = new Set<number>();
@@ -103,6 +104,7 @@ export async function boot(): Promise<void> {
   };
 
   const clearLoading = () => {
+    loadingAbort?.abort(); loadingAbort = undefined;
     clearTimeout(loadingTimer);
     loadingModal?.destroy({ children: true });
     loadingModal = null;
@@ -146,9 +148,10 @@ export async function boot(): Promise<void> {
   };
 
   /** Construct only the latest requested screen: stale imports must not create subscriptions or battles. */
-  const openScreen = (kind: DiagnosticScreen, load: () => Promise<() => Screen>, after?: () => void): void => {
+  const openScreen = (kind: DiagnosticScreen, load: (signal: AbortSignal) => Promise<() => Screen>, after?: () => void): void => {
     const expected = ++navigation;
     clearLoading();
+    const abort = new AbortController(); loadingAbort = abort;
     loading = true;
     screen?.pause?.();
     if (screen) screen.eventMode = 'none';
@@ -162,7 +165,7 @@ export async function boot(): Promise<void> {
       layoutScreen();
     };
     loadingTimer = setTimeout(() => overlay(false), 200);
-    void load().then((create) => {
+    void load(abort.signal).then((create) => {
       if (navigation !== expected) return;
       show(create(), kind);
       after?.();
@@ -175,41 +178,43 @@ export async function boot(): Promise<void> {
   };
 
   /** A campaign battle: the stage's dragon on a fresh board of its region's difficulty. */
-  const startStage = (stage: Stage, seed = randomSeed()) => {
+  const startStage = (stage: Stage, seed = randomSeed(), version: GeneratorVersion = CURRENT_GENERATOR_VERSION) => {
     const saved = activeBattle();
     if (saved) {
       if (saved.stage === stage.id) return resumeBattle();
-      return showMenu(() => startStage(stage, seed));
+      return showMenu(() => startStage(stage, seed, version));
     }
     saveStageId(stage.id);
-    openScreen('battle', async () => {
-      const { GameScreen } = await import('./screens/GameScreen.ts');
-      return () => new GameScreen(generatePuzzle(seed, stage.region.difficulty), {
+    openScreen('battle', async (signal) => {
+      const [{ GameScreen }, { generatePuzzleAsync }] = await Promise.all([import('./screens/GameScreen.ts'), import('./puzzleGeneration.ts')]);
+      const puzzle = await generatePuzzleAsync(seed, stage.region.difficulty, version, signal);
+      return () => new GameScreen(puzzle, {
         onRestart: () => startStage(stage),
         onPlay: (next) => startStage(next),
         onMenu: showMenu,
         stage,
       });
     });
-    if (import.meta.env.DEV) console.info(`[game] stage=${stage.id} seed=${seed}`);
+    if (import.meta.env.DEV) console.info(`[game] stage=${stage.id} seed=${seed} generator=${version}`);
   };
 
   /** A battle outside the campaign (a board to reproduce from the URL): the difficulty's dragon, nothing opened. */
-  const startBattle = (difficulty: Difficulty, seed = randomSeed()) => {
+  const startBattle = (difficulty: Difficulty, seed = randomSeed(), version: GeneratorVersion = CURRENT_GENERATOR_VERSION) => {
     const saved = activeBattle();
     if (saved) {
       if (!saved.stage && !saved.daily && saved.puzzle.difficulty === difficulty) return resumeBattle();
-      return showMenu(() => startBattle(difficulty, seed));
+      return showMenu(() => startBattle(difficulty, seed, version));
     }
-    openScreen('battle', async () => {
-      const { GameScreen } = await import('./screens/GameScreen.ts');
-      return () => new GameScreen(generatePuzzle(seed, difficulty), {
+    openScreen('battle', async (signal) => {
+      const [{ GameScreen }, { generatePuzzleAsync }] = await Promise.all([import('./screens/GameScreen.ts'), import('./puzzleGeneration.ts')]);
+      const puzzle = await generatePuzzleAsync(seed, difficulty, version, signal);
+      return () => new GameScreen(puzzle, {
         onRestart: () => startBattle(difficulty),
         onPlay: (next) => startStage(next),
         onMenu: showMenu,
       });
     });
-    if (import.meta.env.DEV) console.info(`[game] seed=${seed} difficulty=${difficulty}`);
+    if (import.meta.env.DEV) console.info(`[game] seed=${seed} difficulty=${difficulty} generator=${version}`);
   };
 
   /** Today's daily challenge: the day's board, on a level the player has opened. */
@@ -223,9 +228,11 @@ export async function boot(): Promise<void> {
       if (saved.daily === daily.key) return resumeBattle();
       return showMenu(startDaily);
     }
-    openScreen('battle', async () => {
-      const { GameScreen } = await import('./screens/GameScreen.ts');
-      return () => new GameScreen(generatePuzzle(daily.seed, daily.difficulty), {
+    openScreen('battle', async (signal) => {
+      const [{ GameScreen }, { generatePuzzleAsync }] = await Promise.all([import('./screens/GameScreen.ts'), import('./puzzleGeneration.ts')]);
+      // Offline replay of the common day board keeps the live ranking's generator version too.
+      const puzzle = await generatePuzzleAsync(daily.seed, daily.difficulty, RANKED_DAILY_GENERATOR_VERSION, signal);
+      return () => new GameScreen(puzzle, {
         onRestart: startDaily,
         onPlay: (next) => startStage(next),
         onMenu: showMenu,
@@ -283,9 +290,10 @@ export async function boot(): Promise<void> {
   };
   const startRankedDaily = (run: RankedRun): void => {
     if (activeBattle()) return showMenu(() => startRankedDaily(run));
-    openScreen('battle', async () => {
-      const { GameScreen } = await import('./screens/GameScreen.ts');
-      return () => new GameScreen(generatePuzzle(Number(run.seed), run.difficulty), {
+    openScreen('battle', async (signal) => {
+      const [{ GameScreen }, { generatePuzzleAsync }] = await Promise.all([import('./screens/GameScreen.ts'), import('./puzzleGeneration.ts')]);
+      const puzzle = await generatePuzzleAsync(Number(run.seed), run.difficulty, RANKED_DAILY_GENERATOR_VERSION, signal);
+      return () => new GameScreen(puzzle, {
         onMenu: showMenu, onRestart: showDaily, onPlay: startStage, daily: run.day, ranked: run, onRanking: showDaily,
       });
     });
@@ -476,12 +484,15 @@ export async function boot(): Promise<void> {
 
   // ?seed=123&difficulty=hard skips the menu and reproduces a specific board.
   const params = new URLSearchParams(location.search);
+  const linkedVersion = params.get('generator');
+  if (linkedVersion !== null && linkedVersion !== '1' && linkedVersion !== '2') throw new Error('Unsupported generator version');
+  const generatorVersion: GeneratorVersion = linkedVersion === '1' ? 1 : CURRENT_GENERATOR_VERSION;
   const linkedStage = stageById(params.get('stage') ?? '');
   if (linkedStage) {
-    startStage(linkedStage, Number(params.get('seed')) || randomSeed());
+    startStage(linkedStage, params.has('seed') ? Number(params.get('seed')) : randomSeed(), generatorVersion);
   } else if (params.has('seed') || params.has('difficulty')) {
     const difficulty = DIFFICULTIES.find((d) => d === params.get('difficulty')) ?? loadDifficulty();
-    startBattle(difficulty, Number(params.get('seed')) || randomSeed());
+    startBattle(difficulty, params.has('seed') ? Number(params.get('seed')) : randomSeed(), generatorVersion);
   } else {
     showMenu();
   }

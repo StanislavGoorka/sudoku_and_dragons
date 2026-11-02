@@ -12,7 +12,7 @@ try {
   const auth = await client.auth.signInAnonymously(); assert.ifError(auth.error); users.push(auth.data.user!.id);
   const start = await client.functions.invoke('daily', { body: { action: 'start', difficulty: 'easy', seed: 123 } });
   assert.ifError(start.error);
-  const run = start.data.run, puzzle = generatePuzzle(Number(run.seed), 'easy'), grid = [...puzzle.givens];
+  const run = start.data.run, puzzle = generatePuzzle(Number(run.seed), 'easy', 1), grid = [...puzzle.givens];
   const battle = createBattle(ENEMIES.easy), moves: DailyMove[] = [];
   for (let cell = 0; cell < 81 && battle.outcome === 'ongoing'; cell++) if (!grid[cell]) {
     const digit = puzzle.solution[cell]; moves.push({ cell, digit, at: 0 });

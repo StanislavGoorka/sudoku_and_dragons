@@ -51,7 +51,7 @@ const SHELVES: Record<CosmeticKind, { tab: string; inUse: string; owned: string;
 let lastKind: CosmeticKind = 'board';
 
 /** The board shown in the preview: always the same one, partly solved. */
-const SAMPLE = generatePuzzle(20261029, 'easy');
+const SAMPLE = generatePuzzle(20261029, 'easy', 1);
 /** Its solved digits shown as the player's: every 5 (so one pad key shows as done) and a scatter of others. */
 const SAMPLE_PLACED = SAMPLE.givens.map((given, cell) => (given === 0 && (SAMPLE.solution[cell] === 5 || cell % 4 === 1) ? SAMPLE.solution[cell] : given));
 function fromMiddle(cell: number): number {

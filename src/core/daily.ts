@@ -4,6 +4,8 @@ import { generatePuzzle, type Difficulty } from './sudoku/generator.ts';
 import { applyMove } from './sudoku/moves.ts';
 
 export interface DailyMove { cell: number; digit: number; at: number }
+/** The live ranking protocol predates versioning. Keep its common UTC board immutable for all clients. */
+export const RANKED_DAILY_GENERATOR_VERSION = 1 as const;
 export function dailySeed(day: string, difficulty: Difficulty): number {
   let seed = 0x811c9dc5;
   for (const char of `${day}:${difficulty}`) seed = Math.imul(seed ^ char.charCodeAt(0), 0x01000193) >>> 0;
@@ -15,7 +17,7 @@ export function dailySeed(day: string, difficulty: Difficulty): number {
  */
 export function verifyDaily(seed: number, difficulty: Difficulty, moves: unknown, wallMs: number): { mistakes: number } | null {
   if (!Array.isArray(moves) || moves.length < 1 || moves.length > 1000 || !Number.isFinite(wallMs) || wallMs < 0) return null;
-  const puzzle = generatePuzzle(seed, difficulty);
+  const puzzle = generatePuzzle(seed, difficulty, RANKED_DAILY_GENERATOR_VERSION);
   const grid = [...puzzle.givens];
   const battle = createBattle(ENEMIES[difficulty]);
   let at = 0, mistakes = 0;

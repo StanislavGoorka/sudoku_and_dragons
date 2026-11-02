@@ -5,6 +5,10 @@ Kolejność wynika z przeglądu generatora sudoku, botów, kampanii i zapisu pos
 
 ## 11. Rzeczywista trudność sudoku i przewidywalny balans
 
+**Status: zrealizowane.** Generator v2, analizator technik, wersjonowanie zapisów i worker
+zostały sprawdzone korpusem 1000 ziaren na poziom oraz testami regresji.
+Szczegóły i świadome pozostawienie wspólnego wyzwania dnia na v1: [trudność sudoku](SUDOKU_DIFFICULTY.md).
+
 **Problem:** generator zapewnia jedno rozwiązanie, ale poziom wyznacza głównie liczba cyfr
 startowych (40/32/26). Nie ocenia technik potrzebnych człowiekowi do rozwiązania planszy.
 

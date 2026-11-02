@@ -3,7 +3,7 @@ import { advanceTime, applyMove, createBattle, ENEMIES, generatePuzzle, resolveM
 import { dailySeed, verifyDaily } from './daily.ts';
 
 function wonReplay(difficulty: Difficulty): DailyMove[] {
-  const puzzle = generatePuzzle(dailySeed('2026-10-31', difficulty), difficulty);
+  const puzzle = generatePuzzle(dailySeed('2026-10-31', difficulty), difficulty, 1);
   const grid = [...puzzle.givens], battle = createBattle(ENEMIES[difficulty]);
   const moves: DailyMove[] = [];
   for (let cell = 0; cell < 81 && battle.outcome === 'ongoing'; cell++) if (!grid[cell]) {
@@ -36,7 +36,7 @@ describe('server-verified daily results', () => {
   });
   it('accepts winning histories from a frame-driven game loop at different solving speeds', () => {
     for (const difficulty of ['easy', 'medium', 'hard'] as Difficulty[]) for (let seed = 1; seed <= 12; seed++) {
-      const puzzle = generatePuzzle(seed, difficulty), grid = [...puzzle.givens], battle = createBattle(ENEMIES[difficulty]);
+      const puzzle = generatePuzzle(seed, difficulty, 1), grid = [...puzzle.givens], battle = createBattle(ENEMIES[difficulty]);
       const moves: DailyMove[] = [];
       let elapsed = 0;
       for (let cell = 0; cell < 81 && battle.outcome === 'ongoing'; cell++) if (!grid[cell]) {

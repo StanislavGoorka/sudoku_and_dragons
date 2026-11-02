@@ -15,6 +15,7 @@
     "sim:hp": "node scripts/sim-enemy-hp.ts",
     "sim:timer": "node scripts/sim-timer.ts",
     "sim:campaign": "node scripts/sim-campaign.ts",
+    "puzzles:check": "node scripts/check-puzzles.ts",
     "android:sync": "npm run build && cap sync android",
     "android:signing:init": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init-android-signing.ps1",
     "android:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-release.ps1",

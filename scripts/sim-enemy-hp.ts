@@ -15,6 +15,16 @@ import {
   type Difficulty,
 } from '../src/core/index.ts';
 
+const GENERATOR_VERSION = Number(process.argv.find(arg => arg.startsWith('--version='))?.split('=')[1] ?? 2) as 1 | 2;
+if (![1,2].includes(GENERATOR_VERSION)) throw new Error('Unsupported generator version');
+const puzzles = new Map<string, ReturnType<typeof generatePuzzle>>();
+function puzzleFor(seed: number, difficulty: Parameters<typeof generatePuzzle>[1]) {
+  const key = `${difficulty}/${seed}`;
+  if (!puzzles.has(key)) puzzles.set(key, generatePuzzle(seed, difficulty, GENERATOR_VERSION));
+  return puzzles.get(key)!;
+}
+console.log(`Generator v${GENERATOR_VERSION}`);
+
 const SEEDS = 150;
 
 for (const difficulty of ['easy', 'medium', 'hard'] as Difficulty[]) {
@@ -23,7 +33,7 @@ for (const difficulty of ['easy', 'medium', 'hard'] as Difficulty[]) {
   const totals: number[] = [];
   let finishers = 0;
   for (let seed = 1; seed <= SEEDS; seed++) {
-    const { givens, solution } = generatePuzzle(seed, difficulty);
+    const { givens, solution } = puzzleFor(seed, difficulty);
     const board = [...givens];
     const order = shuffle(givens.flatMap((v, i) => (v === 0 ? [i] : [])), createRng(seed * 7919));
     const battle = createBattle(enemy);

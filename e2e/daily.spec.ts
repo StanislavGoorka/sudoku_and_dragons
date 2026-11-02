@@ -31,6 +31,7 @@ test('ranked play uses the server board, queues a replay and displays the result
   await expect.poll(() => page.evaluate(() => window.__game.screen.status.text)).toContain('Nie masz jeszcze');
   await tapButton(page, 'Graj w rankingu'); await ready(page, 'GameScreen');
   expect(await page.evaluate(() => window.__game.screen.puzzle.seed)).toBe(seed);
+  expect(await page.evaluate(() => window.__game.screen.puzzle.generatorVersion)).toBe(1);
   await page.evaluate(() => window.__game.screen.debugFill(0));
   await expect.poll(() => finished).toBe(true); expect(replay.length).toBeGreaterThan(30);
   await page.evaluate(() => window.__game.ranking()); await ready(page, 'DailyScreen');

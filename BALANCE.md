@@ -1,5 +1,8 @@
 # Kampania: balans i bossowie
 
+Generator v2 i porównanie wszystkich etapów z v1: [trudność sudoku](SUDOKU_DIFFICULTY.md).
+Obecne parametry walki pozostają bez zmian; klasyfikacja dotyczy technik potrzebnych do rozwiązania.
+
 Zachowano wszystkie 12 identyfikatorów etapów, odblokowania, bazowe obrażenia cyfr i mnożnik ×2 za
 zamknięcie kwadratu. Zwykłe smoki i dzienne plansze mają te same zasady. Bossowie dostali różne wzorce:
 

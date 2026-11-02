@@ -1,4 +1,4 @@
-import { createBattle, ENEMIES, generatePuzzle, stageById, type Battle, type Difficulty, type Grid, type Puzzle } from '../../core/index.ts';
+import { analyzePuzzle, countSolutions, createBattle, ENEMIES, generatePuzzle, GENERATION_ATTEMPTS, isSolved, stageById, type Battle, type Grid, type Puzzle } from '../../core/index.ts';
 import type { DailyMove } from '../../core/index.ts';
 import type { RankedRun } from '../net/daily.ts';
 
@@ -23,6 +23,24 @@ const finite = (n: unknown, min: number, max = Number.MAX_SAFE_INTEGER): n is nu
   typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max;
 const integer = (n: unknown, min: number, max?: number): n is number => finite(n, min, max) && Number.isInteger(n);
 
+/** Validate the persisted v2 board rather than repeating bounded generation on the startup thread.
+ * This is a device-local checkpoint, not proof of a ranked result. The server replays its own v1 board.
+ */
+function restorePuzzle(saved: Puzzle): Puzzle | null {
+  const version = saved.generatorVersion === undefined ? 1 : saved.generatorVersion;
+  if (version === 1) return generatePuzzle(saved.seed, saved.difficulty, 1);
+  if (version !== 2 || !Array.isArray(saved.givens) || !Array.isArray(saved.solution) ||
+      saved.givens.length !== 81 || saved.solution.length !== 81 ||
+      !saved.solution.every((d) => integer(d, 1, 9)) || !isSolved(saved.solution) ||
+      !saved.givens.every((d, c) => integer(d, 0, 9) && (d === 0 || d === saved.solution[c]))) return null;
+  const analysis = analyzePuzzle(saved.givens);
+  if (analysis.status !== 'solved' || analysis.difficulty !== saved.difficulty || countSolutions(saved.givens) !== 1) return null;
+  return { seed: saved.seed, difficulty: saved.difficulty, generatorVersion: 2,
+    givens: [...saved.givens], solution: [...saved.solution], rating: { difficulty: saved.difficulty, counts: analysis.counts },
+    generation: saved.generation && integer(saved.generation.attempts, 1, GENERATION_ATTEMPTS) && typeof saved.generation.fallback === 'boolean'
+      ? { ...saved.generation } : undefined };
+}
+
 /** Corrupt, obsolete or finished checkpoints never start a battle or pay a reward. */
 export function parseSavedBattle(value: unknown): SavedBattle | null {
   if (!value || typeof value !== 'object') return null;
@@ -32,7 +50,8 @@ export function parseSavedBattle(value: unknown): SavedBattle | null {
   const stage = s.stage === undefined ? undefined : typeof s.stage === 'string' ? stageById(s.stage) : undefined;
   if (s.stage !== undefined && (!stage || stage.region.difficulty !== s.puzzle.difficulty)) return null;
   if (s.daily !== undefined && (s.stage !== undefined || typeof s.daily !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.daily))) return null;
-  const puzzle = generatePuzzle(s.puzzle.seed, s.puzzle.difficulty as Difficulty);
+  const puzzle = restorePuzzle(s.puzzle);
+  if (!puzzle || (s.ranked && puzzle.generatorVersion !== 1)) return null;
   const battle = createBattle(stage?.enemy ?? ENEMIES[puzzle.difficulty]);
   if (!Array.isArray(s.grid) || s.grid.length !== 81 || !s.grid.every((digit, cell) =>
     integer(digit, 0, 9) && (puzzle.givens[cell] ? digit === puzzle.givens[cell] : digit === 0 || digit === puzzle.solution[cell]))) return null;

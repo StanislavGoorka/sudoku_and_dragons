@@ -1,8 +1,8 @@
 import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.js';
-import { CLUES, REGIONS, STAGES, type Stage } from '../../core/index.ts';
+import { REGIONS, STAGES, type Stage } from '../../core/index.ts';
 import { feedback } from '../audio/feedback.ts';
-import { loadStageId, saveStageId } from '../difficulty.ts';
+import { DIFFICULTY_INFO, loadStageId, saveStageId } from '../difficulty.ts';
 import { lookOf } from '../enemies.ts';
 import { killTweens } from '../fx/tweens.ts';
 import { uiTheme as theme } from '../uiTheme.ts';
@@ -377,7 +377,7 @@ export class MenuScreen extends Container {
     this.levelName.text = shown.enemy.name;
     const place = shown.boss ? 'boss' : `walka ${shown.number} z ${region.stages.length}`;
     this.levelInfo.text = open
-      ? `${region.name} · ${place} · ${CLUES[region.difficulty]} podpowiedzi`
+      ? `${region.name} · ${place} · ${DIFFICULTY_INFO[region.difficulty].name}`
       : `Pokonaj najpierw: ${STAGES[this.index - 1].enemy.name}`;
     this.playButton.setText(open ? 'Walcz!' : 'Zablokowany');
     this.playButton.setEnabled(open);

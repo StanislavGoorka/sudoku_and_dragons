@@ -730,6 +730,11 @@ export class DuelScreen extends Container {
       button.setEnabled(true);
       this.modal.setMessage(`${this.endMessage}\n${this.rivalName} chce rewanżu!`);
       feedback.yourTurn();
+    } else {
+      // A failed request (including an offline bot worker download) must leave a usable retry.
+      button.setText('Rewanż');
+      button.setEnabled(true);
+      this.modal.setMessage(this.endMessage);
     }
   }
 

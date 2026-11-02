@@ -18,6 +18,42 @@ function checkpoint(): SavedBattle {
 }
 
 describe('solo battle checkpoint', () => {
+  it('restores an unversioned shipped checkpoint with its original v1 board and manual notes', () => {
+    const saved = checkpoint();
+    saved.puzzle = generatePuzzle(42, 'easy', 1);
+    delete saved.puzzle.generatorVersion;
+    saved.grid = [...saved.puzzle.givens];
+    saved.selected = saved.grid.indexOf(0);
+    saved.notes.fill(0); saved.notes[saved.selected] = (1 << 2) | (1 << 7);
+    const restored = parseSavedBattle(JSON.parse(JSON.stringify(saved)))!;
+    expect(restored.puzzle.generatorVersion).toBe(1);
+    expect(restored.puzzle.givens).toEqual(saved.puzzle.givens);
+    expect(restored.grid).toEqual(saved.grid); expect(restored.notes).toEqual(saved.notes);
+    expect(restored.elapsed).toBe(saved.elapsed); expect(restored.battle.playerHp).toBe(37);
+  });
+  it('preserves an already-started ranked v1 daily across midnight', () => {
+    const saved = checkpoint(); delete saved.stage;
+    saved.puzzle = generatePuzzle(123, 'easy', 1); delete saved.puzzle.generatorVersion;
+    saved.grid = [...saved.puzzle.givens]; saved.daily = '2026-10-30';
+    saved.ranked = { run: { id: '00000000-0000-4000-8000-000000000021', user_id: 'player', seed: 123,
+      difficulty: 'easy', day: saved.daily, started_at: '2026-10-30T23:55:00Z' }, moves: [] };
+    const restored = parseSavedBattle(JSON.parse(JSON.stringify(saved)))!;
+    expect(restored.puzzle.generatorVersion).toBe(1);
+    expect(restored.puzzle.givens).toEqual(saved.puzzle.givens);
+    expect(restored.ranked).toEqual(saved.ranked); expect(restored.daily).toBe(saved.daily);
+  });
+  it('rejects unknown generator versions, broken v2 boards and v2 masquerading as the old ranked protocol', () => {
+    const saved = checkpoint();
+    expect(saved.puzzle.generatorVersion).toBe(2);
+    const unknown = structuredClone(saved); unknown.puzzle.generatorVersion = 3 as 2;
+    expect(parseSavedBattle(unknown)).toBeNull();
+    const bad = structuredClone(saved); bad.puzzle.solution[0] = bad.puzzle.solution[1];
+    expect(parseSavedBattle(bad)).toBeNull();
+    const impossible = structuredClone(saved); impossible.puzzle.givens.fill(0);
+    expect(parseSavedBattle(impossible)).toBeNull();
+    const ranked = structuredClone(saved); ranked.ranked = { run: {} as any, moves: [] };
+    expect(parseSavedBattle(ranked)).toBeNull();
+  });
   it('keeps a boss attack cadence across restart, while legacy checkpoints start at the first attack', () => {
     const saved = checkpoint();
     saved.stage = 'peaks-boss'; saved.puzzle = generatePuzzle(42, 'medium'); saved.grid = [...saved.puzzle.givens];

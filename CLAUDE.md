@@ -347,8 +347,11 @@ code and comments are English.
 
 ## Conventions
 
-- Boards are seeded (`generatePuzzle(seed, difficulty)`) and fully deterministic, so a seed is enough to share
-  a board between players or reproduce a bug.
+- Boards are deterministic for `(seed, difficulty, generatorVersion)`. `generatePuzzle` defaults to v2:
+  logical-technique ratings, at most 12 attempts and a rated fallback bank. Never alter a shipped version.
+  Missing checkpoint versions mean v1; the shared daily protocol (ranked and offline) explicitly stays v1.
+  New solo/bot boards use a cancellable Web Worker, not the UI thread. Reproduce old boards with
+  `?seed=123&difficulty=hard&generator=1`; seed 0 is valid. See `SUDOKU_DIFFICULTY.md`.
 - In duels the client is never trusted: the server holds the solution and validates every move with `core`. The
   client may solve the board itself, but only to predict; the server's version always wins.
 - Online actions are optimistic: show the outcome at once, send the request, reconcile when the answer comes.

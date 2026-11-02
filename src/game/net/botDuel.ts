@@ -5,7 +5,6 @@ import {
   createRng,
   DUEL_RULES,
   forfeit,
-  generatePuzzle,
   playDuelMove,
   timeoutTurn,
   type DuelEvent,
@@ -17,6 +16,7 @@ import {
 } from '../../core/index.ts';
 import type { DuelBackend } from './duelBackend.ts';
 import { OnlineError, type DuelRow, type Profile } from './online.ts';
+import { generatePuzzleAsync } from '../puzzleGeneration.ts';
 
 export const BOT_ID = 'bot';
 const BOT_PROFILE: Profile = { nickname: 'Bot treningowy', dragon: null, effect: null };
@@ -53,8 +53,8 @@ export class BotDuel implements DuelBackend {
   }
 
   /** A new duel on a fresh board, the first turn to either side. */
-  start(): { duel: DuelRow; seat: Seat } {
-    const { givens, solution } = generatePuzzle(Math.floor(this.rng() * 2 ** 32), this.difficulty);
+  async start(signal?: AbortSignal): Promise<{ duel: DuelRow; seat: Seat }> {
+    const { givens, solution } = await generatePuzzleAsync(Math.floor(this.rng() * 2 ** 32), this.difficulty, undefined, signal);
     const id = `bot-${++this.count}`;
     const row: DuelRow = {
       id,
@@ -112,7 +112,7 @@ export class BotDuel implements DuelBackend {
     const game = this.game(duelId);
     if (game.row.status !== 'finished') throw new OnlineError('not-finished');
     if (game.row.rematch_declined) throw new OnlineError('rival-left');
-    const next = this.start();
+    const next = await this.start();
     game.row = { ...game.row, next_duel: next.duel.id, version: game.row.version + 1 };
     return next;
   }
