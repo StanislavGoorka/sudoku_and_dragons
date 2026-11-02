@@ -18,6 +18,25 @@ test('a failed startup download has a visible retry instead of an empty page', a
   await expect(page.getByRole('status')).toHaveCount(0);
 });
 
+test('a failed UI atlas download offers retry and icons survive screen changes', async ({ page }) => {
+  let fail = true;
+  await page.route('**/kenney-icons.png*', (route) => fail ? route.abort() : route.continue());
+  await page.goto('/');
+  await expect(page.getByRole('status')).toContainText('Nie udało się uruchomić gry');
+  fail = false;
+  await page.getByRole('button', { name: 'Spróbuj ponownie' }).click(); await ready(page);
+  const first = await page.evaluate(() => {
+    const s = window.__game.screen;
+    return { loaded: s.settingsButton.icon.texture.source.resource.complete,
+      frame: s.settingsButton.icon.texture.frame, width: s.settingsButton.icon.width };
+  });
+  expect(first.loaded).toBe(true); expect(first.width).toBeGreaterThan(20);
+  await tapButton(page, 'Mapa'); await ready(page, 'MapScreen');
+  await tapButton(page, 'Wstecz'); await ready(page);
+  expect(await page.evaluate(() => window.__game.screen.settingsButton.icon.texture.frame)).toEqual(first.frame);
+  await tapButton(page, 'Ustawienia'); await tapButton(page, 'Gotowe');
+});
+
 test('optional screens load on demand and a cancelled import cannot replace the current screen', async ({ page }) => {
   let release = () => {};
   const gate = new Promise<void>((done) => { release = done; });

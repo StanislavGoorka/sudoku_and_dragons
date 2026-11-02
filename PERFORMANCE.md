@@ -13,7 +13,7 @@ Synchronizacja nie zamyka otwartego dialogu menu. `game-ready` i diagnostyka `bo
 pierwszego ekranu po okazji do renderowania, również przy wejściu bezpośrednio do walki przez URL.
 
 Pixi pomija automatyczne rozszerzenia środowiska. Gra jawnie włącza zdarzenia, a używane klasy
-Graphics/Text/BitmapText rejestrują swoje systemy. Nadal działają WebGL i dostępne fallbacki renderera.
+Graphics/Text/BitmapText/Sprite rejestrują swoje systemy. Nadal działają WebGL i dostępne fallbacki renderera.
 Ekrany rysują maksymalnie 30 kl./s, walka i pojedynek 60 kl./s. Rozdzielczość canvasa jest ograniczona
 do DPR 2. Na ekranie DPR 3 liczba rysowanych pikseli maleje o 56% (z 9 do 4 pikseli na piksel CSS).
 To kompromis ostrości i obciążenia; tekst oraz ręczne notatki sprawdzono w układzie telefonu.

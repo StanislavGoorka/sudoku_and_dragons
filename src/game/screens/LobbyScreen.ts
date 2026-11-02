@@ -310,7 +310,7 @@ export class LobbyScreen extends Container {
   private addText(text: string, fontSize: number, fill: number, fontWeight: '400' | '700' | '600' = '400'): Text {
     const label = new Text({
       text,
-      style: { fontFamily: theme.fontFamily, fontSize, fontWeight, fill, align: 'center', wordWrap: true },
+      style: { fontFamily: fontSize >= 28 ? theme.headingFontFamily : theme.fontFamily, fontSize, fontWeight, fill, align: 'center', wordWrap: true },
     });
     label.anchor.set(0.5, 0);
     this.content.addChild(label);

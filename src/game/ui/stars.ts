@@ -4,6 +4,7 @@ import { feedback } from '../audio/feedback.ts';
 import { killTweens } from '../fx/tweens.ts';
 import type { StarGoal } from '../progress/progress.ts';
 import { uiTheme as theme } from '../uiTheme.ts';
+import { UiIcon } from './UiIcon.ts';
 
 const STAR_EDGE = 0x9f8956;
 
@@ -16,7 +17,7 @@ export function drawStar(g: Graphics, cx: number, cy: number, r: number, filled 
     points.push(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
   }
   if (filled) {
-    g.poly(points).fill(0xd2b778).stroke({ width: 1, color: STAR_EDGE, join: 'round' });
+    g.poly(points).fill(theme.gold).stroke({ width: 1, color: STAR_EDGE, join: 'round' });
   } else {
     g.poly(points).stroke({ width: 1, color: theme.panelLight, join: 'round' });
   }
@@ -26,7 +27,7 @@ export function drawStar(g: Graphics, cx: number, cy: number, r: number, filled 
 /** A pill with a star and the player's star count; tappable when given `onTap`. */
 export class StarCounter extends Container {
   private readonly bg = new Graphics();
-  private readonly icon = new Graphics();
+  private readonly icon = new UiIcon('star');
   private readonly value: Text;
   private pillHeight = 36;
 
@@ -66,8 +67,9 @@ export class StarCounter extends Container {
   private draw(): void {
     const h = this.pillHeight;
     const w = this.pillWidth;
-    this.bg.clear().roundRect(0, 0, w, h, 8).fill(theme.panel).stroke({ width: 1, color: theme.panelLight });
-    drawStar(this.icon.clear(), h * 0.55, h / 2, h * 0.2);
+    this.bg.clear().roundRect(0, 2, w, h, 8).fill(theme.panelLip)
+      .roundRect(0, 0, w, h, 8).fill(theme.panel).stroke({ width: 1, color: theme.panelLight });
+    this.icon.position.set(h * .55, h / 2); this.icon.fit(h * .4); this.icon.tint = theme.gold;
     this.value.position.set(h * 1.0, h / 2 + 1);
     this.hitArea = new Rectangle(0, Math.min(0, (h - 48) / 2), w, Math.max(48, h));
   }

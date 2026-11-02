@@ -4,6 +4,8 @@ import { progress } from '../progress/store.ts';
 import { uiTheme as theme } from '../uiTheme.ts';
 import { Button } from '../ui/Button.ts';
 import { drawStar, StarCounter } from '../ui/stars.ts';
+import { drawPanel } from '../ui/panel.ts';
+import { UiIcon } from '../ui/UiIcon.ts';
 
 export interface ProgressOptions {
   onBack: () => void;
@@ -24,7 +26,7 @@ function label(text: string, fontSize: number, fill: number, fontWeight: '500' |
 /** One achievement: a medal, its name and goal, and its reward (or how far along it is). */
 class AchievementRow extends Container {
   private readonly bg = new Graphics();
-  private readonly medal = new Graphics();
+  private readonly medal = new UiIcon('medal');
   private readonly title: Text;
   private readonly description: Text;
   private readonly side: Text;
@@ -47,12 +49,11 @@ class AchievementRow extends Container {
 
   layout(width: number): void {
     const h = ROW_HEIGHT;
-    this.bg.clear().roundRect(0, 0, width, h, 9).fill(theme.panel).stroke({ width: 1, color: theme.panelLight });
+    drawPanel(this.bg.clear(), 0, 0, width, h, this.done);
     // A gold medal with a star when done, an empty dark one otherwise.
     const mx = 34;
     const my = h / 2;
-    this.medal.clear().circle(mx, my - 2, 19).stroke({ width: 1, color: theme.panelLight });
-    drawStar(this.medal, mx, my - 2, 11, this.done);
+    this.medal.position.set(mx, my - 2); this.medal.fit(29); this.medal.tint = this.done ? theme.gold : theme.textMuted;
 
     const textX = 66;
     const right = width - 14;
@@ -96,6 +97,7 @@ export class ProgressScreen extends Container {
     this.options = options;
     this.backButton = new Button({ text: 'Wstecz', icon: 'back', onTap: options.onBack });
     this.title.anchor.set(0.5, 0);
+    this.title.style.fontFamily = theme.headingFontFamily;
 
     const wins = LEVELS.reduce((sum, d) => sum + progress.levels[d].wins, 0);
     const times = LEVELS.map((d) => progress.levels[d].bestTime).filter((t): t is number => t !== null);
@@ -144,7 +146,7 @@ export class ProgressScreen extends Container {
 
     const panelY = 130;
     const panelHeight = 74;
-    this.statsPanel.clear().roundRect(left, panelY, column, panelHeight, 10).fill(theme.panel).stroke({ width: 1, color: theme.panelLight });
+    drawPanel(this.statsPanel.clear(), left, panelY, column, panelHeight);
     this.stats.forEach(({ value, caption }, i) => {
       const x = left + (column / 3) * (i + 0.5);
       value.position.set(x, panelY + 10);

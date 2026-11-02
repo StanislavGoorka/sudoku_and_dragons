@@ -273,8 +273,9 @@ class ShelfTabs extends Container {
       tab.position.set(i * half, 0);
       tab.hitArea = new Rectangle(0, 0, half, h);
       face.clear();
-      if (open) face.roundRect(inset, inset, half - inset * 2, h - inset * 2, 5).fill(theme.panelLight);
-      text.style.fill = open ? theme.text : theme.textMuted;
+      if (open) face.roundRect(inset, inset, half - inset * 2, h - inset * 2, 5).fill(theme.buttonSecondary)
+        .stroke({ width: 1, color: theme.gold });
+      text.style.fill = open ? theme.gold : theme.textMuted;
       text.style.fontSize = fontSize;
       text.position.set(half / 2, h / 2);
       dot.clear();
@@ -442,7 +443,7 @@ export class ShopScreen extends Container {
   private readonly title = new Text({
     text: 'Sklep',
     style: {
-      fontFamily: theme.fontFamily,
+      fontFamily: theme.headingFontFamily,
       fontWeight: '600',
       fontSize: 28,
       fill: theme.text,

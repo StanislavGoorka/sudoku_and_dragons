@@ -20,7 +20,8 @@ import { MenuScreen } from './screens/MenuScreen.ts';
 import { dailyChallenge } from './progress/daily.ts';
 import { emptyProgress, isUnlocked, LEVELS, type CosmeticKind } from './progress/progress.ts';
 import { activeBattle, onProgressReplaced, progress, saveProgress } from './progress/store.ts';
-import { theme } from './theme.ts';
+import { uiTheme as theme } from './uiTheme.ts';
+import { loadUiIcons } from './ui/UiIcon.ts';
 import { Backdrop } from './ui/Backdrop.ts';
 import { Modal } from './ui/Modal.ts';
 import { isAppActive, setAppActive } from './activity.ts';
@@ -55,9 +56,10 @@ export async function boot(): Promise<void> {
   gsap.defaults({ lazy: false });
   // Pixi measures text when it is created, so the bundled font must be ready before any screen.
   // The sample has Polish letters to pull in the latin-ext files too.
-  await Promise.all(['500', '700', '800'].map((weight) => document.fonts.load(`${weight} 20px "Baloo 2"`, 'Aąż'))).catch(
-    () => {},
-  );
+  await Promise.all([
+    Promise.all(['500', '700', '800'].map((weight) => document.fonts.load(`${weight} 20px "Baloo 2"`, 'Aąż'))).catch(() => {}),
+    loadUiIcons(),
+  ]);
 
   const app = new Application();
   await app.init({

@@ -86,6 +86,7 @@ export class AccountScreen extends Container {
     this.options = options;
     this.backButton = new Button({ text: 'Wstecz', icon: 'back', onTap: () => this.handleBack() });
     this.title.anchor.set(0.5, 0);
+    this.title.style.fontFamily = theme.headingFontFamily;
     this.title.style.wordWrap = false;
 
     this.nickField = new TextField({

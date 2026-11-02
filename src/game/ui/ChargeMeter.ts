@@ -59,13 +59,13 @@ export class ChargeMeter extends Container {
 
     const r = this.radius;
     const g = this.ring.clear();
-    g.circle(0, 0, r + 2).fill(theme.panel);
-    g.circle(0, 0, r).stroke({ width: 1, color: theme.panelLight });
+    g.circle(0, 0, r + 3).fill(theme.panelLip).stroke({ width: 1, color: theme.panelLight });
+    g.circle(0, 0, r).fill(theme.panel).stroke({ width: 2, color: theme.panelLight });
     if (this.shown > 0.002) {
       const start = -Math.PI / 2;
       g.moveTo(0, -r)
         .arc(0, 0, r, start, start + Math.PI * 2 * Math.min(1, this.shown))
-        .stroke({ width: 2, color: urgent ? theme.error : theme.buttonPrimary, cap: 'round' });
+        .stroke({ width: 3, color: urgent ? theme.error : theme.buttonPrimary, cap: 'round' });
     }
     this.dial.scale.set(1);
   }

@@ -29,6 +29,7 @@ export class DailyScreen extends Container {
   private modal: Modal | null = null;
   constructor(private readonly options: { onBack: () => void; onOffline: () => void; onStart: (run: RankedRun) => void; level: Difficulty }) {
     super(); this.level = options.level;
+    this.title.style.fontFamily = theme.headingFontFamily;
     this.back = new Button({ text: 'Wstecz', icon: 'back', onTap: options.onBack });
     this.play = new Button({ text: 'Graj w rankingu', variant: 'primary', onTap: () => void this.start() });
     this.offline = new Button({ text: 'Graj offline', onTap: options.onOffline });

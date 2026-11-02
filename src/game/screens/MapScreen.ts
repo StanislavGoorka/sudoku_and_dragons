@@ -12,6 +12,7 @@ import { DragonView } from '../ui/DragonView.ts';
 import { drawLock } from '../ui/lock.ts';
 import { Scene, SCENES } from '../ui/Scene.ts';
 import { drawStar } from '../ui/stars.ts';
+import { drawPanel } from '../ui/panel.ts';
 
 export interface MapOptions {
   onBack: () => void;
@@ -46,6 +47,7 @@ class StageNode extends Container {
   private readonly dragon: DragonView;
   private readonly marks = new Graphics();
   private readonly bossLabel: Text | null;
+  private readonly bossBadge = new Graphics();
   private readonly open: boolean;
   private readonly next: boolean;
 
@@ -59,20 +61,21 @@ class StageNode extends Container {
     this.dragon.scale.x = -1;
     if (!this.open) this.dragon.tint = 0x1b1338;
     this.dragon.mask = this.mask_;
-    this.bossLabel = stage.boss ? label('Boss', 15, theme.gold) : null;
+    this.bossLabel = stage.boss ? label('BOSS', 12, theme.gold, '700') : null;
     this.bossLabel?.anchor.set(0.5, 1);
     this.addChild(this.frame, this.mask_, this.dragon, this.marks);
-    if (this.bossLabel) this.addChild(this.bossLabel);
+    if (this.bossLabel) this.addChild(this.bossBadge, this.bossLabel);
   }
 
   layout(radius: number): void {
     const r = this.stage.boss ? radius * 1.22 : radius;
-    const ring = this.next ? theme.buttonPrimary : theme.panelLight;
+    const ring = this.next || stageRecord(progress, this.stage).wins > 0 ? theme.gold : theme.panelLight;
     this.frame
       .clear()
+      .circle(0, 2, r + 2).fill(theme.panelLip)
       .circle(0, 0, r)
       .fill(theme.panel)
-      .stroke({ width: this.next ? 2 : 1, color: ring });
+      .stroke({ width: this.next ? 3 : 2, color: ring });
     this.mask_.clear().circle(0, 0, r).fill(0xffffff);
     this.dragon.layout(r * 2.3);
     this.dragon.position.set(-r * 0.05, r * 0.15);
@@ -84,6 +87,11 @@ class StageNode extends Container {
       for (let i = 0; i < 3; i++) drawStar(this.marks, (i - 1) * r * 0.55, r + 14, r * 0.24, i < best);
     }
     this.bossLabel?.position.set(0, -r - 6);
+    if (this.bossLabel) {
+      const width = this.bossLabel.width + 14, height = this.bossLabel.height + 6;
+      this.bossBadge.clear().roundRect(-width / 2, -r - 9 - this.bossLabel.height, width, height, 4)
+        .fill(theme.panelLip).stroke({ width: 1, color: theme.gold, alpha: .6 });
+    }
     this.hitArea = new Rectangle(-r - 6, -r - 6, r * 2 + 12, r * 2 + 28);
   }
 
@@ -109,7 +117,6 @@ class RegionPanel extends Container {
     super();
     this.region = region;
     this.scene = new Scene(SCENES[region.scene] ?? SCENES.dragon);
-    this.scene.visible = false;
     this.title = label(region.name, 22, theme.text);
     const won = region.stages.filter((stage) => stageRecord(progress, stage).wins > 0).length;
     this.count = label(`${won}/${region.stages.length}`, 18, won === region.stages.length ? theme.gold : theme.text);
@@ -126,16 +133,17 @@ class RegionPanel extends Container {
     const before = STAGES[STAGES.indexOf(first) - 1];
     this.note = isStageUnlocked(progress, first) ? null : label(`Pokonaj bossa: ${before.enemy.name}`, 15, theme.textMuted, '700');
     this.note?.anchor.set(0.5, 0.5);
-    this.addChild(this.scene, this.panel, this.path, ...this.nodes, this.shade, this.title, this.count);
+    this.addChild(this.panel, this.scene, this.path, ...this.nodes, this.shade, this.title, this.count);
     if (this.note) this.addChild(this.note);
   }
 
   layout(width: number): void {
     const h = PANEL_HEIGHT;
-    this.scene.layout(width, h, 22);
-    this.panel.clear().roundRect(0, 0, width, h, 12).fill(theme.panel).stroke({ width: 1, color: theme.panelLight });
-    this.title.position.set(14, 10);
-    this.count.position.set(width - 14, 12);
+    this.scene.position.set(4, 4);
+    this.scene.layout(width - 8, h - 8, 7);
+    drawPanel(this.panel.clear(), 0, 0, width, h);
+    this.title.position.set(16, 14);
+    this.count.position.set(width - 16, 16);
     const radius = Math.max(22, Math.min(34, width * 0.075));
     const points = NODES.map(([fx, fy]) => ({ x: fx * width, y: fy * h }));
     this.nodes.forEach((node, i) => {
@@ -148,11 +156,17 @@ class RegionPanel extends Container {
       const a = points[i];
       const b = points[i + 1];
       const lit = stageRecord(progress, this.region.stages[i]).wins > 0;
-      this.path.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ width: 1, color: lit ? theme.buttonPrimary : theme.panelLight });
+      const distance = Math.hypot(b.x - a.x, b.y - a.y);
+      for (let d = radius + 9; d < distance - radius - 7; d += 11) {
+        const t = d / distance;
+        this.path.circle(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 2).fill(lit ? theme.gold : theme.textMuted);
+      }
     }
     this.shade.clear();
+    this.shade.roundRect(8, 8, width - 16, 40, 6).fill({ color: theme.panelLip, alpha: .88 });
     if (this.note) {
-      this.shade.roundRect(0, 0, width, h, 22).fill({ color: theme.background, alpha: 0.45 });
+      this.shade.roundRect(4, 4, width - 8, h - 8, 7).fill({ color: theme.background, alpha: 0.55 });
+      this.shade.roundRect(8, h - 40, width - 16, 32, 6).fill({ color: theme.panelLip, alpha: .9 });
       this.note.position.set(width / 2, h - 22);
     }
   }
@@ -169,7 +183,7 @@ export class MapScreen extends Container {
   private readonly title = new Text({
     text: 'Mapa',
     style: {
-      fontFamily: theme.fontFamily,
+      fontFamily: theme.headingFontFamily,
       fontWeight: '600',
       fontSize: 28,
       fill: theme.text,

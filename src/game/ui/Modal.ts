@@ -4,6 +4,7 @@ import { killTweens } from '../fx/tweens.ts';
 import { OVERSCAN } from '../safeArea.ts';
 import { uiTheme as theme } from '../uiTheme.ts';
 import { Button, type ButtonVariant } from './Button.ts';
+import { drawPanel } from './panel.ts';
 
 export interface ModalAction {
   text: string;
@@ -49,7 +50,7 @@ export class Modal extends Container {
     this.title = new Text({
       text: title,
       style: {
-        fontFamily: theme.fontFamily,
+        fontFamily: theme.headingFontFamily,
         fontWeight: '600',
         fontSize: 24,
         lineHeight: 30,
@@ -129,11 +130,8 @@ export class Modal extends Container {
     }
     const height = y - BUTTON_GAP + PADDING;
 
-    this.panel
-      .clear()
-      .roundRect(0, 0, width, height, 14)
-      .fill(theme.panel)
-      .stroke({ width: 1, color: theme.panelLight });
+    drawPanel(this.panel.clear(), 0, 0, width, height, true);
+    this.panel.moveTo(width / 2 - 28, 10).lineTo(width / 2 + 28, 10).stroke({ width: 2, color: theme.gold, alpha: .65 });
     this.box.pivot.set(width / 2, height / 2);
     const visibleHeight = Math.max(100, screenHeight - 64);
     this.maxScroll = Math.max(0, height - visibleHeight);

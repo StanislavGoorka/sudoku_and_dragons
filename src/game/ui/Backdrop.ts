@@ -31,17 +31,27 @@ export function verticalGradient(colors: number[]): FillGradient {
   });
 }
 
-/** Quiet, opaque UI background. Gradient helpers above remain unchanged for game artwork. */
+/** Navy cloth-like field, with a soft light and sparse geometric seams behind the interface. */
 export class Backdrop extends Container {
   private readonly sky = new Graphics();
+  private readonly light = new Graphics();
+  private readonly seams = new Graphics();
+  private readonly fill = verticalGradient([theme.backdropTop, theme.backdropBottom]);
+  private readonly glow = glowGradient(theme.backdropGlow, .2);
 
   constructor() {
     super();
     this.eventMode = 'none';
-    this.addChild(this.sky);
+    this.addChild(this.sky, this.light, this.seams);
   }
 
   layout(width: number, height: number): void {
-    this.sky.clear().rect(0, 0, width, height).fill(theme.background);
+    this.sky.clear().rect(0, 0, width, height).fill(this.fill);
+    this.light.clear().ellipse(width / 2, height * .18, width * .85, height * .6).fill(this.glow);
+    const g = this.seams.clear();
+    for (let y = 24; y < height; y += 48) for (let x = 24; x < width; x += 48) {
+      g.poly([x, y - 2, x + 2, y, x, y + 2, x - 2, y]).fill({ color: theme.panelLight, alpha: .13 });
+    }
+    for (const x of [8, width - 8]) g.moveTo(x, 0).lineTo(x, height).stroke({ width: 1, color: theme.gold, alpha: .08 });
   }
 }

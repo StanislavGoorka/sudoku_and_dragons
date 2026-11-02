@@ -48,7 +48,7 @@ export class HpBar extends Container {
 
   layout(width: number): void {
     this.barWidth = width;
-    const middle = BAR_HEIGHT / 2 + 1;
+    const middle = BAR_HEIGHT / 2 - 2;
     this.nameText.position.set(12, middle);
     this.valueText.position.set(width - 12, middle);
     this.nameText.scale.set(1);
@@ -56,7 +56,8 @@ export class HpBar extends Container {
     this.track
       .clear()
       .roundRect(0, 0, width, BAR_HEIGHT, 5)
-      .fill({ color: theme.panel, alpha: 0.96 });
+      .fill({ color: theme.panelLip, alpha: 0.96 })
+      .stroke({ width: 1, color: theme.panelLight });
     this.redraw();
   }
 
@@ -97,11 +98,11 @@ export class HpBar extends Container {
 
   private drawSegment(g: Graphics, ratio: number, color: number): void {
     g.clear();
-    const inset = 0;
-    const height = 3;
-    const width = this.barWidth * ratio;
+    const inset = 3;
+    const height = 5;
+    const width = (this.barWidth - inset * 2) * ratio;
     if (width < 1) return;
     const radius = Math.min(height, width) / 2;
-    g.roundRect(inset, BAR_HEIGHT - height, width, height, radius).fill(color);
+    g.roundRect(inset, BAR_HEIGHT - height - 2, width, height, radius).fill(color);
   }
 }

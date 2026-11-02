@@ -200,14 +200,14 @@ code and comments are English.
   `IDLE_WRAPPED`, and take the poses on the parts inside); `idle: false`
   keeps one still (shop tiles). In battles and duels the dragon of whoever played a correct digit lunges. Check art
   with `npm run dragons` before the browser.
-- Look (the owner wants it colourful and attractive, yet clear and with few objects on screen):
-  - `main.ts` puts `ui/Backdrop` (violet gradient with a glow) under every screen, safe-area margins included,
-    and waits for the bundled font **Baloo 2** (`@fontsource/baloo-2`, latin + latin-ext, 500/700/800) before
-    the first screen, because Pixi measures text when it is created. Fredoka was tried and lacks ą, ę, ż.
-  - `ui/Button`: chunky casual-game buttons, a coloured face on a darker lip that it sinks into when pressed;
-    variants `primary` (gold, the main action), `secondary` (violet), `accent` (blue, online); a square button
-    is round; `icon` (`pause`, `back`, `gear`, `palette`, `user`, `map`, `pencil`, `speaker`, `muted`) draws a vector
-    icon instead of the text (no emoji).
+- Look (owner-approved adventure RPG: navy and warm gold, restrained depth; see `UI_REDESIGN.md`):
+  - `main.ts` puts `ui/Backdrop` (navy gradient, sparse diamond pattern) under every screen, safe areas included.
+    It waits for the bundled **Baloo 2** art font (latin + latin-ext, 500/700/800) and the Kenney icon atlas
+    before creating the first screen. UI uses system sans-serif and Georgia/serif headings; board/art retain Baloo.
+  - `ui/Button`: shallow framed controls, a subtle gradient and a 2 px press; `primary` is gold,
+    `secondary` navy, `accent` blue. `icon` replaces the title; `leadingIcon` accompanies it.
+    CC0 Kenney glyphs are copied into `assets/vendor/`, with a small shared runtime atlas (`npm run icons:ui`).
+    The pencil remains vector. Controls keep at least 48 px touch targets.
   - `ui/Scene`: a rounded window onto a sky gradient, a soft light and two rows of hills, one look per dragon
     (morning for the young one, sunset for the red, moonlit night for the ancient) plus a twilight for duels.
     `groundY()` is where dragons stand; `DragonView.footOffset()` puts a dragon's shadow on it.
@@ -217,14 +217,14 @@ code and comments are English.
     `ui/BattleArena`: your dragon (your skin, `PLAYER_SCALE` of the enemy's size: the enemy is the boss) on the
     left, the enemy on the right in its scene, the countdown to its attack low between them. The enemy's
     fireball hits your dragon; when you lose, your dragon falls.
-  - `HpBar`: a thick pill with the name and HP inside it. `Modal`: a violet panel with a lip; pass
+  - `HpBar`: a framed label with an inset HP strip. `Modal`: a navy panel with gold trim; pass
     `theme.gold` as the title colour for a win.
   - The menu shows one campaign stage at a time (the one played last, or the next to win): its dragon over its
     region's scene, its name, region and place ("walka 2 z 4" or "boss"), flipped with the arrows or a swipe
     through the open stages and the next locked one (no further), then
     one "Walcz!" button, then the daily challenge and the online button side by side; a map button (`map` icon)
     sits by the star counter; music (volume and mute), sound effects and vibration live in the settings dialog (gear), board
-    themes, dragon skins and hit effects in the shop (palette, with a gold dot when the stars buy something not owned yet).
+    themes, dragon skins and hit effects in the shop (cart, with a gold dot when the stars buy something not owned yet).
 - Board themes (`src/game/boardThemes.ts`): cosmetics bought with stars, never gameplay help (the owner's call).
   `BOARD_THEMES` (Fiołek free, then Łąka 15, Ocean 25, Cukierek 35, Wulkan 50, Noc 65, Skarbiec 90) each give
   `BoardColors`: tray, lines, cells (`cellAlt` paints every other box for a checker), highlights, digit colours
@@ -366,7 +366,7 @@ code and comments are English.
 
 - UI uses `uiTheme.ts`; `theme.ts` remains the original art/board/effects theme. Preserve that
   boundary: avoid propagating UI fonts or colours into BoardView, DragonView, art or fx. Shop digit
-  previews explicitly keep the art font. Flat controls retain 48 px targets. See `UI_REDESIGN.md`.
+  previews explicitly keep the art font. Navy/gold RPG controls retain 48 px targets. Kenney icons come from the copied CC0 pack in `assets/vendor/`; regenerate the small runtime atlas with `npm run icons:ui`. See `UI_REDESIGN.md`.
 
 - Android test release: `release/android-version.properties` owns Android versions. Release tasks
   require private SUDOKU_UPLOAD_* environment variables; Windows helpers use an ignored upload key
