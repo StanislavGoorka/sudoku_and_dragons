@@ -27,6 +27,7 @@ export interface MenuOptions {
   /** The campaign map. */
   onMap: () => void;
   onOnline: () => void;
+  onTraining:()=>void;
   /** Today's daily challenge. */
   onDaily: () => void;
   /** The star counter opens the progress screen. */
@@ -102,6 +103,7 @@ export class MenuScreen extends Container {
   /** Stars to spend; tap for the progress screen. */
   private readonly starCounter: StarCounter;
   private readonly playButton: Button;
+  private readonly trainingButton:Button;
   private readonly onlineButton: Button;
   /** The daily challenge, with a gold dot until today's is won. */
   private readonly dailyButton: Button;
@@ -138,6 +140,7 @@ export class MenuScreen extends Container {
     this.prevButton = new Button({ text: 'Poprzedni', icon: 'back', onTap: () => this.flip(-1) });
     this.nextButton = new Button({ text: 'Następny', icon: 'back', onTap: () => this.flip(1) });
     this.playButton = new Button({ text: 'Walcz!', leadingIcon: 'play', variant: 'primary', onTap: () => this.play(this.current) });
+    this.trainingButton=new Button({text:'Trening i lekcje',leadingIcon:'medal',onTap:options.onTraining});
     this.onlineButton = new Button({
       text: 'Pojedynek',
       subtitle: 'online z graczem',
@@ -184,6 +187,7 @@ export class MenuScreen extends Container {
       this.levelName,
       this.levelInfo,
       this.playButton,
+      this.trainingButton,
       this.onlineButton,
       this.dailyButton,
       this.settingsButton,
@@ -242,7 +246,9 @@ export class MenuScreen extends Container {
     const onlineHeight = 64;
     const playHeight = 58;
     const onlineY = height - margin - onlineHeight;
-    const playY = onlineY - gap - playHeight;
+    const trainingY=onlineY-8-48;
+    const playY = trainingY - gap - playHeight;
+    this.trainingButton.position.set(left,trainingY);this.trainingButton.layout(column,48);
     const half = (column - gap) / 2;
     this.dailyButton.position.set(left, onlineY);
     this.dailyButton.layout(half, onlineHeight);

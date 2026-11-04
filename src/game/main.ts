@@ -263,6 +263,7 @@ export async function boot(): Promise<void> {
         onPick: (stage) => startStage(stage),
         onMap: () => showMap(),
         onOnline: () => showLobby(),
+        onTraining:()=>showTraining(),
         onDaily: showDaily,
         onProgress: () => showProgress(),
         onShop: () => showShop(),
@@ -323,19 +324,57 @@ export async function boot(): Promise<void> {
   const showLobby = () => {
     openScreen('lobby', async () => {
       const { LobbyScreen } = await import('./screens/LobbyScreen.ts');
-      return () => new LobbyScreen({ onStart: startDuel, onMenu: showMenu });
+      return () => new LobbyScreen({ onStart: startDuel, onMenu: showMenu, onTraining:()=>showTraining('bot') });
     });
   };
 
-  const startDuel = (duel: DuelRow, seat: Seat, me: Me, backend?: DuelBackend) => {
+  const startDuel = (duel: DuelRow, seat: Seat, me: Me, backend?: DuelBackend, trainingUi?:import('./training/botSave.ts').TrainingUi) => {
     openScreen('duel', async () => {
       const { DuelScreen } = await import('./screens/DuelScreen.ts');
       return () => new DuelScreen(duel, me, seat, {
-        onLobby: showLobby,
-        onMenu: showMenu,
+        onLobby: backend&&!backend.ranked?()=>showTraining('bot'):showLobby,
+        onMenu: backend&&!backend.ranked?()=>showTraining('bot'):showMenu,
         onRematch: (next, nextSeat) => startDuel(next, nextSeat, me, backend),
         backend,
+        trainingUi,
       });
+    });
+  };
+
+  const showTraining=(tab:import('./screens/TrainingScreen.ts').TrainingTab='solo'):void=>{
+    openScreen('lobby',async()=>{
+      const {TrainingScreen}=await import('./screens/TrainingScreen.ts');
+      return ()=>new TrainingScreen({onBack:showMenu,onSolo:startPractice,onBot:startTrainingBot,onLesson:startLesson,tab});
+    });
+  };
+  const startPractice=(difficulty:Difficulty,resume=false):void=>{
+    openScreen('battle',async signal=>{
+      const [{GameScreen},{generatePuzzleAsync},{trainingData}]=await Promise.all([
+        import('./screens/GameScreen.ts'),import('./puzzleGeneration.ts'),import('./training/store.ts')]);
+      const saved=resume?trainingData().solo:null;
+      const puzzle=saved?.puzzle??await generatePuzzleAsync(randomSeed(),difficulty,undefined,signal);
+      return ()=>new GameScreen(puzzle,{practice:true,resume:saved??undefined,onRestart:()=>startPractice(puzzle.difficulty),
+        onMenu:()=>showTraining('solo'),onPlay:startStage});
+    },()=>{if(resume)screen?.pause?.();});
+  };
+  const startTrainingBot=(difficulty:Difficulty,strength:import('../core/duel/bot.ts').BotStrength,resume=false):void=>{
+    openScreen('duel',async signal=>{
+      const [{BotDuel},{DuelScreen},{trainingData}]=await Promise.all([
+        import('./net/botDuel.ts'),import('./screens/DuelScreen.ts'),import('./training/store.ts')]);
+      const saved=resume?trainingData().bot:null;
+      const backend=saved?BotDuel.restore(saved).backend:new BotDuel(difficulty,'you',undefined,strength);
+      const row=saved?await backend.fetchDuel('bot-1'): (await backend.start(signal)).duel;
+      return ()=>new DuelScreen(row,{id:'you',nickname:'Ty'},0,{backend,trainingUi:saved??undefined,
+        onMenu:()=>showTraining('bot'),onLobby:()=>showTraining('bot'),
+        onRematch:(duel,seat)=>startDuel(duel,seat,{id:'you',nickname:'Ty'},backend)});
+    },()=>{if(resume)screen?.pause?.();});
+  };
+  const startLesson=(id:import('../core/training/lessons.ts').LessonId,fresh=false):void=>{
+    openScreen('battle',async()=>{
+      const [{LessonScreen},{trainingData}]=await Promise.all([import('./screens/LessonScreen.ts'),import('./training/store.ts')]);
+      const saved=fresh?undefined:trainingData().lessons[id];
+      return ()=>new LessonScreen(id,{onBack:()=>showTraining('lessons'),onLesson:startLesson,
+        resume:saved});
     });
   };
 
@@ -354,7 +393,7 @@ export async function boot(): Promise<void> {
       if (joined.duel.status === 'waiting') {
         openScreen('lobby', async () => {
           const { LobbyScreen } = await import('./screens/LobbyScreen.ts');
-          return () => new LobbyScreen({ onStart: startDuel, onMenu: showMenu, resume: { ...joined, me } });
+          return () => new LobbyScreen({ onStart: startDuel, onMenu: showMenu, onTraining:()=>showTraining('bot'), resume: { ...joined, me } });
         });
       } else {
         startDuel(joined.duel, joined.seat, me);
@@ -459,6 +498,7 @@ export async function boot(): Promise<void> {
         ranking: showDaily,
         menu: showMenu,
         lobby: () => showLobby(),
+        training:showTraining,
         progress: () => showProgress(),
         shop: (kind?: CosmeticKind) => showShop(kind),
         account: () => showAccount(),

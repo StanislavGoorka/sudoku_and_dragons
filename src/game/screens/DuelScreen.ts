@@ -23,6 +23,7 @@ import { chosenEffect, chosenSkin, chosenTheme, type Reward } from '../progress/
 import { rewardLines } from '../progress/rewardText.ts';
 import { progress, recordDuelOnce } from '../progress/store.ts';
 import { fightLayout } from './fightLayout.ts';
+import type { TrainingUi } from '../training/botSave.ts';
 
 export interface DuelScreenOptions {
   /** Back to the online lobby for another duel. */
@@ -32,6 +33,7 @@ export interface DuelScreenOptions {
   onRematch: (duel: DuelRow, seat: Seat) => void;
   /** Who judges the duel: the server (the default), or the device for training with a bot. */
   backend?: DuelBackend;
+  trainingUi?:TrainingUi;
 }
 
 /** What the server says about a rematch once the duel is over. */
@@ -126,6 +128,8 @@ export class DuelScreen extends Container {
   private connection: DuelConnectionState = 'connected';
   private refreshing = false;
   private reward: Reward | null = null;
+  private sinceTrainingSave=0;
+  private trainingSelection:number|null=null;
   private readonly connectionLabel = new Text({ text: '', style: {
     fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 14, fill: theme.textMuted,
   } });
@@ -164,6 +168,11 @@ export class DuelScreen extends Container {
     const colors = chosenTheme(progress).colors;
     this.board = new BoardView(row.state.board, colors);
     this.pad = new NumberPad((digit) => this.handleDigit(digit), colors);
+    if(!this.backend.ranked&&options.trainingUi){
+      this.board.restoreNotes(options.trainingUi.notes);if(options.trainingUi.selected!==null)this.board.select(options.trainingUi.selected);
+      this.notesMode=options.trainingUi.notesMode;this.pad.setNotesMode(this.notesMode);
+      this.notesButton.setVariant(this.notesMode?'primary':'secondary');
+    }
     this.fx.eventMode = 'none';
     this.hurtFlash.eventMode = 'none';
     this.hurtFlash.alpha = 0;
@@ -203,6 +212,7 @@ export class DuelScreen extends Container {
       if (!this.arena.rivalShown) this.arena.showRival(rivalDesign(null));
       void this.showEnd(row.last_event);
     }
+    this.checkpointTraining();
   }
 
   layout(width: number, height: number): void {
@@ -236,6 +246,11 @@ export class DuelScreen extends Container {
   /** Every frame: a turn that ran out, the turn countdown and its last-seconds ticks. */
   update(deltaMs: number): void {
     if (this.switching) return;
+    if(!this.backend.ranked){
+      this.sinceTrainingSave+=deltaMs;
+      if(this.sinceTrainingSave>=1000||this.board.selected!==this.trainingSelection)this.checkpointTraining();
+      if(this.modal)return;
+    }
     if (this.connection === 'connected') this.checkDeadline();
     const { state, turnStartedAt } = this.sync.shown;
     if (state.finished || turnStartedAt === null) return;
@@ -296,6 +311,7 @@ export class DuelScreen extends Container {
   }
 
   override destroy(options?: DestroyOptions): void {
+    if(!this.backend.ranked&&!this.state.finished&&!this.switching){this.backend.pauseTraining?.();this.checkpointTraining();}
     window.removeEventListener('online', this.onOnline);
     window.removeEventListener('offline', this.onOffline);
     this.stopWatching();
@@ -314,6 +330,21 @@ export class DuelScreen extends Container {
     if (!this.backend.ranked || this.destroyed) return;
     this.setConnection('connecting');
     void this.refresh();
+  }
+
+  pause():void {
+    if(this.backend.ranked||this.state.finished)return;
+    this.backend.pauseTraining?.();this.checkpointTraining();
+    if(this.modal)return;
+    this.openModal(new Modal('Pauza treningu','Plansza, notatki i czas tury są zapisane.\nTrening nie wpływa na ranking.',[
+      {text:'Wróć do treningu',variant:'primary',onTap:()=>this.closeModal()},
+      {text:'Trening i lekcje',onTap:this.options.onMenu},
+    ]));
+  }
+  private checkpointTraining():void {
+    if(this.backend.ranked)return;
+    this.sinceTrainingSave=0;this.trainingSelection=this.board.selected;
+    this.backend.checkpointTraining?.(this.duelId,{notes:this.board.saveNotes(),notesMode:this.notesMode,selected:this.board.selected});
   }
 
   private setConnection(state: DuelConnectionState): void {
@@ -365,6 +396,7 @@ export class DuelScreen extends Container {
     if (cell === null || this.board.board[cell] !== 0) return;
     if (this.notesMode) {
       if (this.board.toggleNote(cell, digit)) feedback.select();
+      this.checkpointTraining();
       return;
     }
     if (this.connection !== 'connected') {
@@ -389,6 +421,7 @@ export class DuelScreen extends Container {
     this.notesButton.setVariant(this.notesMode ? 'primary' : 'secondary');
     this.pad.setNotesMode(this.notesMode);
     feedback.select();
+    this.checkpointTraining();
   }
 
   /** When the shown turn runs out, it passes on both screens at once; the claim follows. */
@@ -476,6 +509,7 @@ export class DuelScreen extends Container {
       // After the end only the rematch fields change; the last event is not played again.
       this.sync.confirmed = { ...this.sync.confirmed, version: row.version };
       this.updateRematch();
+      this.checkpointTraining();
       return;
     }
     const turnBefore = this.state.turn;
@@ -498,6 +532,7 @@ export class DuelScreen extends Container {
       this.predictTimeout();
     }
     this.afterChange(turnBefore);
+    this.checkpointTraining();
     this.pump();
   }
 
@@ -610,6 +645,7 @@ export class DuelScreen extends Container {
   }
 
   private requestLeave(): void {
+    if(!this.backend.ranked&&!this.state.finished){this.pause();return;}
     if (this.modal || this.intro) return;
     if (this.sync.confirmed.state.finished) {
       this.leaveEnd(this.options.onMenu);
@@ -651,8 +687,10 @@ export class DuelScreen extends Container {
   }
 
   private closeModal(): void {
+    const wasOpen=this.modal!==null;
     this.modal?.destroy({ children: true });
     this.modal = null;
+    if(wasOpen&&!this.backend.ranked&&!this.state.finished)this.backend.resumeTraining?.();
   }
 
   private async showEnd(event: DuelEvent | null): Promise<void> {

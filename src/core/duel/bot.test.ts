@@ -1,67 +1,66 @@
-import { describe, expect, it } from 'vitest';
-import { createRng } from '../rng.ts';
-import { generatePuzzle } from '../sudoku/generator.ts';
-import { parseGrid } from '../sudoku/grid.ts';
-import { BOT_LEVELS, botMove, moveScore, wouldCloseBox } from './bot.ts';
-import { createDuel, playDuelMove } from './duel.ts';
+import {describe,expect,it} from 'vitest';
+import {createRng} from '../rng.ts';
+import {generatePuzzle} from '../sudoku/generator.ts';
+import {analyzePuzzle} from '../sudoku/logic.ts';
+import {parseGrid} from '../sudoku/grid.ts';
+import {BOT_LEVELS,chooseBotMove,logicalMoves,tacticalScore,wouldCloseBox} from './bot.ts';
+import {createDuel,playDuelMove,timeoutTurn} from './duel.ts';
+const SOLUTION=parseGrid('483921657967345821251876493548132976729564138136798245372689514814253769695417382');
+const PERFECT={...BOT_LEVELS.hard,mistakeRate:0};
+const boardWithout=(...cells:number[])=>SOLUTION.map((d,c)=>cells.includes(c)?0:d);
 
-const SOLUTION = parseGrid('483921657967345821251876493548132976729564138136798245372689514814253769695417382');
-const PERFECT = { mistakeRate: 0, thinkMs: [0, 0] as [number, number], smart: true };
-
-function boardWithout(...cells: number[]) {
-  const board = [...SOLUTION];
-  for (const cell of cells) board[cell] = 0;
-  return board;
-}
-
-describe('duel bot', () => {
-  it('plays an empty cell, with the right digit when it does not slip', () => {
-    const { givens, solution } = generatePuzzle(7, 'medium');
-    const duel = createDuel(givens, 1);
-    const rng = createRng(1);
-    for (let i = 0; i < 20; i++) {
-      const { cell, digit } = botMove(duel, solution, PERFECT, rng);
-      expect(duel.board[cell]).toBe(0);
-      expect(digit).toBe(solution[cell]);
-      duel.board[cell] = digit;
+describe('logical training bots',()=>{
+  it('uses only publicly deducible moves and never mutates the board while thinking',()=>{
+    const puzzle=generatePuzzle(7,'medium'),state=createDuel(puzzle.givens,1),rng=createRng(1);
+    for(let i=0;i<20;i++){
+      const before=JSON.parse(JSON.stringify(state)),move=chooseBotMove(state,PERFECT,rng)!;
+      expect(state).toEqual(before);expect(move).not.toBeNull();expect(state.board[move.cell]).toBe(0);
+      expect(move.digit).toBe(puzzle.solution[move.cell]);state.board[move.cell]=move.digit;
     }
   });
-
-  it('a smart bot closes a box with a big digit rather than play a small one', () => {
-    // Cell 0 (a 4) closes box 0; cell 80 (a 2) closes nothing, since 79 is open too.
-    const duel = createDuel(boardWithout(0, 79, 80), 1);
-    expect(wouldCloseBox(duel.board, 0)).toBe(true);
-    expect(moveScore(duel.board, SOLUTION, 0)).toBeGreaterThan(moveScore(duel.board, SOLUTION, 80));
-    expect(botMove(duel, SOLUTION, PERFECT, createRng(3)).cell).toBe(0);
+  it('has separate technique limits and waits instead of consulting a solution',()=>{
+    const medium=generatePuzzle(42,'medium'),hidden=analyzePuzzle(medium.givens,'easy').grid;
+    expect(logicalMoves(hidden,'easy')).toEqual([]);expect(logicalMoves(hidden,'medium').length).toBeGreaterThan(0);
+    const hard=generatePuzzle(42,'hard'),advanced=analyzePuzzle(hard.givens,'medium').grid;
+    expect(logicalMoves(advanced,'medium')).toEqual([]);expect(logicalMoves(advanced,'hard').length).toBeGreaterThan(0);
+    expect(chooseBotMove(createDuel(advanced,1),BOT_LEVELS.easy,createRng(1))).toBeNull();
+    expect(chooseBotMove(createDuel(new Array(81).fill(0),1),PERFECT,createRng(1))).toBeNull();
+    for(const move of logicalMoves(advanced,'hard'))expect(move.digit).toBe(hard.solution[move.cell]);
   });
-
-  it('a smart bot avoids leaving the rival a box one gap short', () => {
-    // Box 8 has cells 70 and 80 open: filling either leaves the other for the rival to close.
-    const board = boardWithout(70, 80, 3, 4);
-    expect(moveScore(board, SOLUTION, 70)).toBeLessThan(moveScore(board, SOLUTION, 3) + 1);
+  it('a tactical bot prefers a doubled hit rather than a smaller opportunity',()=>{
+    const state=createDuel(boardWithout(0,79,80),1);
+    expect(wouldCloseBox(state.board,0)).toBe(true);
+    expect(chooseBotMove(state,PERFECT,createRng(3))!.cell).toBe(0);
   });
-
-  it('slips about as often as its level says', () => {
-    const { givens, solution } = generatePuzzle(9, 'easy');
-    const duel = createDuel(givens, 1);
-    const rng = createRng(5);
-    let wrong = 0;
-    for (let i = 0; i < 2000; i++) {
-      const { cell, digit } = botMove(duel, solution, BOT_LEVELS.easy, rng);
-      if (digit !== solution[cell]) wrong++;
+  it('penalizes handing the rival a box on the last ordinary move',()=>{
+    const state=createDuel(boardWithout(70,80,3,4,12,17,72),1);state.movesLeft=1;
+    const moves=logicalMoves(state.board,'hard'),safe=moves.find(m=>m.cell===3)!,risky=moves.find(m=>m.cell===80)!;
+    expect(tacticalScore(state,safe)).toBeGreaterThan(tacticalScore(state,risky));
+    expect(chooseBotMove(state,PERFECT,createRng(3))!.cell).not.toBe(80);
+  });
+  it('a smart bot makes better visible-board decisions than a random selection',()=>{
+    const state=createDuel(boardWithout(70,80,3,4,12,17,72),1);state.movesLeft=1;
+    let smart=0,random=0;const a=createRng(25),b=createRng(25);
+    for(let i=0;i<100;i++){
+      smart+=tacticalScore(state,chooseBotMove(state,PERFECT,a)!);
+      random+=tacticalScore(state,chooseBotMove(state,{...PERFECT,smart:false},b)!);
     }
-    expect(wrong / 2000).toBeGreaterThan(0.08);
-    expect(wrong / 2000).toBeLessThan(0.16);
+    expect(smart).toBeGreaterThan(random);
   });
-
-  it('can play a whole duel to the end', () => {
-    const { givens, solution } = generatePuzzle(11, 'hard');
-    const duel = createDuel(givens, 0);
-    const rng = createRng(11);
-    for (let i = 0; i < 500 && !duel.finished; i++) {
-      const { cell, digit } = botMove(duel, solution, BOT_LEVELS.hard, rng);
-      expect(playDuelMove(duel, solution, duel.turn, cell, digit).ok).toBe(true);
+  it('keeps novice thinking time slower and bounded, with occasional reproducible slips',()=>{
+    expect(BOT_LEVELS.easy.thinkMs[0]).toBeGreaterThan(BOT_LEVELS.hard.thinkMs[1]);
+    const state=createDuel(boardWithout(0,79,80),1),rng=createRng(5);let wrong=0;
+    for(let i=0;i<2000;i++){const m=chooseBotMove(state,BOT_LEVELS.easy,rng)!;if(m.digit!==SOLUTION[m.cell])wrong++;}
+    expect(wrong/2000).toBeGreaterThan(.05);expect(wrong/2000).toBeLessThan(.11);
+  });
+  it('can finish a duel with normal turn and timeout rules',()=>{
+    for(const difficulty of ['easy','medium','hard'] as const){
+      const p=generatePuzzle(11,difficulty),state=createDuel(p.givens,0),rng=createRng(11);
+      for(let i=0;i<500&&!state.finished;i++){
+        const move=chooseBotMove(state,BOT_LEVELS.hard,rng);
+        if(move)expect(playDuelMove(state,p.solution,state.turn,move.cell,move.digit).ok).toBe(true);else timeoutTurn(state);
+      }
+      expect(state.finished).toBe(true);
     }
-    expect(duel.finished).toBe(true);
   });
 });

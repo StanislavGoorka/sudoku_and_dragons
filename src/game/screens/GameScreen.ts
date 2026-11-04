@@ -38,8 +38,11 @@ import { easyCell, lessonSeen, markLessonSeen } from '../tutorial.ts';
 import { BattleTutorial } from './BattleTutorial.ts';
 import { fightLayout } from './fightLayout.ts';
 import { queueDailyResult, flushDailyResults, type RankedRun } from '../net/daily.ts';
+import { saveTrainingSolo } from '../training/store.ts';
 
 export interface GameScreenOptions {
+  /** Device-local, unranked solo. The enemy never charges timed attacks. */
+  practice?:boolean;
   /** A new battle on the same difficulty. */
   onRestart: () => void;
   /** A battle on another campaign stage (the one this win opened). */
@@ -89,6 +92,7 @@ export class GameScreen extends Container {
   private elapsed = 0;
   private endShown = false;
   private reward: Reward | null = null;
+  private resultRecorded=false;
   private readonly ranked: RankedRun | undefined;
   private readonly rankedMoves: DailyMove[];
   private readonly bossLabel = new Text({ text: '', style: { fontFamily: theme.fontFamily,
@@ -111,6 +115,7 @@ export class GameScreen extends Container {
     super();
     this.puzzle = puzzle;
     const saved = options.resume;
+    if(options.practice&&(options.stage||options.daily||options.ranked||saved?.stage||saved?.daily||saved?.ranked))throw new Error('Practice cannot be ranked');
     this.ranked = saved?.ranked?.run ?? options.ranked;
     this.rankedMoves = saved?.ranked?.moves ?? [];
     this.battle = saved ? structuredClone(saved.battle) : createBattle(options.stage?.enemy ?? ENEMIES[puzzle.difficulty]);
@@ -148,7 +153,7 @@ export class GameScreen extends Container {
 
     // A player's very first battle walks them through it.
     const fought = Object.values(progress.levels).some((level) => level.wins + level.losses > 0);
-    if (!fought && !lessonSeen('battle')) {
+    if (!options.practice && !fought && !lessonSeen('battle')) {
       this.tutorial = new BattleTutorial(
         {
           arena: () => this.areas.arena,
@@ -216,17 +221,17 @@ export class GameScreen extends Container {
     if (this.modal) return;
     // The tutorial holds the clock: the countdown shows, but neither it nor the battle time runs.
     const dt = this.tutorial ? 0 : deltaMs / 1000;
-    const hit = advanceTime(this.battle, dt);
+    const hit = this.options.practice ? null : advanceTime(this.battle, dt);
     const ongoing = this.battle.outcome === 'ongoing';
     if (ongoing) this.elapsed += dt;
     const attackEvery = attackInterval(this.battle);
-    this.bossLabel.text = this.battle.outcome === 'ongoing' ? bossHint(this.battle) : '';
+    this.bossLabel.text = this.options.practice ? 'Trening · bez zegara · bez nagród' : this.battle.outcome === 'ongoing' ? bossHint(this.battle) : '';
     const secondsLeft = attackEvery - this.battle.charge;
 
-    this.arena.charge.visible = ongoing;
+    this.arena.charge.visible = ongoing && !this.options.practice;
     this.arena.charge.update(this.battle.charge / attackEvery, secondsLeft, dt);
-    this.arena.dragon.setHeat(ongoing ? Math.max(0, 1 - secondsLeft / 5) : 0);
-    this.tickCountdown(ongoing ? secondsLeft : Infinity);
+    this.arena.dragon.setHeat(ongoing && !this.options.practice ? Math.max(0, 1 - secondsLeft / 5) : 0);
+    this.tickCountdown(ongoing && !this.options.practice ? secondsLeft : Infinity);
     if (hit) this.play(hit, this.playDragonAttack(hit));
     this.sinceCheckpoint += deltaMs;
     if (this.sinceCheckpoint >= 1000) this.checkpoint();
@@ -248,7 +253,7 @@ export class GameScreen extends Container {
   pause(): void {
     this.checkpoint();
     if (this.modal || this.battle.outcome !== 'ongoing') return;
-    this.openModal(new Modal('Pauza', 'Smok czeka na Twój ruch.\nMożesz wrócić do tej walki z menu.', [
+    this.openModal(new Modal('Pauza', this.options.practice ? 'Trening jest zapisany osobno.\nWrócisz do niego z ekranu Trening i lekcje.' : 'Smok czeka na Twój ruch.\nMożesz wrócić do tej walki z menu.', [
       { text: 'Wróć do walki', variant: 'primary', onTap: () => this.closeModal() },
       { text: 'Wyjdź do menu', onTap: () => this.options.onMenu() },
     ], theme.text, new MusicControl()));
@@ -316,7 +321,8 @@ export class GameScreen extends Container {
   private checkpoint(): void {
     if (this.battle.outcome !== 'ongoing') return;
     this.sinceCheckpoint = 0;
-    saveActiveBattle({
+    const save=this.options.practice?saveTrainingSolo:saveActiveBattle;
+    save({
       version: 1, puzzle: this.puzzle, stage: this.options.stage?.id, daily: this.options.daily,
       grid: [...this.grid], battle: structuredClone(this.battle), notes: this.board.saveNotes(),
       notesMode: this.notesMode, selected: this.board.selected, mistakes: this.mistakes,
@@ -386,7 +392,7 @@ export class GameScreen extends Container {
     if (result.kind === 'correct') {
       this.bestCombo = Math.max(this.bestCombo, hit.units);
       this.play(hit, this.playPlayerAttack(hit, cell, result.completed));
-      if (hit.units > 0 && this.battle.outcome === 'ongoing') {
+      if (!this.options.practice && hit.units > 0 && this.battle.outcome === 'ongoing') {
         const at = this.fx.toLocal(this.arena.chargePoint(), this.arena);
         floatText(this.fx, `+${battleKnockback(this.battle, hit.units)} s`, { x: at.x + 12, y: at.y - 30 }, {
           color: this.board.colors.placed,
@@ -401,20 +407,25 @@ export class GameScreen extends Container {
 
   /** Runs a hit's animation, then ends the battle if that hit brought someone to 0 HP. */
   private play(hit: Hit, animation: Promise<void>): void {
-    if (this.battle.outcome !== 'ongoing' && !this.reward) {
-      if (this.ranked && this.battle.outcome === 'won') {
-        // Persist before removing the active checkpoint. An uncertain upload retries the same run ID.
-        queueDailyResult(this.ranked, this.rankedMoves);
-        void flushDailyResults().catch(() => {});
+    if (this.battle.outcome !== 'ongoing' && !this.resultRecorded) {
+      this.resultRecorded=true;
+      if (this.options.practice) {
+        saveTrainingSolo(null);
+      } else {
+        if (this.ranked && this.battle.outcome === 'won') {
+          // Persist before removing the active checkpoint. An uncertain upload retries the same run ID.
+          queueDailyResult(this.ranked, this.rankedMoves);
+          void flushDailyResults().catch(() => {});
+        }
+        this.reward = recordBattle(progress, {
+          difficulty: this.puzzle.difficulty, won: this.battle.outcome === 'won', mistakes: this.mistakes,
+          hpLeft: this.battle.playerHp, maxHp: this.battle.playerMaxHp, seconds: this.elapsed,
+          bestCombo: this.bestCombo, stage: this.options.stage?.id, daily: this.options.daily,
+        });
+        // Progress and removal of the checkpoint share the same localStorage write, before animations.
+        saveActiveBattle(null);
+        saveProgress();
       }
-      this.reward = recordBattle(progress, {
-        difficulty: this.puzzle.difficulty, won: this.battle.outcome === 'won', mistakes: this.mistakes,
-        hpLeft: this.battle.playerHp, maxHp: this.battle.playerMaxHp, seconds: this.elapsed,
-        bestCombo: this.bestCombo, stage: this.options.stage?.id, daily: this.options.daily,
-      });
-      // Progress and removal of the checkpoint share the same localStorage write, before animations.
-      saveActiveBattle(null);
-      saveProgress();
     }
     // Only the final hit ends the battle; earlier hits may still be landing.
     void animation.then(() => {
@@ -503,6 +514,15 @@ export class GameScreen extends Container {
 
     const { name, attack } = this.battle.enemy;
     const stats = `Czas: ${formatTime(this.elapsed)} · Błędy: ${this.mistakes}`;
+    if(this.options.practice){
+      won?feedback.victory():feedback.defeat();
+      this.openModal(new Modal(won?'Trening ukończony':'Koniec treningu',
+        `${stats}\nTrening nie daje gwiazdek, rekordów ani postępu kampanii.`,[
+          {text:'Nowy trening',variant:'primary',onTap:this.options.onRestart},
+          {text:'Trening i lekcje',onTap:this.options.onMenu},
+        ],won?theme.gold:theme.text));
+      return;
+    }
     const hint =
       finalHit.cause === 'mistake'
         ? `Każdy błąd to cios smoka za ${attack} HP.`

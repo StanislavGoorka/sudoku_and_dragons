@@ -60,7 +60,8 @@ test('offline bot training and its rematch use the worker without requiring a co
   await page.goto('/'); await ready(page);
   await page.evaluate(() => window.__game.lobby()); await ready(page, 'LobbyScreen');
   await expect.poll(() => page.evaluate(() => window.__game.screen.view.kind)).toBe('offline');
-  await tapButton(page, 'Trening z botem'); await ready(page, 'DuelScreen');
+  await tapButton(page, 'Trening z botem'); await ready(page, 'TrainingScreen');
+  await tapButton(page, 'Rozpocznij pojedynek'); await ready(page, 'DuelScreen');
   expect(await page.evaluate(() => window.__game.screen.backend.ranked)).toBe(false);
   const before = await page.evaluate(() => window.__game.screen.duelId);
   // Prepare a genuinely finished game with the duel rules. A forfeit intentionally declines rematches.

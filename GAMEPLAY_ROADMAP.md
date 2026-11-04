@@ -25,6 +25,10 @@ generowanie nie blokuje interfejsu, a dotychczasowy budżet startowy pozostaje s
 
 ## 12. Pełny trening i praktyczne lekcje walki
 
+**Status: zrealizowane.** Menu treningu obejmuje solo bez zegara, niezależny wybór siły bota
+i trudności planszy oraz cztery praktyczne lekcje. Osobne zapisy pozwalają wznowić trening offline
+bez zmiany kampanii i nagród. Szczegóły: [trening i lekcje](TRAINING.md).
+
 **Problem:** jest samouczek pierwszej walki i trening z botem, ale poziom bota jest związany
 z trudnością sudoku, a jego wybory korzystają z gotowego rozwiązania.
 

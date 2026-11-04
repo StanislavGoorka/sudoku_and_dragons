@@ -149,10 +149,16 @@ code and comments are English.
   down): `DuelScreen` talks to whoever judges the duel through `net/duelBackend.ts` (`DuelBackend`: moves,
   timeout claims, leave, rematch, watch, profiles, clock); `onlineDuels` is the server, `net/botDuel.ts` a
   `BotDuel` that judges on the device with the same core rules (no sign-in, no connection), the player in
-  seat 0 and "Bot treningowy" in seat 1, playing a digit at a time after thinking (`core/duel/bot.ts`, pure and
-  tested: `BOT_LEVELS` by difficulty set the mistake rate, think time and whether it plays for damage and
-  keeps the player from closing boxes; `moveScore`, `botMove`). Bot duels are not `ranked`: no stars, no
-  records, and the end dialog says so; a rematch starts a new board at once.
+  seat 0 and a bot in seat 1. The menu's `TrainingScreen` selects board difficulty independently of bot
+  strength. `core/duel/bot.ts` derives `logicalMoves` from public digits only; `chooseBotMove` uses limited
+  techniques, bounded think times and occasional slips (`BOT_LEVELS`), with `tacticalScore` for stronger
+  bots. It never reads the referee's solution or player notes. A stumped bot waits for the normal timeout.
+  Bot duels are not `ranked`: no stars or records; a rematch starts a new board with the same strength.
+  `GameScreen`'s `practice` option is solo without timed attacks or rewards. `LessonScreen` runs four
+  fixed, replayable scenarios from `core/training/lessons.ts`; ordinary games get no lesson assistance.
+  `training/store.ts` saves solo, bot turns, manual notes and lesson completion under a separate local
+  key, excluded from cloud progress. Local bot clocks freeze on pause/background and resume with their
+  saved remainder. Logout and data deletion clear training too. See `TRAINING.md`.
   `net/duelRecovery.ts` remembers only a duel ID plus its owner. Startup, foreground/online and entering
   the lobby recover the match under RLS; a lost local pointer falls back to the account's latest playing
   duel. Waiting rooms and results reached while away resume too. Navigation and account checks discard

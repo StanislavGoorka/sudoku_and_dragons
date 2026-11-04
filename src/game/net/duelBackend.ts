@@ -1,4 +1,5 @@
 import type { DuelEvent, Seat } from '../../core/index.ts';
+import type { TrainingUi } from '../training/botSave.ts';
 import {
   fetchDuel,
   fetchProfile,
@@ -20,6 +21,10 @@ import {
 export interface DuelBackend {
   /** Online duels pay stars and count in the player's records; training with a bot does not. */
   readonly ranked: boolean;
+  /** Device-only training hooks. Online duel clocks are never paused by these. */
+  checkpointTraining?(duelId:string,ui:TrainingUi):void;
+  pauseTraining?():void;
+  resumeTraining?():void;
   /** The judge's clock, in ms, for turn countdowns. */
   now(): number;
   move(duelId: string, cell: number, digit: number): Promise<{ duel: DuelRow; event: DuelEvent }>;

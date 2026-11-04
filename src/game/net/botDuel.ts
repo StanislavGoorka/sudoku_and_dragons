@@ -1,6 +1,6 @@
 import {
   BOT_LEVELS,
-  botMove,
+  chooseBotMove,
   createDuel,
   createRng,
   DUEL_RULES,
@@ -13,10 +13,14 @@ import {
   type Grid,
   type Rng,
   type Seat,
+  type BotStrength,
 } from '../../core/index.ts';
 import type { DuelBackend } from './duelBackend.ts';
 import { OnlineError, type DuelRow, type Profile } from './online.ts';
 import { generatePuzzleAsync } from '../puzzleGeneration.ts';
+import { saveTrainingBot } from '../training/store.ts';
+import type { BotCheckpoint, TrainingUi } from '../training/botSave.ts';
+import { BOT_NAMES } from '../training/labels.ts';
 
 export const BOT_ID = 'bot';
 const BOT_PROFILE: Profile = { nickname: 'Bot treningowy', dragon: null, effect: null };
@@ -28,12 +32,13 @@ const TURN_START_MS = 900;
 interface Game {
   row: DuelRow;
   solution: Grid;
+  givens:Grid;
 }
 
 /**
  * Training with a bot, judged on the device with the same rules as the server (core), so it needs no
  * connection and DuelScreen plays it like an online duel. The player sits in seat 0, the bot in seat 1;
- * it plays its turn a digit at a time, thinking as long as its level says (BOT_LEVELS, by difficulty).
+ * it plays its turn a digit at a time, thinking as long as its independently selected strength says.
  * Nothing it plays counts towards stars or records (`ranked` is false).
  */
 export class BotDuel implements DuelBackend {
@@ -45,11 +50,15 @@ export class BotDuel implements DuelBackend {
   private readonly watchers = new Map<string, Set<(row: DuelRow) => void>>();
   private readonly timers = new Map<string, number>();
   private count = 0;
+  private pausedAt:number|null=null;
+  private pausedMs=0;
+  readonly strength:BotStrength;
 
-  constructor(difficulty: Difficulty, player: string, seed = Math.floor(Math.random() * 2 ** 32)) {
+  constructor(difficulty: Difficulty, player: string, seed = Math.floor(Math.random() * 2 ** 32), strength:BotStrength=difficulty) {
     this.difficulty = difficulty;
     this.player = player;
     this.rng = createRng(seed);
+    this.strength=strength;
   }
 
   /** A new duel on a fresh board, the first turn to either side. */
@@ -72,15 +81,42 @@ export class BotDuel implements DuelBackend {
       rematch_declined: false,
       next_duel: null,
     };
-    this.games.set(id, { row, solution });
+    this.games.set(id, { row, solution, givens });
     return { duel: structuredClone(row), seat: 0 };
   }
 
   now(): number {
-    return Date.now();
+    return (this.pausedAt??Date.now())-this.pausedMs;
+  }
+
+  static restore(saved:BotCheckpoint):{backend:BotDuel;duel:DuelRow;seat:Seat} {
+    const backend=new BotDuel(saved.difficulty,'you',undefined,saved.strength);
+    backend.pausedAt=saved.state.finished?null:Date.now();backend.count=1;
+    const row:DuelRow={id:'bot-1',mode:'random',code:null,difficulty:saved.difficulty,
+      status:saved.state.finished?'finished':'playing',player0:'you',player1:BOT_ID,state:structuredClone(saved.state),
+      last_event:null,version:1,turn_started_at:new Date(backend.now()-(DUEL_RULES.turnSeconds*1000-saved.remainingMs)).toISOString(),
+      rematch_by:null,rematch_declined:false,next_duel:null};
+    backend.games.set(row.id,{row,solution:[...saved.solution],givens:[...saved.givens]});
+    return {backend,duel:structuredClone(row),seat:0};
+  }
+
+  checkpointTraining(duelId:string,ui:TrainingUi):void {
+    const game=this.game(duelId);
+    saveTrainingBot({...ui,version:1,difficulty:this.difficulty,strength:this.strength,
+      givens:game.givens,solution:game.solution,state:game.row.state,
+      remainingMs:Math.min(DUEL_RULES.turnSeconds*1000,Math.max(0,this.deadline(game.row)-this.now()))});
+  }
+  pauseTraining():void {
+    if(this.pausedAt!==null)return;
+    this.pausedAt=Date.now();for(const id of this.timers.keys())this.stopBot(id);
+  }
+  resumeTraining():void {
+    if(this.pausedAt!==null){this.pausedMs+=Date.now()-this.pausedAt;this.pausedAt=null;}
+    for(const id of this.watchers.keys())this.scheduleBot(id);
   }
 
   async move(duelId: string, cell: number, digit: number): Promise<{ duel: DuelRow; event: DuelEvent }> {
+    if(this.pausedAt!==null)throw new OnlineError('not-playing');
     const game = this.game(duelId);
     if (game.row.status !== 'playing') throw new OnlineError('not-playing');
     if (this.now() > this.deadline(game.row) + GRACE_MS) throw new OnlineError('too-late');
@@ -89,6 +125,7 @@ export class BotDuel implements DuelBackend {
   }
 
   async claimTimeout(duelId: string): Promise<{ duel: DuelRow }> {
+    if(this.pausedAt!==null)throw new OnlineError('not-playing');
     const game = this.game(duelId);
     if (game.row.status !== 'playing') throw new OnlineError('not-playing');
     const deadline = this.deadline(game.row);
@@ -144,11 +181,11 @@ export class BotDuel implements DuelBackend {
   }
 
   async fetchProfile(): Promise<Profile> {
-    return BOT_PROFILE;
+    return {...BOT_PROFILE,nickname:`Bot · ${BOT_NAMES[this.strength]}`};
   }
 
   knownProfile(playerId: string): Profile | undefined {
-    return playerId === BOT_ID ? BOT_PROFILE : undefined;
+    return playerId === BOT_ID ? {...BOT_PROFILE,nickname:`Bot · ${BOT_NAMES[this.strength]}`} : undefined;
   }
 
   private game(duelId: string): Game {
@@ -190,10 +227,11 @@ export class BotDuel implements DuelBackend {
 
   /** On the bot's turn, its next digit after a moment's thought (a longer one at the start of a turn). */
   private scheduleBot(duelId: string): void {
+    if(this.pausedAt!==null)return;
     const game = this.games.get(duelId);
     if (!game || game.row.status !== 'playing' || game.row.state.turn !== 1) return;
     if (!this.watchers.get(duelId)?.size || this.timers.has(duelId)) return;
-    const level = BOT_LEVELS[this.difficulty];
+    const level = BOT_LEVELS[this.strength];
     const [min, max] = level.thinkMs;
     const firstOfTurn = game.row.state.movesLeft === DUEL_RULES.movesPerTurn;
     const delay = min + this.rng() * (max - min) + (firstOfTurn ? TURN_START_MS : 0);
@@ -201,7 +239,11 @@ export class BotDuel implements DuelBackend {
       this.timers.delete(duelId);
       const current = this.games.get(duelId);
       if (!current || current.row.status !== 'playing' || current.row.state.turn !== 1) return;
-      const { cell, digit } = botMove(current.row.state, current.solution, level, this.rng);
+      if(this.now()>=this.deadline(current.row)){void this.claimTimeout(duelId);return;}
+      const move = chooseBotMove(current.row.state, level, this.rng);
+      // No guessed answer from the referee. The ordinary turn clock handles a stumped bot.
+      if(!move)return;
+      const {cell,digit}=move;
       this.play(current, 1, cell, digit);
     }, delay);
     this.timers.set(duelId, timer);
