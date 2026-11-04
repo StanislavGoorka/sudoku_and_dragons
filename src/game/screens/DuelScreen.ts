@@ -24,16 +24,20 @@ import { rewardLines } from '../progress/rewardText.ts';
 import { progress, recordDuelOnce } from '../progress/store.ts';
 import { fightLayout } from './fightLayout.ts';
 import type { TrainingUi } from '../training/botSave.ts';
+import { DuelReplay } from '../history/duelReplay.ts';
+import { addReplay } from '../history/store.ts';
+import type { Replay } from '../history/replay.ts';
 
 export interface DuelScreenOptions {
   /** Back to the online lobby for another duel. */
   onLobby: () => void;
   onMenu: () => void;
+  onReplay: (replay: Replay) => void;
   /** Both players asked for a rematch: open the new duel. */
   onRematch: (duel: DuelRow, seat: Seat) => void;
   /** Who judges the duel: the server (the default), or the device for training with a bot. */
   backend?: DuelBackend;
-  trainingUi?:TrainingUi;
+  trainingUi?:TrainingUi & { replay?: unknown; replayElapsed?: number };
 }
 
 /** What the server says about a rematch once the duel is over. */
@@ -78,6 +82,8 @@ export class DuelScreen extends Container {
   private readonly seat: Seat;
   private readonly options: DuelScreenOptions;
   private readonly sync: DuelSync;
+  private readonly replay: DuelReplay;
+  private finishedReplay: Replay | null = null;
   /** The event behind the last confirmed version. */
   private lastEvent: DuelEvent | null;
   private rivalName = 'Rywal';
@@ -143,6 +149,7 @@ export class DuelScreen extends Container {
     this.me = me;
     this.seat = seat;
     this.options = options;
+    this.replay = new DuelReplay(row, seat, this.backend.ranked, this.replayNow(), options.trainingUi);
     if (this.backend.ranked) rememberDuel(row, me);
     // The board has one solution, so the client finds it too; it only predicts with it.
     const solution = solve(row.state.board);
@@ -344,8 +351,11 @@ export class DuelScreen extends Container {
   private checkpointTraining():void {
     if(this.backend.ranked)return;
     this.sinceTrainingSave=0;this.trainingSelection=this.board.selected;
-    this.backend.checkpointTraining?.(this.duelId,{notes:this.board.saveNotes(),notesMode:this.notesMode,selected:this.board.selected});
+    this.backend.checkpointTraining?.(this.duelId, { notes: this.board.saveNotes(), notesMode: this.notesMode, selected: this.board.selected },
+      { draft: this.replay.draft, elapsed: Math.round(this.replay.elapsed(this.replayNow())) });
   }
+
+  private replayNow(): number { return this.backend.ranked ? performance.now() : this.backend.now(); }
 
   private setConnection(state: DuelConnectionState): void {
     if (this.destroyed || !this.backend.ranked) return;
@@ -513,6 +523,7 @@ export class DuelScreen extends Container {
       return;
     }
     const turnBefore = this.state.turn;
+    this.replay.observe(row, this.replayNow());
     const received = this.sync.receive({ ...snapshotOf(row), event: row.last_event });
     this.lastEvent = row.last_event;
     if (received.kind === 'unexpected') {
@@ -665,6 +676,8 @@ export class DuelScreen extends Container {
                 if (!row || (await supabase.auth.getSession()).data.session?.user.id !== this.me.id) return;
                 if (row.state.finished) {
                   recordDuelOnce(this.me.id, this.duelId, row.state.winner === this.seat);
+                  this.replay.observe(row, this.replayNow());
+                  addReplay(this.replay.recorder.finish(this.replay.elapsed(this.replayNow())));
                   forgetDuel(this.duelId);
                 } else if (row.status === 'cancelled') forgetDuel(this.duelId);
               }).catch(() => {});
@@ -703,6 +716,7 @@ export class DuelScreen extends Container {
     const draw = winner === null;
     // Persist before waiting for a hit/death animation, including on a restored finished duel.
     if (this.backend.ranked) this.reward = recordDuelOnce(this.me.id, this.duelId, won);
+    this.finishedReplay = addReplay(this.replay.recorder.finish(this.replay.elapsed(this.replayNow())));
     // Let the last hit land (shown when it was played, maybe before the server confirmed it),
     // then the loser's dragon falls.
     const since = (performance.now() - (this.finishShownAt ?? performance.now())) / 1000;
@@ -738,6 +752,7 @@ export class DuelScreen extends Container {
       new Modal(this.endTitle, this.endMessage, [
         { text: 'Rewanż', variant: 'primary', onTap: () => this.requestRematch() },
         { text: 'Nowy pojedynek', onTap: () => this.leaveEnd(this.options.onLobby) },
+        ...(this.finishedReplay ? [{ text: 'Analiza walki', onTap: () => this.leaveEnd(() => this.options.onReplay(this.finishedReplay!)) }] : []),
         { text: 'Menu', onTap: () => this.leaveEnd(this.options.onMenu) },
       ], this.sync.confirmed.state.winner === this.seat ? theme.gold : theme.text),
     );

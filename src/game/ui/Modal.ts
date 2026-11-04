@@ -123,12 +123,14 @@ export class Modal extends Container {
     }
     this.message.position.set(width / 2, y);
     y += this.message.text ? this.message.height + PADDING : PADDING / 2;
+    const compact = screenHeight < 700 && this.buttons.length >= 4;
+    const buttonHeight = compact ? 48 : BUTTON_HEIGHT, buttonGap = compact ? 8 : BUTTON_GAP;
     for (const button of this.buttons) {
       button.position.set(PADDING, y);
-      button.layout(inner, BUTTON_HEIGHT);
-      y += BUTTON_HEIGHT + BUTTON_GAP;
+      button.layout(inner, buttonHeight);
+      y += buttonHeight + buttonGap;
     }
-    const height = y - BUTTON_GAP + PADDING;
+    const height = y - buttonGap + PADDING;
 
     drawPanel(this.panel.clear(), 0, 0, width, height, true);
     this.panel.moveTo(width / 2 - 28, 10).lineTo(width / 2 + 28, 10).stroke({ width: 2, color: theme.gold, alpha: .65 });

@@ -191,7 +191,7 @@ export async function boot(): Promise<void> {
       return () => new GameScreen(puzzle, {
         onRestart: () => startStage(stage),
         onPlay: (next) => startStage(next),
-        onMenu: showMenu,
+        onMenu: showMenu, onReplay: showReplay,
         stage,
       });
     });
@@ -211,7 +211,7 @@ export async function boot(): Promise<void> {
       return () => new GameScreen(puzzle, {
         onRestart: () => startBattle(difficulty),
         onPlay: (next) => startStage(next),
-        onMenu: showMenu,
+        onMenu: showMenu, onReplay: showReplay,
       });
     });
     if (import.meta.env.DEV) console.info(`[game] seed=${seed} difficulty=${difficulty} generator=${version}`);
@@ -235,7 +235,7 @@ export async function boot(): Promise<void> {
       return () => new GameScreen(puzzle, {
         onRestart: startDaily,
         onPlay: (next) => startStage(next),
-        onMenu: showMenu,
+        onMenu: showMenu, onReplay: showReplay,
         daily: daily.key,
       });
     });
@@ -248,7 +248,7 @@ export async function boot(): Promise<void> {
     openScreen('battle', async () => {
       const { GameScreen } = await import('./screens/GameScreen.ts');
       return () => new GameScreen(saved.puzzle, {
-        resume: saved, stage, daily: saved.daily, onMenu: showMenu,
+        resume: saved, stage, daily: saved.daily, onMenu: showMenu, onReplay: showReplay,
         onRanking: showDaily,
         onRestart: saved.daily ? startDaily : stage ? () => startStage(stage) : () => startBattle(saved.puzzle.difficulty),
         onPlay: (next) => startStage(next),
@@ -295,7 +295,7 @@ export async function boot(): Promise<void> {
       const [{ GameScreen }, { generatePuzzleAsync }] = await Promise.all([import('./screens/GameScreen.ts'), import('./puzzleGeneration.ts')]);
       const puzzle = await generatePuzzleAsync(Number(run.seed), run.difficulty, RANKED_DAILY_GENERATOR_VERSION, signal);
       return () => new GameScreen(puzzle, {
-        onMenu: showMenu, onRestart: showDaily, onPlay: startStage, daily: run.day, ranked: run, onRanking: showDaily,
+        onMenu: showMenu, onReplay: showReplay, onRestart: showDaily, onPlay: startStage, daily: run.day, ranked: run, onRanking: showDaily,
       });
     });
   };
@@ -317,7 +317,21 @@ export async function boot(): Promise<void> {
   const showProgress = () => {
     openScreen('progress', async () => {
       const { ProgressScreen } = await import('./screens/ProgressScreen.ts');
-      return () => new ProgressScreen({ onBack: showMenu });
+      return () => new ProgressScreen({ onBack: showMenu, onHistory: showHistory });
+    });
+  };
+
+  const showHistory = () => {
+    openScreen('progress', async () => {
+      const { HistoryScreen } = await import('./screens/HistoryScreen.ts');
+      return () => new HistoryScreen({ onBack: showProgress, onReplay: showReplay });
+    });
+  };
+
+  const showReplay = (replay: import('./history/replay.ts').Replay) => {
+    openScreen('progress', async () => {
+      const { ReplayScreen } = await import('./screens/ReplayScreen.ts');
+      return () => new ReplayScreen(replay, showHistory);
     });
   };
 
@@ -334,6 +348,7 @@ export async function boot(): Promise<void> {
       return () => new DuelScreen(duel, me, seat, {
         onLobby: backend&&!backend.ranked?()=>showTraining('bot'):showLobby,
         onMenu: backend&&!backend.ranked?()=>showTraining('bot'):showMenu,
+        onReplay: showReplay,
         onRematch: (next, nextSeat) => startDuel(next, nextSeat, me, backend),
         backend,
         trainingUi,
@@ -354,7 +369,7 @@ export async function boot(): Promise<void> {
       const saved=resume?trainingData().solo:null;
       const puzzle=saved?.puzzle??await generatePuzzleAsync(randomSeed(),difficulty,undefined,signal);
       return ()=>new GameScreen(puzzle,{practice:true,resume:saved??undefined,onRestart:()=>startPractice(puzzle.difficulty),
-        onMenu:()=>showTraining('solo'),onPlay:startStage});
+        onMenu:()=>showTraining('solo'),onPlay:startStage,onReplay:showReplay});
     },()=>{if(resume)screen?.pause?.();});
   };
   const startTrainingBot=(difficulty:Difficulty,strength:import('../core/duel/bot.ts').BotStrength,resume=false):void=>{
@@ -365,7 +380,7 @@ export async function boot(): Promise<void> {
       const backend=saved?BotDuel.restore(saved).backend:new BotDuel(difficulty,'you',undefined,strength);
       const row=saved?await backend.fetchDuel('bot-1'): (await backend.start(signal)).duel;
       return ()=>new DuelScreen(row,{id:'you',nickname:'Ty'},0,{backend,trainingUi:saved??undefined,
-        onMenu:()=>showTraining('bot'),onLobby:()=>showTraining('bot'),
+        onMenu:()=>showTraining('bot'),onLobby:()=>showTraining('bot'),onReplay:showReplay,
         onRematch:(duel,seat)=>startDuel(duel,seat,{id:'you',nickname:'Ty'},backend)});
     },()=>{if(resume)screen?.pause?.();});
   };
@@ -500,6 +515,7 @@ export async function boot(): Promise<void> {
         lobby: () => showLobby(),
         training:showTraining,
         progress: () => showProgress(),
+        history: showHistory,
         shop: (kind?: CosmeticKind) => showShop(kind),
         account: () => showAccount(),
         feedback,

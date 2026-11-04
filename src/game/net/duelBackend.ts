@@ -1,5 +1,6 @@
 import type { DuelEvent, Seat } from '../../core/index.ts';
 import type { TrainingUi } from '../training/botSave.ts';
+import type { ReplayDraft } from '../history/replay.ts';
 import {
   fetchDuel,
   fetchProfile,
@@ -22,7 +23,7 @@ export interface DuelBackend {
   /** Online duels pay stars and count in the player's records; training with a bot does not. */
   readonly ranked: boolean;
   /** Device-only training hooks. Online duel clocks are never paused by these. */
-  checkpointTraining?(duelId:string,ui:TrainingUi):void;
+  checkpointTraining?(duelId:string,ui:TrainingUi,replay?:{draft:ReplayDraft;elapsed:number}):void;
   pauseTraining?():void;
   resumeTraining?():void;
   /** The judge's clock, in ms, for turn countdowns. */

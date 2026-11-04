@@ -21,16 +21,22 @@ test('in-app account deletion confirms intent, preserves data offline, then clea
     return route.fulfill({ json: route.request().url().includes('/functions/') ? { nickname: 'Test', serverTime: Date.now() } : [], headers });
   });
   await page.goto('/'); await ready(page);
-  await page.evaluate(() => { window.__game.state.stars = 40; window.__game.save(); window.__game.account(); });
+  await page.evaluate(() => {
+    window.__game.state.stars = 40; window.__game.save();
+    localStorage.setItem('sudoku-dragons.history', '{"version":1,"items":[]}');
+    window.__game.account();
+  });
   await ready(page, 'AccountScreen'); await tapButton(page, 'Usuń konto i dane'); await tapButton(page, 'Anuluj');
   expect(attempts).toBe(0);
   await tapButton(page, 'Usuń konto i dane'); await tapButton(page, 'Usuń bezpowrotnie');
   await expect.poll(() => page.evaluate(() => window.__game.screen.message.text)).toContain('Nie potwierdzono');
   expect(await page.evaluate(() => window.__game.state.stars)).toBe(40);
+  expect(await page.evaluate(() => localStorage.getItem('sudoku-dragons.history'))).not.toBeNull();
   fail = false; await tapButton(page, 'Usuń konto i dane'); await tapButton(page, 'Usuń bezpowrotnie');
   await expect.poll(() => page.evaluate(() => window.__game.screen.message.text)).toContain('Konto i dane usunięte');
   expect(await page.evaluate(() => window.__game.state.stars)).toBe(0);
   expect(await page.evaluate(() => localStorage.getItem('sudoku-dragons.auth'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('sudoku-dragons.history'))).toBeNull();
 });
 test('web deletion requires a fresh login and never touches the local game save', async ({ page }) => {
   let deleted = false;

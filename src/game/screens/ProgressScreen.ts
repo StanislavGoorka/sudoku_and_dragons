@@ -9,6 +9,7 @@ import { UiIcon } from '../ui/UiIcon.ts';
 
 export interface ProgressOptions {
   onBack: () => void;
+  onHistory: () => void;
 }
 
 const ROW_HEIGHT = 68;
@@ -79,6 +80,7 @@ class AchievementRow extends Container {
 export class ProgressScreen extends Container {
   private readonly options: ProgressOptions;
   private readonly backButton: Button;
+  private readonly historyButton: Button;
   private readonly title = label('Postępy', 28, theme.text, '600');
   private readonly stars = new StarCounter(progress.stars);
   private readonly statsPanel = new Graphics();
@@ -96,6 +98,7 @@ export class ProgressScreen extends Container {
     super();
     this.options = options;
     this.backButton = new Button({ text: 'Wstecz', icon: 'back', onTap: options.onBack });
+    this.historyButton = new Button({ text: 'Historia walk', onTap: options.onHistory });
     this.title.anchor.set(0.5, 0);
     this.title.style.fontFamily = theme.headingFontFamily;
 
@@ -130,7 +133,7 @@ export class ProgressScreen extends Container {
     this.viewport.on('pointerupoutside', () => (this.dragFrom = null));
     this.viewport.on('wheel', (event: FederatedWheelEvent) => this.scrollTo(this.scroll + event.deltaY));
 
-    this.addChild(this.statsPanel, ...this.stats.flatMap((s) => [s.value, s.caption]), this.title, this.stars, this.heading, this.viewport, this.backButton);
+    this.addChild(this.statsPanel, ...this.stats.flatMap((s) => [s.value, s.caption]), this.title, this.stars, this.historyButton, this.heading, this.viewport, this.backButton);
   }
 
   layout(width: number, height: number): void {
@@ -153,7 +156,9 @@ export class ProgressScreen extends Container {
       caption.position.set(x, panelY + 46);
     });
 
-    const headingY = panelY + panelHeight + 20;
+    this.historyButton.position.set(left, panelY + panelHeight + 12);
+    this.historyButton.layout(column, 48);
+    const headingY = panelY + panelHeight + 72;
     this.heading.position.set(left + 4, headingY);
     const listTop = headingY + 36;
     const viewHeight = Math.max(0, height - listTop - margin);

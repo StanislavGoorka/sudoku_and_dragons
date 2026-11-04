@@ -21,6 +21,7 @@ import { generatePuzzleAsync } from '../puzzleGeneration.ts';
 import { saveTrainingBot } from '../training/store.ts';
 import type { BotCheckpoint, TrainingUi } from '../training/botSave.ts';
 import { BOT_NAMES } from '../training/labels.ts';
+import type { ReplayDraft } from '../history/replay.ts';
 
 export const BOT_ID = 'bot';
 const BOT_PROFILE: Profile = { nickname: 'Bot treningowy', dragon: null, effect: null };
@@ -100,10 +101,10 @@ export class BotDuel implements DuelBackend {
     return {backend,duel:structuredClone(row),seat:0};
   }
 
-  checkpointTraining(duelId:string,ui:TrainingUi):void {
+  checkpointTraining(duelId:string,ui:TrainingUi,replay?:{draft:ReplayDraft;elapsed:number}):void {
     const game=this.game(duelId);
     saveTrainingBot({...ui,version:1,difficulty:this.difficulty,strength:this.strength,
-      givens:game.givens,solution:game.solution,state:game.row.state,
+      givens:game.givens,solution:game.solution,state:game.row.state,replay:replay?.draft,replayElapsed:replay?.elapsed,
       remainingMs:Math.min(DUEL_RULES.turnSeconds*1000,Math.max(0,this.deadline(game.row)-this.now()))});
   }
   pauseTraining():void {

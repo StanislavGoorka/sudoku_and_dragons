@@ -3,6 +3,7 @@ import { emptyProgress, parseProgress, recordDuel, type Progress, type Reward } 
 import { parseSavedBattle, type SavedBattle } from './battleSave.ts';
 import { reportDiagnostic } from '../diagnostics/index.ts';
 import { clearTrainingData } from '../training/storageKey.ts';
+import { clearHistoryData } from '../history/storageKey.ts';
 
 const STORAGE_KEY = `sudoku-dragons.progress${profileSuffix}`;
 
@@ -113,6 +114,7 @@ export function replaceProgress(next: Progress): boolean {
 /** Explicit account/data deletion also clears receipts and the local battle, even if writes are full. */
 export function clearLocalProgress(): void {
   clearTrainingData();
+  clearHistoryData();
   try { localStorage.removeItem(STORAGE_KEY); } catch { /* Storage is unavailable. */ }
   battle = null;
   duelResults.clear();

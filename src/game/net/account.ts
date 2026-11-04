@@ -4,6 +4,7 @@ import { clearLocalProgress, replaceProgress, saveActiveBattle } from '../progre
 import { clearDiagnosticQueue } from '../diagnostics/index.ts';
 import { clearDailyResults } from './daily.ts';
 import { clearTrainingData } from '../training/storageKey.ts';
+import { clearHistoryData } from '../history/storageKey.ts';
 import { requestAccountDeletion } from './accountDeletion.ts';
 import { forgetCloudBase, syncProgress } from './cloudSave.ts';
 import { randomNickname } from './nickname.ts';
@@ -196,6 +197,7 @@ export async function logOut(): Promise<void> {
   switchedAccount(randomNickname());
   saveActiveBattle(null);
   clearTrainingData();
+  clearHistoryData();
   forgetDuel();
   replaceProgress(emptyProgress());
 }

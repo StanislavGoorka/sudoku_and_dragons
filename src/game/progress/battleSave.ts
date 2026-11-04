@@ -16,6 +16,8 @@ export interface SavedBattle {
   mistakes: number;
   bestCombo: number;
   elapsed: number;
+  /** Optional in old saves. Validated lazily by the recorder when the battle opens. */
+  replay?: unknown;
   ranked?: { run: RankedRun; moves: DailyMove[] };
 }
 
@@ -66,7 +68,7 @@ export function parseSavedBattle(value: unknown): SavedBattle | null {
     version: 1, puzzle, stage: s.stage, daily: s.daily, grid: [...s.grid],
     battle: { ...battle, playerHp: s.battle.playerHp, enemyHp: s.battle.enemyHp, charge: s.battle.charge, timedAttacks: s.battle.timedAttacks ?? 0 },
     notes: s.notes.map((bits, cell) => s.grid[cell] === 0 ? bits : 0),
-    notesMode: s.notesMode, selected: s.selected, mistakes: s.mistakes, bestCombo: s.bestCombo, elapsed: s.elapsed,
+    notesMode: s.notesMode, selected: s.selected, mistakes: s.mistakes, bestCombo: s.bestCombo, elapsed: s.elapsed, replay: s.replay,
     ranked: s.ranked && s.ranked.run?.seed === puzzle.seed && s.ranked.run.difficulty === puzzle.difficulty &&
       s.ranked.run.day === s.daily && /^[0-9a-f-]{36}$/i.test(s.ranked.run.id) && typeof s.ranked.run.user_id === 'string' &&
       Array.isArray(s.ranked.moves) && s.ranked.moves.length <= 1000 ? structuredClone(s.ranked) : undefined,

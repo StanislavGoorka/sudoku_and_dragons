@@ -109,9 +109,14 @@ test('discovers an online duel without a local pointer, then restores confirmed 
   await tapCell(page, cell);
   await page.keyboard.press(String(puzzle.solution[cell]));
   await expect.poll(() => page.evaluate(() => window.__game.screen.sync.confirmed.version)).toBe(2);
+  expect(await page.evaluate(() => window.__game.screen.replay.draft.steps.map((s: any) => s.event.kind))).toEqual(['correct']);
   await page.reload();
   await ready(page, 'DuelScreen');
   expect(await page.evaluate(() => window.__game.screen.sync.confirmed.state)).toEqual(server.row().state);
+  const resumed = await page.evaluate(() => window.__game.screen.replay.draft);
+  expect(resumed.partial).toBe(true);
+  expect(resumed.steps).toHaveLength(0);
+  expect(resumed.initial.board).toBe(server.row().state.board.join(''));
 });
 
 test('reconnects to a finished server result and records its reward once across restarts', async ({ page, context }) => {
@@ -135,6 +140,9 @@ test('reconnects to a finished server result and records its reward once across 
   await ready(page, 'DuelScreen');
   await expect.poll(() => page.evaluate(() => window.__game.screen.endShown)).toBe(true);
   expect(await page.evaluate(() => window.__game.state.duels.won)).toBe(1);
+  const history = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku-dragons.history')!).items);
+  expect(history).toHaveLength(1);
+  expect(history[0].steps.map((s: any) => s.event.kind)).toEqual(['forfeit']);
 });
 
 test('restores a waiting room and opens the duel when its rival joins', async ({ page }) => {

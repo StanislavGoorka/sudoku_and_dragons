@@ -3,6 +3,8 @@ import type { BotStrength } from '../../core/duel/bot.ts';
 export interface TrainingUi {notes:number[];notesMode:boolean;selected:number|null}
 export interface BotCheckpoint extends TrainingUi {
   version:1; difficulty:Difficulty; strength:BotStrength; givens:Grid; solution:Grid; state:DuelState; remainingMs:number;
+  replay?: unknown;
+  replayElapsed?: number;
 }
 const integer=(v:unknown,min:number,max:number):v is number=>typeof v==='number'&&Number.isInteger(v)&&v>=min&&v<=max;
 export function parseTrainingUi(value:unknown,board:Grid):TrainingUi|null {
@@ -26,5 +28,6 @@ export function parseBotCheckpoint(value:unknown):BotCheckpoint|null {
     typeof s.remainingMs!=='number'||!Number.isFinite(s.remainingMs)||s.remainingMs<0||s.remainingMs>30000)return null;
   const ui=parseTrainingUi(s,state.board);if(!ui)return null;
   return {...ui,version:1,difficulty:s.difficulty,strength:s.strength,givens:[...s.givens],solution:[...s.solution],
-    state:structuredClone(state),remainingMs:s.remainingMs};
+    state:structuredClone(state),remainingMs:s.remainingMs,replay:s.replay,
+    replayElapsed:integer(s.replayElapsed,0,Number.MAX_SAFE_INTEGER)?s.replayElapsed:undefined};
 }

@@ -159,6 +159,10 @@ code and comments are English.
   `training/store.ts` saves solo, bot turns, manual notes and lesson completion under a separate local
   key, excluded from cloud progress. Local bot clocks freeze on pause/background and resume with their
   saved remainder. Logout and data deletion clear training too. See `TRAINING.md`.
+  `history/` keeps up to 30 local replays. Solo/bot carry the draft in their checkpoint; online
+  records only successive confirmed rows and marks missing versions as gaps. `HistoryScreen`
+  opens from progress; `ReplayScreen` displays stored frames without playing or rewarding moves.
+  This key is also cleared on logout and data deletion. See `BATTLE_HISTORY.md`.
   `net/duelRecovery.ts` remembers only a duel ID plus its owner. Startup, foreground/online and entering
   the lobby recover the match under RLS; a lost local pointer falls back to the account's latest playing
   duel. Waiting rooms and results reached while away resume too. Navigation and account checks discard

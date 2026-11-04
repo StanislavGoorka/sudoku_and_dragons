@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const t = vi.hoisted(() => ({ updateUser: vi.fn(), verifyOtp: vi.fn(), getSession: vi.fn(), signOut: vi.fn(),
-  request: vi.fn(), replace: vi.fn(), clear: vi.fn(), connect: vi.fn(), switched: vi.fn(), clearDaily: vi.fn(), clearDiagnostics: vi.fn(), clearTraining: vi.fn(), sync: vi.fn() }));
+  request: vi.fn(), replace: vi.fn(), clear: vi.fn(), connect: vi.fn(), switched: vi.fn(), clearDaily: vi.fn(), clearDiagnostics: vi.fn(), clearTraining: vi.fn(), clearHistory: vi.fn(), sync: vi.fn() }));
 vi.mock('./online.ts', () => ({ supabase: { auth: { onAuthStateChange: vi.fn(), updateUser: t.updateUser, verifyOtp: t.verifyOtp,
   getSession: t.getSession, signOut: t.signOut }, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) }) },
   connect: t.connect, localNickname: () => 'Test', switchedAccount: t.switched, OnlineError: class extends Error {} }));
@@ -12,6 +12,7 @@ vi.mock('./duelRecovery.ts', () => ({ forgetDuel: vi.fn() }));
 vi.mock('./daily.ts', () => ({ clearDailyResults: t.clearDaily }));
 vi.mock('../diagnostics/index.ts', () => ({ clearDiagnosticQueue: t.clearDiagnostics }));
 vi.mock('../training/storageKey.ts', () => ({ clearTrainingData: t.clearTraining }));
+vi.mock('../history/storageKey.ts', () => ({ clearHistoryData: t.clearHistory }));
 
 beforeEach(() => {
   vi.resetModules(); vi.resetAllMocks();
@@ -65,8 +66,10 @@ it('a late deletion response cannot erase the next account', async () => {
   });
   await expect(a.deleteAccount()).rejects.toThrow('account-changed'); expect(t.clear).not.toHaveBeenCalled();
 });
-it('logout clears device training only after progress was saved', async () => {
+it('logout clears device training and battle history only after progress was saved', async () => {
   const a = await import('./account.ts'); t.sync.mockRejectedValueOnce(new Error('offline'));
   await expect(a.logOut()).rejects.toThrow('network');expect(t.clearTraining).not.toHaveBeenCalled();
+  expect(t.clearHistory).not.toHaveBeenCalled();
   await a.logOut();expect(t.clearTraining).toHaveBeenCalledTimes(1);
+  expect(t.clearHistory).toHaveBeenCalledTimes(1);
 });

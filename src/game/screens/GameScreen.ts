@@ -39,6 +39,8 @@ import { BattleTutorial } from './BattleTutorial.ts';
 import { fightLayout } from './fightLayout.ts';
 import { queueDailyResult, flushDailyResults, type RankedRun } from '../net/daily.ts';
 import { saveTrainingSolo } from '../training/store.ts';
+import { replayId, ReplayRecorder, replayState, type Replay } from '../history/replay.ts';
+import { addReplay } from '../history/store.ts';
 
 export interface GameScreenOptions {
   /** Device-local, unranked solo. The enemy never charges timed attacks. */
@@ -55,6 +57,7 @@ export interface GameScreenOptions {
   resume?: SavedBattle;
   ranked?: RankedRun;
   onRanking?: () => void;
+  onReplay: (replay: Replay) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -93,6 +96,8 @@ export class GameScreen extends Container {
   private endShown = false;
   private reward: Reward | null = null;
   private resultRecorded=false;
+  private readonly replay: ReplayRecorder;
+  private finishedReplay: Replay | null = null;
   private readonly ranked: RankedRun | undefined;
   private readonly rankedMoves: DailyMove[];
   private readonly bossLabel = new Text({ text: '', style: { fontFamily: theme.fontFamily,
@@ -124,6 +129,9 @@ export class GameScreen extends Container {
     this.mistakes = saved?.mistakes ?? 0;
     this.bestCombo = saved?.bestCombo ?? 0;
     this.options = options;
+    this.replay = new ReplayRecorder({ id: replayId(), difficulty: puzzle.difficulty, title: this.battle.enemy.name,
+      mode: options.practice ? 'practice' : options.daily ? 'daily' : options.stage ? 'campaign' : 'solo' },
+      this.replayState(), Math.round(this.elapsed * 1000), Boolean(saved), saved?.replay);
     this.pauseButton = new Button({ text: 'Pauza', icon: 'pause', onTap: () => this.requestLeave() });
     this.notesButton = new Button({ text: 'Notatki', icon: 'pencil', onTap: () => this.toggleNotes() });
     this.arena = new BattleArena(this.battle.enemy, lookOf(this.battle.enemy, options.stage), this.battle.playerMaxHp, chosenSkin(progress).design);
@@ -221,9 +229,9 @@ export class GameScreen extends Container {
     if (this.modal) return;
     // The tutorial holds the clock: the countdown shows, but neither it nor the battle time runs.
     const dt = this.tutorial ? 0 : deltaMs / 1000;
+    if (this.battle.outcome === 'ongoing') this.elapsed += dt;
     const hit = this.options.practice ? null : advanceTime(this.battle, dt);
     const ongoing = this.battle.outcome === 'ongoing';
-    if (ongoing) this.elapsed += dt;
     const attackEvery = attackInterval(this.battle);
     this.bossLabel.text = this.options.practice ? 'Trening · bez zegara · bez nagród' : this.battle.outcome === 'ongoing' ? bossHint(this.battle) : '';
     const secondsLeft = attackEvery - this.battle.charge;
@@ -232,7 +240,10 @@ export class GameScreen extends Container {
     this.arena.charge.update(this.battle.charge / attackEvery, secondsLeft, dt);
     this.arena.dragon.setHeat(ongoing && !this.options.practice ? Math.max(0, 1 - secondsLeft / 5) : 0);
     this.tickCountdown(ongoing && !this.options.practice ? secondsLeft : Infinity);
-    if (hit) this.play(hit, this.playDragonAttack(hit));
+    if (hit) {
+      this.replay.record({ kind: 'timer', damage: hit.damage }, this.replayState(), this.elapsed * 1000);
+      this.play(hit, this.playDragonAttack(hit));
+    }
     this.sinceCheckpoint += deltaMs;
     if (this.sinceCheckpoint >= 1000) this.checkpoint();
   }
@@ -326,7 +337,7 @@ export class GameScreen extends Container {
       version: 1, puzzle: this.puzzle, stage: this.options.stage?.id, daily: this.options.daily,
       grid: [...this.grid], battle: structuredClone(this.battle), notes: this.board.saveNotes(),
       notesMode: this.notesMode, selected: this.board.selected, mistakes: this.mistakes,
-      bestCombo: this.bestCombo, elapsed: this.elapsed,
+      bestCombo: this.bestCombo, elapsed: this.elapsed, replay: this.replay.draft,
       ranked: this.ranked ? { run: this.ranked, moves: [...this.rankedMoves] } : undefined,
     });
   }
@@ -389,6 +400,9 @@ export class GameScreen extends Container {
 
     const hit = resolveMove(this.battle, result);
     if (!hit) return;
+    this.replay.record(result.kind === 'correct'
+      ? { kind: 'correct', actor: 0, cell, digit, damage: hit.damage, units: result.completed, finisher: hit.finisher || undefined }
+      : { kind: 'wrong', actor: 0, cell, digit, damage: hit.damage }, this.replayState(), this.elapsed * 1000);
     if (result.kind === 'correct') {
       this.bestCombo = Math.max(this.bestCombo, hit.units);
       this.play(hit, this.playPlayerAttack(hit, cell, result.completed));
@@ -403,6 +417,15 @@ export class GameScreen extends Container {
       this.play(hit, this.playDragonAttack(hit));
     }
     this.checkpoint();
+  }
+
+  private replayState() {
+    return replayState(this.grid, [this.battle.playerHp, this.battle.enemyHp], this.battle.outcome);
+  }
+
+  private replayAction(): ModalAction[] {
+    const replay = this.finishedReplay;
+    return replay ? [{ text: 'Analiza walki', onTap: () => this.options.onReplay(replay) }] : [];
   }
 
   /** Runs a hit's animation, then ends the battle if that hit brought someone to 0 HP. */
@@ -426,6 +449,9 @@ export class GameScreen extends Container {
         saveActiveBattle(null);
         saveProgress();
       }
+      const best = this.options.practice ? null : this.options.stage
+        ? progress.stages[this.options.stage.id]?.bestTime : progress.levels[this.puzzle.difficulty].bestTime;
+      this.finishedReplay = addReplay(this.replay.finish(this.elapsed * 1000, best == null ? null : Math.round(best * 1000)));
     }
     // Only the final hit ends the battle; earlier hits may still be landing.
     void animation.then(() => {
@@ -520,6 +546,7 @@ export class GameScreen extends Container {
         `${stats}\nTrening nie daje gwiazdek, rekordów ani postępu kampanii.`,[
           {text:'Nowy trening',variant:'primary',onTap:this.options.onRestart},
           {text:'Trening i lekcje',onTap:this.options.onMenu},
+          ...this.replayAction(),
         ],won?theme.gold:theme.text));
       return;
     }
@@ -546,7 +573,7 @@ export class GameScreen extends Container {
           { text: 'Walcz ponownie', onTap: () => this.options.onRestart() },
         ]
       : [{ text: 'Walcz ponownie', variant: 'primary', onTap: () => this.options.onRestart() }];
-    actions.push({ text: 'Menu', onTap: () => this.options.onMenu() });
+    actions.push(...this.replayAction(), { text: 'Menu', onTap: () => this.options.onMenu() });
     if (this.ranked && this.options.onRanking) actions.unshift({ text: 'Ranking dnia', onTap: this.options.onRanking });
     const lines = [...(won ? [] : [hint]), stats, ...rewardLines(reward, progress.stars)];
     const stars = won ? new StarRow(reward.goals) : null;

@@ -46,6 +46,10 @@ notatki pozostają ręczne, a zwykłe walki nie dostają automatycznych podpowie
 
 ## 13. Historia walk, powtórki i czytelna analiza wyniku
 
+**Status: zrealizowane.** Historia obejmuje 30 zakończonych walk. Analiza pokazuje straty HP,
+obrażenia z kwadratów, tempo solo i rekord. Powtórkę można przewijać krokami lub odtworzyć
+w wybranym tempie. Luki w odzyskanych pojedynkach są oznaczane. Szczegóły: [historia walk](BATTLE_HISTORY.md).
+
 **Problem:** ekran końcowy pokazuje podstawowe statystyki i nagrody, ale nie ma historii
 pozwalającej prześledzić, dlaczego walka skończyła się konkretnym wynikiem.
 
