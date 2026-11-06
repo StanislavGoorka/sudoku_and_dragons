@@ -17,6 +17,7 @@ import { uiTheme as theme } from '../uiTheme.ts';
 import { BoardView } from '../ui/BoardView.ts';
 import { Button } from '../ui/Button.ts';
 import { DuelArena } from '../ui/DuelArena.ts';
+import { WarriorView } from '../ui/WarriorView.ts';
 import { Modal } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 import { chosenEffect, chosenSkin, chosenTheme, type Reward } from '../progress/progress.ts';
@@ -168,7 +169,7 @@ export class DuelScreen extends Container {
       this.rivalName = known.nickname;
       this.rivalEffect = known.effect;
     }
-    this.arena = new DuelArena(me.nickname, this.rivalName, DUEL_RULES.maxHp, chosenSkin(progress).design);
+    this.arena = new DuelArena(me.nickname, this.rivalName, DUEL_RULES.maxHp, chosenSkin(progress).design, !this.backend.ranked);
     if (known) this.arena.showRival(rivalDesign(known.dragon));
     this.arena.hpBar(true).setHp(this.state.hp[seat]);
     this.arena.hpBar(false).setHp(this.state.hp[otherSeat(seat)]);
@@ -200,12 +201,12 @@ export class DuelScreen extends Container {
         this.rivalName = profile.nickname;
         this.rivalEffect = profile.effect;
         this.arena.setRivalName(profile.nickname);
-        this.showRivalDragon(profile.dragon);
+        this.showRivalFighter(profile.dragon);
       });
     }
     // A slow profile: the rival comes in the default look, and changes if their skin turns up.
     this.rivalTimer = window.setTimeout(() => {
-      if (!this.arena.rivalShown) this.showRivalDragon(null);
+      if (!this.arena.rivalShown) this.showRivalFighter(null);
     }, RIVAL_PROFILE_WAIT_MS);
     this.showState(this.state);
     this.updateTurn(false);
@@ -384,10 +385,10 @@ export class DuelScreen extends Container {
   }
 
   /**
-   * The rival's dragon in their skin (null: not known, the default look). Not once the duel is over:
-   * a dragon swapped while it falls would never finish falling.
+   * The rival in their chosen colors (null: not known, the default look). Not once the duel is over:
+   * a fighter swapped while it falls would never finish falling.
    */
-  private showRivalDragon(skin: string | null): void {
+  private showRivalFighter(skin: string | null): void {
     window.clearTimeout(this.rivalTimer);
     if (this.destroyed || this.sync.confirmed.state.finished) return;
     this.arena.showRival(rivalDesign(skin));
@@ -574,8 +575,8 @@ export class DuelScreen extends Container {
         if (this.board.countOf(event.digit) === 9) this.pad.setDone(event.digit, true);
         feedback.digit(event.digit);
         if (event.completed.length > 0) feedback.unitsCompleted(event.completed.length);
-        // The mover's dragon lunges as the hit flies at the other one.
-        void this.arena.dragon(mine).attack();
+        // The mover attacks as the hit flies at the other one.
+        void this.arena.fighter(mine).attack();
         void this.playHit(event.cell, event.completed, !mine, event.damage, after.hp[otherSeat(event.seat)]);
         if (mine && event.extraMove && !after.finished) this.toast('Dodatkowy ruch!', theme.flash);
         break;
@@ -609,7 +610,7 @@ export class DuelScreen extends Container {
     const box = completed.find((unit) => unit.kind === 'box');
     const origin = box ? this.board.unitCenter(box) : this.board.cellCenter(cell);
     const color = big ? theme.flash : targetMine ? this.board.colors.opponent : this.board.colors.placed;
-    const to = this.fx.toLocal(this.arena.dragonPoint(targetMine), this.arena);
+    const to = this.fx.toLocal(this.arena.fighterPoint(targetMine), this.arena);
     await wait(0.1);
     if (this.destroyed) return;
     const from = this.fx.toLocal(origin, this.board);
@@ -624,8 +625,8 @@ export class DuelScreen extends Container {
   private hurtPlayer(mine: boolean, damage: number, big: boolean, hp: number | null): void {
     const seat = mine ? this.seat : otherSeat(this.seat);
     this.arena.hpBar(mine).setHp(hp ?? this.state.hp[seat]);
-    this.arena.dragon(mine).hurt(big ? 18 : 8);
-    const at = this.fx.toLocal(this.arena.dragonPoint(mine), this.arena);
+    this.arena.fighter(mine).hurt(big ? 18 : 8);
+    const at = this.fx.toLocal(this.arena.fighterPoint(mine), this.arena);
     floatText(this.fx, `-${damage}`, { x: at.x, y: at.y - 30 }, { color: mine ? theme.error : theme.flash, fontSize: big ? 30 : 22 });
     if (big) floatText(this.fx, 'Kwadrat ×2!', { x: at.x, y: at.y - 70 }, { color: theme.combo, fontSize: 24 });
     if (mine) {
@@ -718,13 +719,15 @@ export class DuelScreen extends Container {
     if (this.backend.ranked) this.reward = recordDuelOnce(this.me.id, this.duelId, won);
     this.finishedReplay = addReplay(this.replay.recorder.finish(this.replay.elapsed(this.replayNow())));
     // Let the last hit land (shown when it was played, maybe before the server confirmed it),
-    // then the loser's dragon falls.
+    // then the defeated fighter falls.
     const since = (performance.now() - (this.finishShownAt ?? performance.now())) / 1000;
     await wait(Math.max(0, 1 - since));
     if (this.destroyed) return;
     if (!draw) {
       feedback.dragonFalls();
-      await this.arena.dragon(!won).die();
+      const winnerView = this.arena.fighter(won);
+      if (winnerView instanceof WarriorView) winnerView.celebrate();
+      await this.arena.fighter(!won).die();
       if (this.destroyed) return;
     }
 

@@ -105,6 +105,10 @@ test('discovers an online duel without a local pointer, then restores confirmed 
   await page.goto('/');
   await ready(page, 'DuelScreen');
   await expect.poll(() => page.evaluate(() => window.__game.screen.connection)).toBe('connected');
+  await expect.poll(() => page.evaluate(() => {
+    const a = window.__game.screen.arena;
+    return [a.fighter(true).constructor.name, a.fighter(false).constructor.name, a.fighter(false).scale.x < 0];
+  })).toEqual(['WarriorView', 'WarriorView', true]);
   const cell = puzzle.givens.indexOf(0);
   await tapCell(page, cell);
   await page.keyboard.press(String(puzzle.solution[cell]));

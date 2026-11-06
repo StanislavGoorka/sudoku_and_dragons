@@ -460,11 +460,11 @@ export class GameScreen extends Container {
   }
 
   /**
-   * Your dragon lunges as your hit effect flies from the board to the enemy: from the cell, or big and gold
+   * The warrior swings as the hit effect flies from the board to the enemy: from the cell, or big and gold
    * from the middle of the 3×3 box the digit closed (double damage).
    */
   private async playPlayerAttack(hit: Hit, cell: number, completed: Unit[]): Promise<void> {
-    void this.arena.playerDragon.attack();
+    void this.arena.playerWarrior.attack();
     const big = hit.boxed;
     const box = completed.find((unit) => unit.kind === 'box');
     const origin = box ? this.board.unitCenter(box) : this.board.cellCenter(cell);
@@ -494,7 +494,7 @@ export class GameScreen extends Container {
     if (big) shake(this.arena, 4, 0.25);
   }
 
-  /** The enemy lunges and spits a fireball at your dragon. */
+  /** The enemy lunges and spits a fireball at the warrior. */
   private async playDragonAttack(hit: Hit): Promise<void> {
     feedback.dragonLunge();
     await this.arena.dragon.attack();
@@ -507,7 +507,7 @@ export class GameScreen extends Container {
 
     feedback.playerHit();
     burst(this.fx, to, theme.fire, 18);
-    this.arena.playerDragon.hurt(14);
+    this.arena.playerWarrior.hurt(14);
     shake(this, 8, 0.35);
     gsap.fromTo(this.hurtFlash, { alpha: 0.3 }, { alpha: 0, duration: 0.45, ease: 'power2.out' });
     this.arena.playerHp.setHp(hit.hpAfter);
@@ -532,10 +532,11 @@ export class GameScreen extends Container {
     this.endShown = true;
     this.closeModal();
 
-    // The loser's dragon falls: the enemy, or yours.
+    // The defeated fighter falls before the result opens.
     const won = this.battle.outcome === 'won';
     feedback.dragonFalls();
-    await (won ? this.arena.dragon : this.arena.playerDragon).die();
+    if (won) this.arena.playerWarrior.celebrate();
+    await (won ? this.arena.dragon : this.arena.playerWarrior).die();
     if (this.destroyed) return;
 
     const { name, attack } = this.battle.enemy;

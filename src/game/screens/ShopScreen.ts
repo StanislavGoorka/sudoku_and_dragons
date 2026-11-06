@@ -30,6 +30,7 @@ import { verticalGradient } from '../ui/Backdrop.ts';
 import { BoardView } from '../ui/BoardView.ts';
 import { Button } from '../ui/Button.ts';
 import { DragonView } from '../ui/DragonView.ts';
+import { WarriorView } from '../ui/WarriorView.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 import { Scene, SCENES } from '../ui/Scene.ts';
 import { drawStar, StarCounter } from '../ui/stars.ts';
@@ -43,7 +44,7 @@ export interface ShopOptions {
 /** What each shelf says about the looked-at item. */
 const SHELVES: Record<CosmeticKind, { tab: string; inUse: string; owned: string; toBuy: string }> = {
   board: { tab: 'Plansze', inUse: 'Grasz na tej planszy', owned: 'Masz już ten motyw', toBuy: 'Kup, by grać na tej planszy' },
-  dragon: { tab: 'Smoki', inUse: 'Walczy za Ciebie', owned: 'Masz już tego smoka', toBuy: 'Walczy za Ciebie, rywale go widzą' },
+  dragon: { tab: 'Zbroje', inUse: 'Masz na sobie tę zbroję', owned: 'Masz już tę zbroję', toBuy: 'Załóż w walce — rywale ją zobaczą' },
   effect: { tab: 'Efekty', inUse: 'Tak lecą Twoje ciosy', owned: 'Masz już ten efekt', toBuy: 'Twoje ciosy, rywale też je widzą' },
 };
 
@@ -62,7 +63,7 @@ const SAMPLE_SELECTED = SAMPLE_PLACED.map((digit, cell) => (digit === 5 && SAMPL
   .filter((cell) => cell >= 0)
   .sort((a, b) => fromMiddle(a) - fromMiddle(b))[0];
 
-/** The duel's sky, behind the dragons on their tiles. */
+/** The duel's sky, behind the cosmetics on their tiles. */
 const SKY = verticalGradient(SCENES.duel.sky);
 
 const SWATCH_GAP = 8;
@@ -101,19 +102,18 @@ function themeLook(item: Cosmetic): SwatchLook {
   };
 }
 
-/** A dragon skin: the dragon, still, against the duel sky, facing right as yours does in a duel. */
+/** An armor swatch with a still warrior. */
 function skinLook(item: Cosmetic): SwatchLook {
   const design = dragonSkin(item.id).design;
-  const dragon = new DragonView(design, { idle: false });
-  dragon.scale.x = -1;
+  const warrior = new WarriorView(design, { idle: false });
   return {
     lip: theme.panelLip,
     face: SKY,
     accent: design.palette.body,
-    picture: dragon,
+    picture: warrior,
     layout(size) {
-      dragon.layout(size * 0.86);
-      dragon.position.set(size / 2, size / 2 + size * 0.02);
+      warrior.layout(size * 0.86);
+      warrior.position.set(size * 0.45, size * 0.51);
     },
   };
 }
@@ -286,10 +286,10 @@ class ShelfTabs extends Container {
   }
 }
 
-/** The dragon shelf's preview: the looked-at skin hovering over the duel scene, facing right like yours. */
-class DragonPreview extends Container {
+/** A preview of the chosen armor, with a sword attack on tap. */
+class ArmorPreview extends Container {
   private readonly scene = new Scene(SCENES.duel);
-  private dragon: DragonView;
+  private warrior: WarriorView;
   private design: DragonDesign;
   private sceneWidth = 0;
   private sceneHeight = 0;
@@ -297,41 +297,35 @@ class DragonPreview extends Container {
   constructor(design: DragonDesign) {
     super();
     this.design = design;
-    this.dragon = this.makeDragon(design);
-    this.addChild(this.scene, this.dragon);
+    this.warrior = new WarriorView(design);
+    this.addChild(this.scene, this.warrior);
   }
 
   layout(width: number, height: number): void {
     this.sceneWidth = width;
     this.sceneHeight = height;
     this.scene.layout(width, height, 22);
-    this.placeDragon();
+    this.placeWarrior();
   }
 
   show(design: DragonDesign): void {
     if (design === this.design) return;
     this.design = design;
-    this.dragon.destroy({ children: true });
-    this.dragon = this.makeDragon(design);
-    this.addChild(this.dragon);
-    this.placeDragon();
+    this.warrior.destroy({ children: true });
+    this.warrior = new WarriorView(design);
+    this.addChild(this.warrior);
+    this.placeWarrior();
   }
 
   attack(): void {
-    void this.dragon.attack();
+    void this.warrior.attack();
   }
 
-  private makeDragon(design: DragonDesign): DragonView {
-    const dragon = new DragonView(design);
-    dragon.scale.x = -1;
-    return dragon;
-  }
-
-  private placeDragon(): void {
+  private placeWarrior(): void {
     if (this.sceneHeight === 0) return;
     const ground = this.scene.groundY() + 4;
-    this.dragon.layout(Math.min(this.sceneHeight * 0.72, this.sceneWidth * 0.75));
-    this.dragon.position.set(this.sceneWidth / 2, ground - this.dragon.footOffset());
+    this.warrior.layout(Math.min(this.sceneHeight * 0.72, this.sceneWidth * 0.52));
+    this.warrior.position.set(this.sceneWidth / 2, ground - this.warrior.footOffset());
   }
 }
 
@@ -430,8 +424,8 @@ class EffectPreview extends Container {
 }
 
 /**
- * The shop: board themes, dragon skins and hit effects, bought with stars. Each shelf shows the looked-at item
- * big (the board and number pad in its colours, the dragon over the duel scene, or the effect flying
+ * The shop: board themes, armor and hit effects, bought with stars. Each shelf shows the looked-at item
+ * big (the board and number pad in its colours, the warrior over the duel scene, or the effect flying
  * at a dragon), a row of items
  * to pick from (tap, swipe the preview, or the arrow keys), and one button that buys the item or
  * puts on one already bought.
@@ -450,12 +444,12 @@ export class ShopScreen extends Container {
     },
   });
   private readonly stars = new StarCounter(progress.stars);
-  /** The looked-at item, big; it takes no taps but a swipe (and on the dragon shelf a tap, to see it attack). */
+  /** Swipe to browse; tap the armor preview to see a sword attack. */
   private readonly preview = new Container();
   private readonly boardPreview = new Container();
   private readonly board: BoardView;
   private readonly pad: NumberPad;
-  private readonly dragonPreview: DragonPreview;
+  private readonly armorPreview: ArmorPreview;
   private readonly effectPreview: EffectPreview;
   private swatches: Swatch[] = [];
   private readonly itemName = new Text({
@@ -497,9 +491,9 @@ export class ShopScreen extends Container {
     this.pad = new NumberPad(() => {}, colors);
     for (let digit = 1; digit <= 9; digit++) this.pad.setDone(digit, this.board.countOf(digit) === 9);
     this.boardPreview.addChild(this.board, this.pad);
-    this.dragonPreview = new DragonPreview(dragonSkin(progress.dragonSkin).design);
+    this.armorPreview = new ArmorPreview(dragonSkin(progress.dragonSkin).design);
     this.effectPreview = new EffectPreview(progress.hitEffect, colors);
-    this.preview.addChild(this.boardPreview, this.dragonPreview, this.effectPreview);
+    this.preview.addChild(this.boardPreview, this.armorPreview, this.effectPreview);
     this.preview.interactiveChildren = false;
     this.preview.eventMode = 'static';
     this.preview.cursor = 'pointer';
@@ -567,7 +561,7 @@ export class ShopScreen extends Container {
     } else {
       previewWidth = column;
       previewHeight = Math.max(160, Math.min(room, column * 1.05));
-      this.dragonPreview.layout(previewWidth, previewHeight);
+      this.armorPreview.layout(previewWidth, previewHeight);
       this.effectPreview.layout(previewWidth, previewHeight);
     }
     // Pivot in the middle, so the preview pops in place after a purchase.
@@ -623,7 +617,7 @@ export class ShopScreen extends Container {
     for (const swatch of this.swatches) this.addChildAt(swatch, this.getChildIndex(this.itemName));
     this.index = Math.max(0, this.items.findIndex((item) => isChosen(progress, this.kind, item)));
     this.boardPreview.visible = this.kind === 'board';
-    this.dragonPreview.visible = this.kind === 'dragon';
+    this.armorPreview.visible = this.kind === 'dragon';
     this.effectPreview.visible = this.kind === 'effect';
     if (this.kind === 'effect') this.effectPreview.start();
     else this.effectPreview.stop();
@@ -647,9 +641,9 @@ export class ShopScreen extends Container {
     if (Math.abs(dx) > 40) {
       this.look(this.index + (dx < 0 ? 1 : -1));
     } else if (Math.abs(dx) < 10 && this.kind === 'dragon') {
-      // A tap on the dragon: it shows off its attack.
-      feedback.dragonLunge();
-      this.dragonPreview.attack();
+      // A tap on the warrior previews a sword strike.
+      feedback.select();
+      this.armorPreview.attack();
     } else if (Math.abs(dx) < 10 && this.kind === 'effect') {
       this.effectPreview.fire(true, true);
     }
@@ -663,7 +657,7 @@ export class ShopScreen extends Container {
       this.board.setColors(colors);
       this.pad.setColors(colors);
     } else if (this.kind === 'dragon') {
-      this.dragonPreview.show(dragonSkin(item.id).design);
+      this.armorPreview.show(dragonSkin(item.id).design);
     } else {
       this.effectPreview.show(item.id);
     }
@@ -724,16 +718,16 @@ export class ShopScreen extends Container {
     burst(this.fx, swatch.center(), swatch.accent, 10);
   }
 
-  /** Saves what was bought or put on; a new dragon skin or hit effect also goes to the server, for rivals to see. */
+  /** Saves the purchase or selection and shares equipped armor and effects with rivals. */
   private saveChange(): void {
     saveProgress();
     if (this.kind !== 'board') syncProfile();
   }
 
-  /** The preview pops; a dragon also lunges, proud of its new look, and a new effect fires a big shot. */
+  /** The preview pops; the warrior swings in new armor and a new effect fires a big shot. */
   private pop(): void {
     gsap.fromTo(this.preview.scale, { x: 0.94, y: 0.94 }, { x: 1, y: 1, duration: 0.45, ease: 'back.out(3)' });
-    if (this.kind === 'dragon') this.dragonPreview.attack();
+    if (this.kind === 'dragon') this.armorPreview.attack();
     if (this.kind === 'effect') this.effectPreview.fire(true);
   }
 }

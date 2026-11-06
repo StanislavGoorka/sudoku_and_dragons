@@ -208,8 +208,11 @@ code and comments are English.
   `die` folds the wings, drops the arms and the dragon.
   Idle motion and action poses never share a property (`rig` vs parts; the head and arms sway in idle wrappers,
   `IDLE_WRAPPED`, and take the poses on the parts inside); `idle: false`
-  keeps one still (shop tiles). In battles and duels the dragon of whoever played a correct digit lunges. Check art
-  with `npm run dragons` before the browser.
+  keeps one still. Check dragon art with `npm run dragons` before the browser.
+- `ui/WarriorView.ts`: the human fighter, drawn in Pixi with articulated sword arm, shield and cape.
+  Idle breathing, sword attack, hurt, defeat and victory use separate GSAP timelines; the view kills them
+  when destroyed. Solo and bot training pit the warrior against a dragon. In online duels both sides are
+  warriors. Hit effects still travel from the board according to the player's equipped effect.
 - Look (owner-approved adventure RPG: navy and warm gold, restrained depth; see `UI_REDESIGN.md`):
   - `main.ts` puts `ui/Backdrop` (navy gradient, sparse diamond pattern) under every screen, safe areas included.
     It waits for the bundled **Baloo 2** art font (latin + latin-ext, 500/700/800) and the Kenney icon atlas
@@ -221,12 +224,11 @@ code and comments are English.
   - `ui/Scene`: a rounded window onto a sky gradient, a soft light and two rows of hills, one look per dragon
     (morning for the young one, sunset for the red, moonlit night for the ancient) plus a twilight for duels.
     `groundY()` is where dragons stand; `DragonView.footOffset()` puts a dragon's shadow on it.
-  - Fight screens (battle and duel) share `screens/fightLayout.ts`: the arena (scene, two dragons facing each
+  - Fight screens (battle and duel) share `screens/fightLayout.ts`: the arena (scene, two fighters facing each
     other, HP bars inside it, a round pause or leave button in its corner) on top, the board as big as fits, the number pad below.
     The board sits in a tray (`BoardView.BORDER`) and takes its colours from the player's board theme.
-    `ui/BattleArena`: your dragon (your skin, `PLAYER_SCALE` of the enemy's size: the enemy is the boss) on the
-    left, the enemy on the right in its scene, the countdown to its attack low between them. The enemy's
-    fireball hits your dragon; when you lose, your dragon falls.
+    `ui/BattleArena`: your warrior on the left, the enemy dragon on the right in its scene, the countdown
+    to its attack low between them. The enemy's fireball hits the warrior.
   - `HpBar`: a framed label with an inset HP strip. `Modal`: a navy panel with gold trim; pass
     `theme.gold` as the title colour for a win.
   - The menu shows one campaign stage at a time (the one played last, or the next to win): its dragon over its
@@ -234,7 +236,7 @@ code and comments are English.
     through the open stages and the next locked one (no further), then
     one "Walcz!" button, then the daily challenge and the online button side by side; a map button (`map` icon)
     sits by the star counter; music (volume and mute), sound effects and vibration live in the settings dialog (gear), board
-    themes, dragon skins and hit effects in the shop (cart, with a gold dot when the stars buy something not owned yet).
+    themes, armor and hit effects in the shop (cart, with a gold dot when the stars buy something not owned yet).
 - Board themes (`src/game/boardThemes.ts`): cosmetics bought with stars, never gameplay help (the owner's call).
   `BOARD_THEMES` (Fiołek free, then Łąka 15, Ocean 25, Cukierek 35, Wulkan 50, Noc 65, Skarbiec 90) each give
   `BoardColors`: tray, lines, cells (`cellAlt` paints every other box for a checker), highlights, digit colours
@@ -244,15 +246,16 @@ code and comments are English.
   `chosenTheme(progress)`; in a duel each player sees their own theme. `boardThemes.test.ts` checks every theme
   stays readable (digit contrast on every cell state, yours and the rival's apart in hue, no red digits since
   red means a mistake); keep it passing when adding one.
-- Dragon skins (`src/game/dragonSkins.ts`): the look of your dragon in battles and duels, also cosmetics. `DRAGON_SKINS`
+- Armor (`src/game/dragonSkins.ts`): the cosmetic colors of your warrior. Existing IDs, prices, save keys
+  and profile fields are preserved, so owned cosmetics remain equipped and usable. `DRAGON_SKINS`
   (Lazur free, then Szmaragd 20, Pianka 30, Szron 40, Cień 55, Magma 70, Król 100) point at designs in
   dragonArt. Rivals see your skin: it is the `dragon` column of your profile (the server keeps any well-formed id,
   so a new skin needs no redeploy; an app that does not know an id shows the default). `net/online.ts` sends the
   profile when it changed (`syncProfile()` after a purchase, and at sign-in; the last confirmed one is in
   localStorage), and `fetchProfile` reads the rival's (remembered for the session, so a rematch shows them at
-  once). `DuelArena` shows the rival's dragon once the profile arrives (it pops in) or after 1.5 s in the
+  once). `DuelArena` shows the rival once the profile arrives (it pops in) or after 1.5 s in the
   default look. `rivalDesign()`: a rival on the free skin is shown orange, so two players who bought nothing
-  still tell their dragons apart; two players with the same paid skin do look alike (mirrored). The lobby's
+  still tell their fighters apart; two players with the same paid skin do look alike (mirrored). The lobby's
   picture shows your skin too.
 - Hit effects (`src/game/hitEffects.ts`, drawn by `fx/hitEffects.ts`): what flies from the board to the dragon you
   hit, and what happens where it lands; cosmetics too, plainest cheapest: Iskry (free: the old orb in your digit

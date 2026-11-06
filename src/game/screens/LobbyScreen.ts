@@ -24,7 +24,7 @@ import { uiTheme as theme } from '../uiTheme.ts';
 import { lessonSeen, markLessonSeen } from '../tutorial.ts';
 import { Button } from '../ui/Button.ts';
 import { Modal } from '../ui/Modal.ts';
-import { DragonView } from '../ui/DragonView.ts';
+import { WarriorView } from '../ui/WarriorView.ts';
 import { Scene, SCENES } from '../ui/Scene.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 
@@ -280,13 +280,12 @@ export class LobbyScreen extends Container {
     }
   }
 
-  /** The two duel dragons facing each other over the duel scene. */
+  /** Two warriors facing each other over the duel scene. */
   private addHero(): void {
     const hero = new Container();
     const scene = new Scene(SCENES.duel);
-    const mine = new DragonView(chosenSkin(progress).design);
-    const rival = new DragonView(DESIGNS['duel-rival']);
-    mine.scale.x = -1;
+    const mine = new WarriorView(chosenSkin(progress).design);
+    const rival = new WarriorView(DESIGNS['duel-rival'], { facingLeft: true });
     hero.addChild(scene, mine, rival);
     this.content.addChild(hero);
     const height = Math.round(Math.min(190, Math.max(120, this.screenHeight * 0.22)));
@@ -296,12 +295,12 @@ export class LobbyScreen extends Container {
         hero.position.set(left, top);
         scene.layout(width, height, 22);
         const ground = scene.groundY() + 4;
-        for (const [dragon, x] of [
+        for (const [fighter, x] of [
           [mine, width * 0.25],
           [rival, width * 0.75],
         ] as const) {
-          dragon.layout(Math.min(width * 0.42, (ground - 8) * 1.05));
-          dragon.position.set(x, ground - dragon.footOffset());
+          fighter.layout(Math.min(width * 0.42, (ground - 8) * 1.05));
+          fighter.position.set(x, ground - fighter.footOffset());
         }
       },
     });

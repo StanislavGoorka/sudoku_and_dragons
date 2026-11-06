@@ -5,21 +5,22 @@ import type { EnemyLook } from '../enemies.ts';
 import { uiTheme as theme } from '../uiTheme.ts';
 import { ChargeMeter } from './ChargeMeter.ts';
 import { DragonView } from './DragonView.ts';
+import { WarriorView } from './WarriorView.ts';
 import { HpBar } from './HpBar.ts';
 import { Scene } from './Scene.ts';
 
-/** Your dragon next to the enemy: smaller, the enemy is the boss. */
-const PLAYER_SCALE = 0.72;
+/** The warrior stands below the dragon?s head. */
+const PLAYER_SCALE = 0.9;
 
 /**
  * The fight above the board: the enemy dragon over its own scene on the right, its HP across the sky,
- * your dragon (in your skin) facing it from the left with your HP along the ground, and the countdown
+ * the armored warrior facing it from the left with your HP along the ground, and the countdown
  * to the enemy's attack between them.
  */
 export class BattleArena extends Container {
   /** The enemy. */
   readonly dragon: DragonView;
-  readonly playerDragon: DragonView;
+  readonly playerWarrior: WarriorView;
   readonly charge = new ChargeMeter();
   readonly enemyHp: HpBar;
   readonly playerHp: HpBar;
@@ -29,12 +30,10 @@ export class BattleArena extends Container {
     super();
     this.scene = new Scene(look.scene);
     this.dragon = new DragonView(look.design);
-    this.playerDragon = new DragonView(playerDesign);
-    // Dragons face left: mirror yours so the two face each other.
-    this.playerDragon.scale.x = -1;
+    this.playerWarrior = new WarriorView(playerDesign);
     this.enemyHp = new HpBar(enemy.name, enemy.maxHp, theme.enemyHp);
     this.playerHp = new HpBar('Ty', playerMaxHp, theme.playerHp);
-    this.addChild(this.scene, this.playerDragon, this.dragon, this.charge, this.enemyHp, this.playerHp);
+    this.addChild(this.scene, this.playerWarrior, this.dragon, this.charge, this.enemyHp, this.playerHp);
   }
 
   /**
@@ -49,22 +48,21 @@ export class BattleArena extends Container {
     this.playerHp.position.set(pad, height - pad - HpBar.HEIGHT);
     this.playerHp.layout(width - pad * 2);
 
-    // Both dragons stand on the ground and cast their shadows on it; the enemy fills the sky as far as the width allows.
+    // Both fighters stand on the ground and cast their shadows on it; the enemy fills the sky as far as the width allows.
     const top = pad + HpBar.HEIGHT + 4;
     const ground = this.scene.groundY() + 4;
     const enemySize = Math.max(32, Math.min(width * 0.5, (ground - top) * 1.05));
     this.dragon.layout(enemySize);
     this.dragon.position.set(width * 0.68, ground - this.dragon.footOffset());
     const playerSize = enemySize * PLAYER_SCALE;
-    this.playerDragon.layout(playerSize);
-    // Far enough in that the tail stays inside the scene.
-    this.playerDragon.position.set(Math.max(width * 0.18, playerSize * 0.5 + 4), ground - this.playerDragon.footOffset());
+    this.playerWarrior.layout(playerSize);
+    this.playerWarrior.position.set(Math.max(width * 0.20, playerSize * 0.44 + 4), ground - this.playerWarrior.footOffset());
 
     // The countdown sits low between the two, where their bodies leave the most room, just above your HP.
     const radius = Math.max(14, Math.min(24, (ground - top) * 0.16));
     const captionHeight = 18;
     this.charge.position.set(
-      (this.playerDragon.x + playerSize * 0.2 + this.dragon.x - enemySize * 0.2) / 2,
+      (this.playerWarrior.x + playerSize * 0.2 + this.dragon.x - enemySize * 0.2) / 2,
       this.playerHp.y - 4 - captionHeight - radius,
     );
     this.charge.layout(radius);
@@ -80,9 +78,9 @@ export class BattleArena extends Container {
     return this.toLocal(this.dragon.mouthGlobal());
   }
 
-  /** Where dragon attacks land: your dragon, in arena coordinates. */
+  /** Where dragon attacks land: the warrior, in arena coordinates. */
   playerTarget(): PointData {
-    return { x: this.playerDragon.x, y: this.playerDragon.y };
+    return { x: this.playerWarrior.x, y: this.playerWarrior.y };
   }
 
   /** The attack countdown, in arena coordinates (knockback numbers float up from it). */
