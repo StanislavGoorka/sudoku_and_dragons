@@ -119,6 +119,12 @@ export class WarriorView extends Container {
       .to(this.sword, { rotation: 0, duration: .35 }, .7);
   }
 
+  cast(): void {
+    if (this.dead) return;
+    this.pose().to(this.shield, { x: 4, rotation: -.3, duration: .16, yoyo: true, repeat: 1 }, 0)
+      .to(this.sword, { rotation: -.38, duration: .16, yoyo: true, repeat: 1 }, 0);
+  }
+
   die(): Promise<void> {
     if (this.defeat) return this.defeat;
     this.dead = true;

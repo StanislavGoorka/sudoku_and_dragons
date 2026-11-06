@@ -1,12 +1,10 @@
 import gsap from 'gsap';
 import { Container, Graphics, Rectangle, Text, type DestroyOptions } from 'pixi.js';
 import {
-  advanceTime,
   applyMove,
   createBattle,
   ENEMIES,
   battleKnockback, attackInterval, bossHint,
-  resolveMove,
   type Battle,
   type Difficulty,
   type Grid,
@@ -41,6 +39,8 @@ import { queueDailyResult, flushDailyResults, type RankedRun } from '../net/dail
 import { saveTrainingSolo } from '../training/store.ts';
 import { replayId, ReplayRecorder, replayState, type Replay } from '../history/replay.ts';
 import { addReplay } from '../history/store.ts';
+import { canUseSkill, createHero, FOCUS_COST, HERO_CLASSES, heroMove, heroTime, useSkill, type HeroState } from '../combat/hero.ts';
+import { chosenHero } from '../combat/heroChoice.ts';
 
 export interface GameScreenOptions {
   /** Device-local, unranked solo. The enemy never charges timed attacks. */
@@ -69,6 +69,9 @@ export class GameScreen extends Container {
   readonly music: TrackId = 'battle';
   private readonly puzzle: Puzzle;
   private readonly battle: Battle;
+  private readonly hero?: HeroState;
+  private readonly skillButton?: Button;
+  private skillDisplay = '';
   /** The board as the rules see it; moves are checked here against the solution. */
   private readonly grid: Grid;
   private readonly options: GameScreenOptions;
@@ -124,6 +127,9 @@ export class GameScreen extends Container {
     this.ranked = saved?.ranked?.run ?? options.ranked;
     this.rankedMoves = saved?.ranked?.moves ?? [];
     this.battle = saved ? structuredClone(saved.battle) : createBattle(options.stage?.enemy ?? ENEMIES[puzzle.difficulty]);
+    if (!options.daily && !saved?.daily && !this.ranked) {
+      this.hero = saved ? (saved.hero && { ...saved.hero }) : createHero(chosenHero());
+    }
     this.grid = [...(saved?.grid ?? puzzle.givens)];
     this.elapsed = saved?.elapsed ?? 0;
     this.mistakes = saved?.mistakes ?? 0;
@@ -135,6 +141,7 @@ export class GameScreen extends Container {
     this.pauseButton = new Button({ text: 'Pauza', icon: 'pause', onTap: () => this.requestLeave() });
     this.notesButton = new Button({ text: 'Notatki', icon: 'pencil', onTap: () => this.toggleNotes() });
     this.arena = new BattleArena(this.battle.enemy, lookOf(this.battle.enemy, options.stage), this.battle.playerMaxHp, chosenSkin(progress).design);
+    if (this.hero) this.arena.playerHp.setName(HERO_CLASSES[this.hero.id].name);
     const colors = chosenTheme(progress).colors;
     this.board = new BoardView(puzzle.givens, colors);
     this.board.sync(this.grid);
@@ -156,6 +163,10 @@ export class GameScreen extends Container {
     this.hurtFlash.alpha = 0;
 
     this.addChild(this.arena, this.pauseButton, this.notesButton, this.board, this.pad, this.hurtFlash, this.fx);
+    if (this.hero) {
+      this.skillButton = new Button({ text: '', onTap: () => this.castSkill() });
+      this.addChild(this.skillButton);
+    }
     this.bossLabel.anchor.set(0.5, 0); this.bossLabel.eventMode = 'none';
     this.bossLabel.text = bossHint(this.battle); this.addChild(this.bossLabel);
 
@@ -182,6 +193,7 @@ export class GameScreen extends Container {
       );
       this.addChild(this.tutorial);
     }
+    this.refreshSkill();
     this.checkpoint();
   }
 
@@ -197,7 +209,11 @@ export class GameScreen extends Container {
     this.notesButton.layout(buttonSize, buttonSize);
 
     this.arena.position.set(left, arenaY);
-    this.arena.layout(columnWidth, arenaHeight, buttonSize + 4, buttonSize + 4);
+    const skillWidth = this.skillButton ? Math.min(150, Math.floor(columnWidth * .43)) : 0;
+    this.arena.layout(columnWidth, arenaHeight, buttonSize + 4, buttonSize + 4, skillWidth);
+    // The visible face sits beside the HP bar; Button keeps a 48 px touch area.
+    this.skillButton?.position.set(left + columnWidth - skillWidth - 10, arenaY + arenaHeight - 50);
+    this.skillButton?.layout(skillWidth, 40);
     this.bossLabel.position.set(width / 2, arenaY + 41);
     this.bossLabel.style.fontSize = Math.min(13, columnWidth / 25);
     this.board.position.set((width - boardSize) / 2, boardY);
@@ -230,7 +246,7 @@ export class GameScreen extends Container {
     // The tutorial holds the clock: the countdown shows, but neither it nor the battle time runs.
     const dt = this.tutorial ? 0 : deltaMs / 1000;
     if (this.battle.outcome === 'ongoing') this.elapsed += dt;
-    const hit = this.options.practice ? null : advanceTime(this.battle, dt);
+    const hit = this.options.practice ? null : heroTime(this.battle, dt, this.hero);
     const ongoing = this.battle.outcome === 'ongoing';
     const attackEvery = attackInterval(this.battle);
     this.bossLabel.text = this.options.practice ? 'Trening · bez zegara · bez nagród' : this.battle.outcome === 'ongoing' ? bossHint(this.battle) : '';
@@ -243,7 +259,10 @@ export class GameScreen extends Container {
     if (hit) {
       this.replay.record({ kind: 'timer', damage: hit.damage }, this.replayState(), this.elapsed * 1000);
       this.play(hit, this.playDragonAttack(hit));
+      this.refreshSkill();
+      this.checkpoint();
     }
+    if (this.hero?.id === 'ranger' && this.hero.guarded && this.hero.focus === FOCUS_COST) this.refreshSkill();
     this.sinceCheckpoint += deltaMs;
     if (this.sinceCheckpoint >= 1000) this.checkpoint();
   }
@@ -276,6 +295,11 @@ export class GameScreen extends Container {
       return;
     }
     if (this.modal) return;
+    if (event.code === 'Space' && this.hero) {
+      event.preventDefault();
+      this.castSkill();
+      return;
+    }
     if (/^[1-9]$/.test(event.key)) {
       this.handleDigit(Number(event.key));
       return;
@@ -337,7 +361,7 @@ export class GameScreen extends Container {
       version: 1, puzzle: this.puzzle, stage: this.options.stage?.id, daily: this.options.daily,
       grid: [...this.grid], battle: structuredClone(this.battle), notes: this.board.saveNotes(),
       notesMode: this.notesMode, selected: this.board.selected, mistakes: this.mistakes,
-      bestCombo: this.bestCombo, elapsed: this.elapsed, replay: this.replay.draft,
+      bestCombo: this.bestCombo, elapsed: this.elapsed, replay: this.replay.draft, hero: this.hero && { ...this.hero },
       ranked: this.ranked ? { run: this.ranked, moves: [...this.rankedMoves] } : undefined,
     });
   }
@@ -347,6 +371,7 @@ export class GameScreen extends Container {
     markLessonSeen('battle');
     this.tutorial?.destroy({ children: true });
     this.tutorial = null;
+    this.refreshSkill();
   }
 
   /** The pause button and Back pause the battle (leaving is one of the options); after the battle they go to the menu. */
@@ -398,17 +423,20 @@ export class GameScreen extends Container {
       if (result.completed.length > 0) feedback.unitsCompleted(result.completed.length);
     }
 
-    const hit = resolveMove(this.battle, result);
+    const hpBefore = this.battle.playerHp;
+    const hit = heroMove(this.battle, result, this.hero);
     if (!hit) return;
+    const healed = Math.max(0, this.battle.playerHp - hpBefore);
     this.replay.record(result.kind === 'correct'
-      ? { kind: 'correct', actor: 0, cell, digit, damage: hit.damage, units: result.completed, finisher: hit.finisher || undefined }
+      ? { kind: 'correct', actor: 0, cell, digit, damage: hit.damage, units: result.completed, finisher: hit.finisher || undefined, healed: healed || undefined }
       : { kind: 'wrong', actor: 0, cell, digit, damage: hit.damage }, this.replayState(), this.elapsed * 1000);
     if (result.kind === 'correct') {
+      if (healed) this.showSkillFeedback(`+${healed} HP`, HERO_CLASSES.alchemist.color);
       this.bestCombo = Math.max(this.bestCombo, hit.units);
       this.play(hit, this.playPlayerAttack(hit, cell, result.completed));
       if (!this.options.practice && hit.units > 0 && this.battle.outcome === 'ongoing') {
         const at = this.fx.toLocal(this.arena.chargePoint(), this.arena);
-        floatText(this.fx, `+${battleKnockback(this.battle, hit.units)} s`, { x: at.x + 12, y: at.y - 30 }, {
+        floatText(this.fx, `+${battleKnockback(this.battle, hit.units) + (this.hero?.id === 'ranger' ? 1 : 0)} s`, { x: at.x + 12, y: at.y - 30 }, {
           color: this.board.colors.placed,
           fontSize: 16,
         });
@@ -416,7 +444,45 @@ export class GameScreen extends Container {
     } else {
       this.play(hit, this.playDragonAttack(hit));
     }
+    this.refreshSkill();
     this.checkpoint();
+  }
+
+  private refreshSkill(): void {
+    if (!this.hero || !this.skillButton) return;
+    const { id, guarded, focus } = this.hero;
+    const ready = !this.tutorial && canUseSkill(this.battle, this.hero);
+    const label = id === 'alchemist' && focus === FOCUS_COST && this.battle.playerHp === this.battle.playerMaxHp
+      ? 'pełne HP' : `${focus}/${FOCUS_COST}${guarded ? ' · osłona' : ''}`;
+    const display = `${ready}:${label}`;
+    if (display === this.skillDisplay) return;
+    this.skillDisplay = display;
+    this.skillButton.setText(`${HERO_CLASSES[id].skill} · ${label}`);
+    this.skillButton.setVariant(ready ? 'primary' : 'secondary');
+    this.skillButton.setEnabled(ready);
+    if (!ready) this.skillButton.alpha = .88;
+  }
+
+  private castSkill(): void {
+    if (!this.hero || this.modal || this.tutorial) return;
+    const skill = useSkill(this.battle, this.hero);
+    if (!skill) return;
+    const def = HERO_CLASSES[skill.id];
+    this.replay.record({ kind: 'skill', ...skill }, this.replayState(), this.elapsed * 1000);
+    this.arena.playerWarrior.cast();
+    const at = this.fx.toLocal(this.arena.playerTarget(), this.arena);
+    burst(this.fx, at, def.color, 14);
+    const result = skill.healed ? `+${skill.healed} HP` : skill.delayed >= 1 ? `+${Math.floor(skill.delayed)} s` : def.skill;
+    this.showSkillFeedback(result, def.color);
+    feedback.select();
+    this.refreshSkill();
+    this.checkpoint();
+  }
+
+  private showSkillFeedback(label: string, color: number): void {
+    this.arena.playerHp.setHp(this.battle.playerHp);
+    const at = this.fx.toLocal(this.arena.playerTarget(), this.arena);
+    floatText(this.fx, label, { x: at.x + 40, y: at.y - 16 }, { color, fontSize: 20 });
   }
 
   private replayState() {
@@ -510,8 +576,8 @@ export class GameScreen extends Container {
     this.arena.playerWarrior.hurt(14);
     shake(this, 8, 0.35);
     gsap.fromTo(this.hurtFlash, { alpha: 0.3 }, { alpha: 0, duration: 0.45, ease: 'power2.out' });
-    this.arena.playerHp.setHp(hit.hpAfter);
-    floatText(this.fx, `-${hit.damage}`, { x: to.x, y: to.y - 30 }, { color: theme.error, fontSize: 26 });
+    this.arena.playerHp.setHp(this.hero ? this.battle.playerHp : hit.hpAfter);
+    floatText(this.fx, hit.damage ? `-${hit.damage}` : 'Blok!', { x: to.x, y: to.y - 30 }, { color: hit.damage ? theme.error : theme.gold, fontSize: 26 });
   }
 
   /** A tick for each of the last five seconds before the dragon's timed attack. */

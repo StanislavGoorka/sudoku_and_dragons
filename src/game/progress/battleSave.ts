@@ -1,6 +1,7 @@
 import { analyzePuzzle, countSolutions, createBattle, ENEMIES, generatePuzzle, GENERATION_ATTEMPTS, isSolved, stageById, type Battle, type Grid, type Puzzle } from '../../core/index.ts';
 import type { DailyMove } from '../../core/index.ts';
 import type { RankedRun } from '../net/daily.ts';
+import { parseHero, type HeroState } from '../combat/hero.ts';
 
 /** Device-local checkpoint. Stored with progress so finishing and paying a battle is one write. */
 export interface SavedBattle {
@@ -16,6 +17,7 @@ export interface SavedBattle {
   mistakes: number;
   bestCombo: number;
   elapsed: number;
+  hero?: HeroState;
   /** Optional in old saves. Validated lazily by the recorder when the battle opens. */
   replay?: unknown;
   ranked?: { run: RankedRun; moves: DailyMove[] };
@@ -66,6 +68,7 @@ export function parseSavedBattle(value: unknown): SavedBattle | null {
   if (s.battle.timedAttacks !== undefined && !integer(s.battle.timedAttacks, 0, 100000)) return null;
   return {
     version: 1, puzzle, stage: s.stage, daily: s.daily, grid: [...s.grid],
+    hero: s.daily || s.ranked ? undefined : parseHero(s.hero),
     battle: { ...battle, playerHp: s.battle.playerHp, enemyHp: s.battle.enemyHp, charge: s.battle.charge, timedAttacks: s.battle.timedAttacks ?? 0 },
     notes: s.notes.map((bits, cell) => s.grid[cell] === 0 ? bits : 0),
     notesMode: s.notesMode, selected: s.selected, mistakes: s.mistakes, bestCombo: s.bestCombo, elapsed: s.elapsed, replay: s.replay,

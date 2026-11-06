@@ -1,4 +1,5 @@
 import type { ReplayEvent, ReplayMode, ReplayResult } from './replay.ts';
+import { HERO_CLASSES } from '../combat/hero.ts';
 
 export const MODE_LABEL: Record<ReplayMode, string> = {
   campaign: 'Kampania', daily: 'Wyzwanie dnia', practice: 'Trening solo', solo: 'Walka solo', bot: 'Trening z botem', online: 'Online',
@@ -16,6 +17,7 @@ export function eventLabel(event?: ReplayEvent): string {
   if (!event) return 'Stan początkowy zapisu';
   if (event.kind === 'gap') return 'Brak ruchów pośrednich. Oto kolejny znany stan.';
   if (event.kind === 'timer') return `Atak na czas: −${event.damage} HP`;
+  if (event.kind === 'skill') return `${HERO_CLASSES[event.id].skill}${event.healed ? ` · +${event.healed} HP` : event.delayed > 0 ? ` · atak cofnięty o ${Number(event.delayed.toFixed(1))} s` : ' · osłona gotowa'}`;
   const who = event.actor === 0 ? 'Ty' : 'Rywal';
   if (event.kind === 'timeout') return `${who} · koniec czasu tury`;
   if (event.kind === 'forfeit') return `${who} · przegrana walkowerem`;
@@ -24,7 +26,7 @@ export function eventLabel(event?: ReplayEvent): string {
     if (event.finisher) return `Rozwiązana plansza · cios kończący za ${event.damage} HP`;
     const names = { row: 'wiersz', col: 'kolumna', box: 'kwadrat ×2' };
     const units = event.units.map(u => names[u.kind]).join(', ');
-    return `${who} · ${event.digit} → ${event.damage} obrażeń${units ? ` · ${units}` : ''}`;
+    return `${who} · ${event.digit} → ${event.damage} obrażeń${units ? ` · ${units}` : ''}${event.healed ? ` · +${event.healed} HP` : ''}`;
   }
   return '';
 }

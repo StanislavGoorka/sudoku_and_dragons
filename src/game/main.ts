@@ -264,6 +264,7 @@ export async function boot(): Promise<void> {
         onMap: () => showMap(),
         onOnline: () => showLobby(),
         onTraining:()=>showTraining(),
+        onHero: showHero,
         onDaily: showDaily,
         onProgress: () => showProgress(),
         onShop: () => showShop(),
@@ -311,6 +312,13 @@ export async function boot(): Promise<void> {
     openScreen('shop', async () => {
       const { ShopScreen } = await import('./screens/ShopScreen.ts');
       return () => new ShopScreen({ onBack: showMenu, kind });
+    });
+  };
+
+  const showHero = () => {
+    openScreen('progress', async () => {
+      const { HeroScreen } = await import('./screens/HeroScreen.ts');
+      return () => new HeroScreen(showMenu);
     });
   };
 

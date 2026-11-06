@@ -1,5 +1,6 @@
 import { unitsOf, type Unit } from '../../core/sudoku/grid.ts';
 import type { Difficulty } from '../../core/sudoku/generator.ts';
+import { isHeroClass, type SkillUse } from '../combat/hero.ts';
 
 export const MAX_STEPS = 192;
 export type ReplayMode = 'campaign' | 'daily' | 'practice' | 'solo' | 'bot' | 'online';
@@ -11,7 +12,8 @@ export interface ReplayState {
   result: ReplayResult;
 }
 export type ReplayEvent =
-  | { kind: 'correct'; actor: 0 | 1; cell: number; digit: number; damage: number; units: Unit[]; finisher?: boolean }
+  | { kind: 'correct'; actor: 0 | 1; cell: number; digit: number; damage: number; units: Unit[]; finisher?: boolean; healed?: number }
+  | ({ kind: 'skill' } & SkillUse)
   | { kind: 'wrong'; actor: 0 | 1; cell: number; digit: number; damage: number }
   | { kind: 'timer'; damage: number }
   | { kind: 'timeout' | 'forfeit'; actor: 0 | 1 }
@@ -54,6 +56,7 @@ function matches(before: ReplayState, event: ReplayEvent, after: ReplayState): b
       if (board[event.cell] !== '0') return false;
       board = board.slice(0, event.cell) + event.digit + board.slice(event.cell + 1);
       hp[1 - event.actor] -= event.damage;
+      hp[event.actor] += event.healed ?? 0;
       break;
     }
     case 'wrong':
@@ -61,6 +64,7 @@ function matches(before: ReplayState, event: ReplayEvent, after: ReplayState): b
       hp[event.actor] -= event.damage;
       break;
     case 'timer': hp[0] -= event.damage; break;
+    case 'skill': hp[0] += event.healed; break;
   }
   return board === after.board && hp[0] === after.hp[0] && hp[1] === after.hp[1];
 }
@@ -106,11 +110,12 @@ function validEvent(value: unknown): value is ReplayEvent {
   const e = value as ReplayEvent;
   if (!e) return false;
   if (e.kind === 'gap') return true;
+  if (e.kind === 'skill') return isHeroClass(e.id) && int(e.healed, 0, 8) && Number.isFinite(e.delayed) && e.delayed >= 0 && e.delayed <= 10;
   if (e.kind === 'timer') return int(e.damage, 0, 9999);
   if (!('actor' in Object(e)) || !int(e.actor, 0, 1)) return false;
   if (e.kind === 'timeout' || e.kind === 'forfeit') return true;
   if ((e.kind !== 'correct' && e.kind !== 'wrong') || !int(e.cell, 0, 80) || !int(e.digit, 1, 9) || !int(e.damage, 0, 9999)) return false;
-  return e.kind === 'wrong' || ((e.finisher === undefined || typeof e.finisher === 'boolean') && Array.isArray(e.units) && e.units.length <= 3 && e.units.every(u =>
+  return e.kind === 'wrong' || ((e.healed === undefined || int(e.healed, 0, 1)) && (e.finisher === undefined || typeof e.finisher === 'boolean') && Array.isArray(e.units) && e.units.length <= 3 && e.units.every(u =>
     u && unitsOf(e.cell).some(unit => unit.kind === u.kind && unit.index === u.index)));
 }
 export function parseDraft(value: unknown): ReplayDraft | null {

@@ -40,13 +40,13 @@ export class BattleArena extends Container {
    * `corner` keeps the top-left corner free (for the screen's pause or leave button), `cornerRight` the
    * top-right one (the notes toggle).
    */
-  layout(width: number, height: number, corner = 0, cornerRight = 0): void {
+  layout(width: number, height: number, corner = 0, cornerRight = 0, skillWidth = 0): void {
     const pad = 10;
     this.scene.layout(width, height);
     this.enemyHp.position.set(pad + corner, pad);
     this.enemyHp.layout(width - pad * 2 - corner - cornerRight);
     this.playerHp.position.set(pad, height - pad - HpBar.HEIGHT);
-    this.playerHp.layout(width - pad * 2);
+    this.playerHp.layout(width - pad * 2 - (skillWidth ? skillWidth + 8 : 0));
 
     // Both fighters stand on the ground and cast their shadows on it; the enemy fills the sky as far as the width allows.
     const top = pad + HpBar.HEIGHT + 4;
