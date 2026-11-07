@@ -1,6 +1,7 @@
 import { closesBox, moveDamage } from '../battle/battle.ts';
 import { CELL_COUNT, type Grid, type Unit } from '../sudoku/grid.ts';
 import { applyMove } from '../sudoku/moves.ts';
+import { ARENA_FOCUS, type ArenaFighter, type HeroClass } from './classes.ts';
 
 /** A player's place in a duel: 0 created it (or waited in the queue), 1 joined. */
 export type Seat = 0 | 1;
@@ -32,6 +33,8 @@ export interface DuelState {
   finished: boolean;
   /** Set when finished; null for a draw (board full with equal HP). */
   winner: Seat | null;
+  /** Absent in classic duels, lessons and older checkpoints. */
+  heroes?: [ArenaFighter, ArenaFighter];
 }
 
 export type DuelEvent =
@@ -45,12 +48,14 @@ export type DuelEvent =
       damage: number;
       /** Completing a unit keeps the move. */
       extraMove: boolean;
+      healed?: number;
     }
   | { kind: 'wrong'; seat: Seat; cell: number; digit: number; damage: number }
+  | { kind: 'skill'; seat: Seat; id: HeroClass; healed: number }
   | { kind: 'timeout'; seat: Seat }
   | { kind: 'forfeit'; seat: Seat };
 
-export type DuelError = 'finished' | 'not-your-turn' | 'occupied' | 'bad-move';
+export type DuelError = 'finished' | 'not-your-turn' | 'occupied' | 'bad-move' | 'skill-unavailable';
 
 export type DuelMoveResult = { ok: true; event: DuelEvent } | { ok: false; error: DuelError };
 
@@ -58,15 +63,16 @@ export function otherSeat(seat: Seat): Seat {
   return seat === 0 ? 1 : 0;
 }
 
-export function createDuel(givens: Grid, firstTurn: Seat): DuelState {
+export function createDuel(givens: Grid, firstTurn: Seat, heroes?: [ArenaFighter, ArenaFighter]): DuelState {
   return {
     board: [...givens],
-    hp: [DUEL_RULES.maxHp, DUEL_RULES.maxHp],
+    hp: heroes ? [heroes[0].maxHp, heroes[1].maxHp] : [DUEL_RULES.maxHp, DUEL_RULES.maxHp],
     turn: firstTurn,
     movesLeft: DUEL_RULES.movesPerTurn,
     idleTurns: [0, 0],
     finished: false,
     winner: null,
+    ...(heroes ? { heroes } : {}),
   };
 }
 
@@ -98,9 +104,14 @@ export function playDuelMove(
   if (move.kind === 'occupied') return { ok: false, error: 'occupied' };
   state.idleTurns[seat] = 0;
   const other = otherSeat(seat);
+  const hero = state.heroes?.[seat];
+  const rival = state.heroes?.[other];
 
   if (move.kind === 'wrong') {
-    const damage = Math.min(DUEL_RULES.mistakeDamage, state.hp[seat]);
+    let raw: number = DUEL_RULES.mistakeDamage;
+    if (hero?.id === 'guardian') raw -= 2;
+    if (hero?.id === 'ranger' && hero.guarded) { raw -= 6; hero.guarded = false; }
+    const damage = Math.min(raw, state.hp[seat]);
     state.hp[seat] -= damage;
     if (state.hp[seat] === 0) {
       finish(state, other);
@@ -111,8 +122,16 @@ export function playDuelMove(
   }
 
   const units = move.completed.length;
-  const damage = Math.min(moveDamage(digit, closesBox(move.completed)), state.hp[other]);
+  let raw = moveDamage(digit, closesBox(move.completed));
+  if (rival?.id === 'guardian' && rival.guarded) { raw = Math.max(0, raw - 6); rival.guarded = false; }
+  const damage = Math.min(raw, state.hp[other]);
   state.hp[other] -= damage;
+  let healed = 0;
+  if (hero) {
+    hero.correct++;
+    hero.focus = Math.min(ARENA_FOCUS, hero.focus + (hero.id === 'ranger' || units > 0 ? 2 : 1));
+    if (hero.id === 'alchemist' && units > 0 && state.hp[seat] < hero.maxHp) { state.hp[seat]++; healed = 1; }
+  }
   const extraMove = units > 0;
   if (state.hp[other] === 0) {
     finish(state, seat);
@@ -123,7 +142,24 @@ export function playDuelMove(
     state.movesLeft--;
     if (state.movesLeft === 0) passTurn(state);
   }
-  return { ok: true, event: { kind: 'correct', seat, cell, digit, completed: move.completed, damage, extraMove } };
+  return { ok: true, event: { kind: 'correct', seat, cell, digit, completed: move.completed, damage, extraMove, ...(healed ? { healed } : {}) } };
+}
+
+export function canUseArenaSkill(state: DuelState, seat: Seat): boolean {
+  const h = state.heroes?.[seat];
+  return !!h && !state.finished && state.turn === seat && h.focus === ARENA_FOCUS &&
+    (h.id === 'alchemist' ? state.hp[seat] < h.maxHp : !h.guarded);
+}
+
+/** A skill consumes focus but neither places a digit nor changes the turn or its deadline. */
+export function useArenaSkill(state: DuelState, seat: Seat): DuelMoveResult {
+  if (!canUseArenaSkill(state, seat)) return { ok: false, error: 'skill-unavailable' };
+  const h = state.heroes![seat];
+  h.focus = 0;
+  const healed = h.id === 'alchemist' ? Math.min(8, h.maxHp - state.hp[seat]) : 0;
+  if (h.id === 'alchemist') state.hp[seat] += healed;
+  else h.guarded = true;
+  return { ok: true, event: { kind: 'skill', id: h.id, seat, healed } };
 }
 
 /** The player on turn let their time run out: the turn passes, or they forfeit after too many. */

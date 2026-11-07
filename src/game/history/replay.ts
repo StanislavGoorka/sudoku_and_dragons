@@ -13,7 +13,7 @@ export interface ReplayState {
 }
 export type ReplayEvent =
   | { kind: 'correct'; actor: 0 | 1; cell: number; digit: number; damage: number; units: Unit[]; finisher?: boolean; healed?: number }
-  | ({ kind: 'skill' } & SkillUse)
+  | ({ kind: 'skill'; actor?: 0 | 1 } & SkillUse)
   | { kind: 'wrong'; actor: 0 | 1; cell: number; digit: number; damage: number }
   | { kind: 'timer'; damage: number }
   | { kind: 'timeout' | 'forfeit'; actor: 0 | 1 }
@@ -64,7 +64,7 @@ function matches(before: ReplayState, event: ReplayEvent, after: ReplayState): b
       hp[event.actor] -= event.damage;
       break;
     case 'timer': hp[0] -= event.damage; break;
-    case 'skill': hp[0] += event.healed; break;
+    case 'skill': hp[event.actor ?? 0] += event.healed; break;
   }
   return board === after.board && hp[0] === after.hp[0] && hp[1] === after.hp[1];
 }
@@ -110,7 +110,7 @@ function validEvent(value: unknown): value is ReplayEvent {
   const e = value as ReplayEvent;
   if (!e) return false;
   if (e.kind === 'gap') return true;
-  if (e.kind === 'skill') return isHeroClass(e.id) && int(e.healed, 0, 8) && Number.isFinite(e.delayed) && e.delayed >= 0 && e.delayed <= 10;
+  if (e.kind === 'skill') return isHeroClass(e.id) && (e.actor === undefined || int(e.actor, 0, 1)) && int(e.healed, 0, 8) && Number.isFinite(e.delayed) && e.delayed >= 0 && e.delayed <= 10;
   if (e.kind === 'timer') return int(e.damage, 0, 9999);
   if (!('actor' in Object(e)) || !int(e.actor, 0, 1)) return false;
   if (e.kind === 'timeout' || e.kind === 'forfeit') return true;

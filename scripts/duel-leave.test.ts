@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { describe, expect, it } from 'vitest';
-import { createDuel, forfeit } from '../src/core/index.ts';
+import { arenaFighter, createDuel, DUEL_RULES, forfeit, useArenaSkill } from '../src/core/index.ts';
 
 function waitingRoom() {
   return {
@@ -24,7 +24,7 @@ type BeforeWrite = (room: Room, write: number) => Error | void;
 // and database transport are replaced, so tests can force a join between reading and writing.
 const source = readFileSync(new URL('../supabase/functions/duel/index.ts', import.meta.url), 'utf8');
 const executable = stripTypeScriptTypes(source.replace(/^import[\s\S]*?from ['"][^'"]+['"];\r?\n/gm, ''));
-const loadHandler = new Function('createClient', 'Deno', 'forfeit', `${executable}\nreturn leave;`);
+const loadHandler = new Function('createClient', 'Deno', 'forfeit', 'useArenaSkill', 'DUEL_RULES', `${executable}\nreturn { leave, skill };`);
 
 function server(beforeWrite?: BeforeWrite) {
   const room = waitingRoom();
@@ -54,8 +54,8 @@ function server(beforeWrite?: BeforeWrite) {
     }
   }
   const admin = { from: () => new Query() };
-  const leave = loadHandler(() => admin, { env: { get: () => '' }, serve: () => {} }, forfeit);
-  return { room, leave, writes: () => writes };
+  const { leave, skill } = loadHandler(() => admin, { env: { get: () => '' }, serve: () => {} }, forfeit, useArenaSkill, DUEL_RULES);
+  return { room, leave, skill, writes: () => writes };
 }
 
 function join(room: Room): void {
@@ -125,4 +125,23 @@ describe('leaving an online duel', () => {
     expect(room.state.winner).toBe(1);
     expect(writes()).toBe(1);
   });
+});
+
+it('the Arena skill endpoint checks seat, clock and focus and writes one version', async () => {
+  const { room, skill, writes } = server();
+  join(room);
+  room.state.heroes = [arenaFighter('alchemist', 300), arenaFighter('ranger')];
+  room.state.heroes[0].focus = 5;
+  room.state.hp[0] = 120;
+  await expect(skill('outsider', room.id)).rejects.toMatchObject({ status: 403 });
+  await expect(skill('rival', room.id)).rejects.toMatchObject({ message: 'skill-unavailable' });
+  const at = room.turn_started_at;
+  room.turn_started_at = new Date(Date.now() - 40000).toISOString();
+  await expect(skill('host', room.id)).rejects.toMatchObject({ message: 'too-late' });
+  room.turn_started_at = at;
+  await expect(skill('host', room.id)).resolves.toMatchObject({ event: { kind: 'skill', healed: 8 } });
+  await expect(skill('host', room.id)).rejects.toMatchObject({ message: 'skill-unavailable' });
+  expect(room.state.hp[0]).toBe(128);
+  expect(room.turn_started_at).toBe(at);
+  expect(writes()).toBe(1);
 });

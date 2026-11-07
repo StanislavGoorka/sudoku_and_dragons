@@ -6,7 +6,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
-import { createDuel, generatePuzzle } from '../src/core/index.ts';
+import { arenaFighter, createDuel, generatePuzzle, type HeroClass } from '../src/core/index.ts';
 
 const host = process.env.PGHOST ?? '127.0.0.1';
 assert(['127.0.0.1', 'localhost', '::1'].includes(host), 'Tests require a local PostgreSQL server');
@@ -120,6 +120,33 @@ try {
   assert(!('solution' in easy.duel) && !('seed' in easy.duel));
   console.log('ok   only the server can queue players; responses contain no solution');
 
+  const arenaQueue = async (player: string, id: HeroClass, xp: number) => (await observer.query(
+    "select public.queue_random_duel($1, 'hard', $2, 7, $3) as joined",
+    [player, createDuel(puzzle.givens, 0, [arenaFighter(id, xp), arenaFighter('guardian')]), puzzle.solution])).rows[0].joined;
+  await observer.query('insert into public.arena_profiles(player, xp, rating) values ($1, 300, 1000), ($2, 100, 1200)', players.slice(0, 2));
+  const arenaA = await arenaQueue(players[0], 'alchemist', 300);
+  const arenaB = await arenaQueue(players[1], 'ranger', 100);
+  assert.notEqual(arenaA.duel.id, arenaB.duel.id);
+  const pair = () => observer.query('select public.try_pair_arena($1,$2) as duel', [arenaA.duel.id, players[0]]);
+  assert.equal((await pair()).rows[0].duel, null);
+  assert.equal((await observer.query('select public.try_pair_arena($1,$2) as duel', [arenaA.duel.id, players[2]])).rows[0].duel, null);
+  await observer.query("update public.duels set created_at = now() - interval '25 seconds' where id = $1", [arenaA.duel.id]);
+  const matched = (await pair()).rows[0].duel;
+  assert.equal(matched.status, 'playing');
+  assert.deepEqual(matched.state.hp, [136, 132]);
+  assert.deepEqual(matched.state.heroes.map((h: {id: string}) => h.id), ['alchemist', 'ranger']);
+  assert.equal((await observer.query('select next_duel from public.duels where id = $1', [arenaB.duel.id])).rows[0].next_duel, matched.id);
+  matched.state.heroes.forEach((h: { correct: number }) => { h.correct = 1; });
+  matched.state.finished = true; matched.state.winner = 0;
+  const settled = (await observer.query("update public.duels set status = 'finished', state = $2 where id = $1 returning arena_result",
+    [matched.id, matched.state])).rows[0].arena_result;
+  assert.equal(settled[0].xp, 325);
+  assert.equal(settled[1].xp, 110);
+  assert(settled[0].delta > 12 && settled[0].delta === -settled[1].delta);
+  await observer.query("update public.duels set status = 'finished', version = version + 1 where id = $1", [matched.id]);
+  assert.equal((await observer.query('select xp from public.arena_profiles where player = $1', [players[0]])).rows[0].xp, 325);
+  console.log('ok   Arena pairs by Elo, expands its window, preserves both classes and settles a result exactly once');
+
   // Exercise the diagnostics RPC under actual database roles, with a real JWT subject setting.
   await observer.query(`create or replace function auth.uid() returns uuid language sql as
     'select nullif(current_setting(''request.jwt.claim.sub'', true), '''')::uuid'`);
@@ -127,6 +154,9 @@ try {
   await second.query('set role authenticated');
   await assert.rejects(second.query('select public.report_client_diagnostics($1)', [JSON.stringify([])]), { code: '42501' });
   for (const client of [first, second]) await client.query("select set_config('request.jwt.claim.sub', $1, false)", [players[0]]);
+  assert.deepEqual((await first.query('select player from public.arena_profiles')).rows.map(r => r.player), [players[0]]);
+  await assert.rejects(first.query('update public.arena_profiles set xp = 10000'), { code: '42501' });
+  await assert.rejects(first.query('select public.try_pair_arena($1,$2)', [arenaA.duel.id, players[0]]), { code: '42501' });
   const diagnostic = () => ({ id: randomUUID(), release: 'test-build', platform: 'web', kind: 'runtime', code: 'TypeError',
     screen: 'menu', operation: 'unhandled', location: 'main-HASH.js:1:42', count: 1, value: null });
   const send = (client: pg.Client, events: object[]) => client.query('select public.report_client_diagnostics($1) as accepted', [JSON.stringify(events)]);

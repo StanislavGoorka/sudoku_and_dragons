@@ -1,7 +1,8 @@
-import { analyzePuzzle, countSolutions, createBattle, ENEMIES, generatePuzzle, GENERATION_ATTEMPTS, isSolved, stageById, type Battle, type Grid, type Puzzle } from '../../core/index.ts';
+import { analyzePuzzle, countSolutions, createBattle, ENEMIES, generatePuzzle, GENERATION_ATTEMPTS, isSolved, PLAYER_MAX_HP, stageById, type Battle, type Grid, type Puzzle } from '../../core/index.ts';
 import type { DailyMove } from '../../core/index.ts';
 import type { RankedRun } from '../net/daily.ts';
 import { parseHero, type HeroState } from '../combat/hero.ts';
+import { STORY_HP_BONUS_LIMIT } from './character.ts';
 
 /** Device-local checkpoint. Stored with progress so finishing and paying a battle is one write. */
 export interface SavedBattle {
@@ -56,7 +57,9 @@ export function parseSavedBattle(value: unknown): SavedBattle | null {
   if (s.daily !== undefined && (s.stage !== undefined || typeof s.daily !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.daily))) return null;
   const puzzle = restorePuzzle(s.puzzle);
   if (!puzzle || (s.ranked && puzzle.generatorVersion !== 1)) return null;
-  const battle = createBattle(stage?.enemy ?? ENEMIES[puzzle.difficulty]);
+  const savedMax = s.battle?.playerMaxHp;
+  const maxHp = stage && integer(savedMax, PLAYER_MAX_HP, PLAYER_MAX_HP + STORY_HP_BONUS_LIMIT) ? savedMax : PLAYER_MAX_HP;
+  const battle = createBattle(stage?.enemy ?? ENEMIES[puzzle.difficulty], maxHp);
   if (!Array.isArray(s.grid) || s.grid.length !== 81 || !s.grid.every((digit, cell) =>
     integer(digit, 0, 9) && (puzzle.givens[cell] ? digit === puzzle.givens[cell] : digit === 0 || digit === puzzle.solution[cell]))) return null;
   if (!s.grid.includes(0) || !s.battle || s.battle.outcome !== 'ongoing' ||

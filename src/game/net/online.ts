@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Difficulty, DuelEvent, DuelState, Seat } from '../../core/index.ts';
+import { chosenHero } from '../combat/heroChoice.ts';
+import { characterName } from '../progress/character.ts';
 import { profileSuffix } from '../profile.ts';
-import { progress } from '../progress/store.ts';
+import { progress, saveProgress } from '../progress/store.ts';
 import { randomNickname } from './nickname.ts';
 import { SUPABASE_KEY, SUPABASE_URL } from './config.ts';
 import { flushDiagnostics, reportDiagnostic, setDiagnosticTransport } from '../diagnostics/index.ts';
@@ -25,6 +27,7 @@ export interface DuelRow {
   rematch_declined: boolean;
   /** The rematch duel, once both players asked. */
   next_duel: string | null;
+  arena_result?: [{ rating: number; xp: number; delta: number; earned: number }, { rating: number; xp: number; delta: number; earned: number }] | null;
 }
 
 export interface Me {
@@ -91,6 +94,7 @@ const SYNCED_KEY = `sudoku-dragons.profile-synced${suffix}`;
 
 /** The player's nickname: made up on the first visit and kept on this device, so it shows before sign-in. */
 export function localNickname(): string {
+  if (progress.character) return progress.character.name;
   let nickname = localStorage.getItem(NICKNAME_KEY);
   if (!nickname) {
     nickname = randomNickname();
@@ -102,6 +106,8 @@ export function localNickname(): string {
 
 /** Changes the nickname here at once and on the server in the background (rivals see it from their next duel). */
 export function setNickname(nickname: string): void {
+  const valid = characterName(nickname);
+  if (progress.character && valid) { progress.character = { ...progress.character, name: valid }; saveProgress(); }
   localStorage.setItem(NICKNAME_KEY, nickname);
   syncProfile();
 }
@@ -193,10 +199,13 @@ export interface Joined {
 }
 
 export const online = {
-  createRoom: (difficulty: Difficulty) => call<Joined>('create', { difficulty }),
-  joinRoom: (code: string) => call<Joined>('join', { code }),
+  createRoom: (difficulty: Difficulty) => call<Joined>('create', { difficulty, hero: progress.character?.classId ?? chosenHero() }),
+  joinRoom: (code: string) => call<Joined>('join', { code, hero: progress.character?.classId ?? chosenHero() }),
   /** Joins the oldest waiting random duel, or waits in a new one. */
-  quickMatch: (difficulty: Difficulty) => call<Joined>('queue', { difficulty }),
+  quickMatch: (difficulty: Difficulty) => call<Joined>('queue', { difficulty, hero: progress.character?.classId ?? chosenHero() }),
+  arenaStats: () => call<{ xp: number; rating: number }>('arena-stats', {}),
+  pairArena: (duelId: string) => call<{ duel: DuelRow | null }>('arena-pair', { duelId }),
+  skill: (duelId: string) => call<{ duel: DuelRow; event: DuelEvent }>('skill', { duelId }),
   move: (duelId: string, cell: number, digit: number) =>
     call<{ duel: DuelRow; event: DuelEvent }>('move', { duelId, cell, digit }),
   claimTimeout: (duelId: string) => call<{ duel: DuelRow }>('timeout', { duelId }),
@@ -310,6 +319,7 @@ export function errorMessage(error: unknown): string {
     'sign-in': 'Nie udało się zalogować.',
     'too-late': 'Za późno: czas tury minął.',
     'rival-left': 'Rywal wyszedł z pojedynku.',
+    'arena-client-required': 'Odśwież grę, aby dołączyć do pokoju Areny.',
   };
   return messages[code] ?? 'Brak połączenia z serwerem.';
 }

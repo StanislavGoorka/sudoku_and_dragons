@@ -35,13 +35,13 @@ export class DuelArena extends Container {
   });
   private mine = false;
 
-  constructor(myName: string, rivalName: string, maxHp: number, myDesign: DragonDesign, private readonly bot: boolean) {
+  constructor(myName: string, rivalName: string, maxHp: number, myDesign: DragonDesign, private readonly bot: boolean, rivalMaxHp = maxHp) {
     super();
     this.myWarrior = new WarriorView(myDesign);
     this.rivalFighter = this.makeRival(rivalDesign(null));
     this.rivalFighter.visible = false;
     this.myHp = new HpBar(`Ty · ${myName}`, maxHp, theme.playerHp);
-    this.rivalHp = new HpBar(rivalName, maxHp, theme.enemyHp);
+    this.rivalHp = new HpBar(rivalName, rivalMaxHp, theme.enemyHp);
     this.turnText.anchor.set(0.5, 0.5);
     this.addChild(this.scene, this.myWarrior, this.rivalFighter, this.turnPill, this.turnText, this.timer, this.rivalHp, this.myHp);
   }
@@ -50,13 +50,13 @@ export class DuelArena extends Container {
    * `corner` keeps the top-left corner free (for the screen's pause or leave button), `cornerRight` the
    * top-right one (the notes toggle).
    */
-  layout(width: number, height: number, corner = 0, cornerRight = 0): void {
+  layout(width: number, height: number, corner = 0, cornerRight = 0, skillWidth = 0): void {
     const pad = 10;
     this.scene.layout(width, height);
     this.rivalHp.position.set(pad + corner, pad);
     this.rivalHp.layout(width - pad * 2 - corner - cornerRight);
     this.myHp.position.set(pad, height - pad - HpBar.HEIGHT);
-    this.myHp.layout(width - pad * 2);
+    this.myHp.layout(width - pad * 2 - (skillWidth ? skillWidth + 8 : 0));
 
     const top = pad + HpBar.HEIGHT + 4;
     const ground = this.scene.groundY() + 4;

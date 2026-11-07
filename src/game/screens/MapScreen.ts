@@ -8,6 +8,8 @@ import { currentStage, isStageUnlocked, stageRecord } from '../progress/progress
 import { progress } from '../progress/store.ts';
 import { uiTheme as theme } from '../uiTheme.ts';
 import { Button } from '../ui/Button.ts';
+import { Modal } from '../ui/Modal.ts';
+import { chapterText } from '../progress/character.ts';
 import { DragonView } from '../ui/DragonView.ts';
 import { drawLock } from '../ui/lock.ts';
 import { Scene, SCENES } from '../ui/Scene.ts';
@@ -181,7 +183,7 @@ export class MapScreen extends Container {
   private readonly options: MapOptions;
   private readonly backButton: Button;
   private readonly title = new Text({
-    text: 'Mapa',
+    text: 'Dziennik questów',
     style: {
       fontFamily: theme.headingFontFamily,
       fontWeight: '600',
@@ -198,6 +200,9 @@ export class MapScreen extends Container {
   private maxScroll = 0;
   private drag: { y: number; scroll: number; moved: boolean } | null = null;
   private placed = false;
+  private quest: Modal | null = null;
+  private screenWidth = 0;
+  private screenHeight = 0;
 
   constructor(options: MapOptions) {
     super();
@@ -230,12 +235,15 @@ export class MapScreen extends Container {
   }
 
   layout(width: number, height: number): void {
+    this.screenWidth = width; this.screenHeight = height;
     const margin = 16;
     const column = Math.min(width - margin * 2, 440);
     const left = (width - column) / 2;
     this.backButton.position.set(margin, 12);
     this.backButton.layout(44, 44);
     this.title.position.set(width / 2, 14);
+    this.title.scale.set(1);
+    this.title.scale.set(Math.min(1, (width - 132) / this.title.width));
     this.summary.position.set(width / 2, 58);
 
     const top = 88;
@@ -255,15 +263,16 @@ export class MapScreen extends Container {
       this.scroll = index * (PANEL_HEIGHT + PANEL_GAP) - (viewHeight - PANEL_HEIGHT) / 2;
     }
     this.scrollTo(this.scroll);
+    this.quest?.layout(width, height);
   }
 
   handleBack(): boolean {
-    this.options.onBack();
+    if (this.quest) this.closeQuest(); else this.options.onBack();
     return true;
   }
 
   handleKey(event: KeyboardEvent): void {
-    if (event.key === 'Escape') this.options.onBack();
+    if (event.key === 'Escape') this.handleBack();
   }
 
   private tap(node: StageNode): void {
@@ -274,8 +283,18 @@ export class MapScreen extends Container {
       return;
     }
     feedback.tap();
-    this.options.onPick(node.stage);
+    const stage = node.stage;
+    const xp = stageRecord(progress, stage).wins ? 10 : 40;
+    this.quest = new Modal(`Quest: ${stage.enemy.name}`,
+      `${chapterText(stage.region.id)}\n\nCel: pokonaj smoka. Nagroda: ${xp} XP.`, [
+        { text: 'Rozpocznij quest', variant: 'primary', onTap: () => this.options.onPick(stage) },
+        { text: 'Wróć do dziennika', onTap: () => this.closeQuest() },
+      ]);
+    this.addChild(this.quest);
+    this.quest.layout(this.screenWidth, this.screenHeight); this.quest.show();
   }
+
+  private closeQuest(): void { this.quest?.destroy({ children: true }); this.quest = null; }
 
   private scrollTo(scroll: number): void {
     this.scroll = Math.max(0, Math.min(this.maxScroll, scroll));

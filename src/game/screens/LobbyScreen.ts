@@ -1,6 +1,6 @@
 import { Container, Text, type DestroyOptions } from 'pixi.js';
 import { isAppActive } from '../activity.ts';
-import { DUEL_RULES, type Difficulty, type Seat } from '../../core/index.ts';
+import { arenaLevel, DUEL_RULES, type Difficulty, type Seat } from '../../core/index.ts';
 import { DIFFICULTIES, DIFFICULTY_INFO, loadDifficulty, saveDifficulty } from '../difficulty.ts';
 import {
   connect,
@@ -57,6 +57,7 @@ interface Row {
  * answers catch up in the background.
  */
 export class LobbyScreen extends Container {
+  private ladder: { xp: number; rating: number } | null = null;
   private readonly options: LobbyOptions;
   private readonly nickname = localNickname();
   private ready!: Promise<Me>;
@@ -180,6 +181,12 @@ export class LobbyScreen extends Container {
   /** Signs in in the background; the lobby works meanwhile and requests wait for it. */
   private connect(): void {
     const ready = connect().then(async (me) => {
+      void online.arenaStats().then(stats => {
+        if (!this.destroyed && this.ready === ready && Number.isSafeInteger(stats.xp) && Number.isSafeInteger(stats.rating)) {
+          this.ladder = stats;
+          if (this.view.kind === 'home') this.render();
+        }
+      }).catch(() => { /* Private rooms and training stay available if rating cannot be fetched. */ });
       const joined = await recoverDuel(me);
       if ((await supabase.auth.getSession()).data.session?.user.id !== me.id) throw new Error('account-changed');
       if (!this.destroyed && joined) {
@@ -217,7 +224,7 @@ export class LobbyScreen extends Container {
 
     const view = this.view;
     if (view.kind === 'home' || view.kind === 'searching') this.addHero();
-    const title = this.addText('Pojedynek online', 34, theme.text, '600');
+    const title = this.addText('Arena', 34, theme.text, '600');
     title.style.stroke = { color: theme.panelLip, width: 6, join: 'round' };
     switch (view.kind) {
       case 'offline':
@@ -230,10 +237,11 @@ export class LobbyScreen extends Container {
         break;
 
       case 'home':
-        this.addText(`Grasz jako: ${this.nickname}`, 15, theme.textMuted);
+        this.addText(this.ladder ? `${this.nickname} · Elo ${this.ladder.rating}\nPoziom Areny ${arenaLevel(this.ladder.xp)} · ${this.ladder.xp % 100}/100 XP`
+          : `Grasz jako: ${this.nickname}`, 15, theme.textMuted);
         this.addDifficultyPicker();
-        this.addButton('Szybka gra', () => this.quickMatch(), { variant: 'primary', subtitle: 'losowy przeciwnik', height: 64 });
-        this.addButton('Stwórz pokój', () => this.createRoom(), { subtitle: 'zaproś znajomego kodem', height: 64 });
+        this.addButton('Szybka gra', () => this.quickMatch(), { variant: 'primary', subtitle: 'rywal o zbliżonym ratingu', height: 64 });
+        this.addButton('Stwórz pokój', () => this.createRoom(), { subtitle: 'zaproś znajomego · bez Elo', height: 64 });
         this.addButton('Dołącz kodem', () => this.show({ kind: 'join', code: '' }));
         this.addButtonPair(['Z botem', () => this.startBot()], ['Zasady', () => this.showRules()]);
         if (view.message) this.addText(view.message, 15, theme.error);
@@ -486,12 +494,26 @@ export class LobbyScreen extends Container {
     }
     this.show(waitingView);
     const waitingAttempt = this.attempt;
+    let done = false, pairing = false, following = false;
     const onRow = (row: DuelRow) => {
-      if (this.destroyed || this.attempt !== waitingAttempt) return;
+      if (done || this.destroyed || this.attempt !== waitingAttempt) return;
       if (row.status === 'playing') {
+        done = true;
         this.stopWaiting();
-        this.options.onStart(row, joined.seat, me);
+        rememberDuel(row, me);
+        this.options.onStart(row, row.player0 === me.id ? 0 : 1, me);
+      } else if (row.status === 'cancelled' && row.next_duel) {
+        if (following) return;
+        following = true;
+        void fetchDuel(row.next_duel).then(next => {
+          if (done || this.destroyed || this.attempt !== waitingAttempt) return;
+          if (next.status !== 'playing' && next.status !== 'finished') return;
+          done = true;
+          this.stopWaiting(); rememberDuel(next, me);
+          this.options.onStart(next, next.player0 === me.id ? 0 : 1, me);
+        }).catch(() => {}).finally(() => { following = false; });
       } else if (row.status === 'cancelled') {
+        done = true;
         forgetDuel(row.id);
         this.stopWaiting();
         this.show({ kind: 'home' });
@@ -500,7 +522,13 @@ export class LobbyScreen extends Container {
     this.stopWatching = watchDuel(joined.duel.id, onRow);
     // In case the live connection misses the moment someone joins.
     this.refreshWaiting = () => {
-      if (isAppActive()) void fetchDuel(joined.duel.id).then(onRow, () => {});
+      if (!isAppActive() || done) return;
+      void fetchDuel(joined.duel.id).then(onRow, () => {});
+      if (joined.duel.mode === 'random' && joined.duel.state.heroes && !pairing) {
+        pairing = true;
+        void online.pairArena(joined.duel.id).then(({ duel }) => { if (duel) onRow(duel); })
+          .catch(() => {}).finally(() => { pairing = false; });
+      }
     };
     this.pollTimer = window.setInterval(this.refreshWaiting, 3000);
   }

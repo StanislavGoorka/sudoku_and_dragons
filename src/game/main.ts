@@ -20,6 +20,7 @@ import { MenuScreen } from './screens/MenuScreen.ts';
 import { dailyChallenge } from './progress/daily.ts';
 import { emptyProgress, isUnlocked, LEVELS, type CosmeticKind } from './progress/progress.ts';
 import { activeBattle, onProgressReplaced, progress, saveProgress } from './progress/store.ts';
+import { lessonSeen } from './tutorial.ts';
 import { uiTheme as theme } from './uiTheme.ts';
 import { loadUiIcons } from './ui/UiIcon.ts';
 import { Backdrop } from './ui/Backdrop.ts';
@@ -264,7 +265,7 @@ export async function boot(): Promise<void> {
         onMap: () => showMap(),
         onOnline: () => showLobby(),
         onTraining:()=>showTraining(),
-        onHero: showHero,
+        onHero: () => showHero(),
         onDaily: showDaily,
         onProgress: () => showProgress(),
         onShop: () => showShop(),
@@ -315,10 +316,10 @@ export async function boot(): Promise<void> {
     });
   };
 
-  const showHero = () => {
+  const showHero = (creating = false) => {
     openScreen('progress', async () => {
       const { HeroScreen } = await import('./screens/HeroScreen.ts');
-      return () => new HeroScreen(showMenu);
+      return () => new HeroScreen(showMenu, creating);
     });
   };
 
@@ -558,6 +559,7 @@ export async function boot(): Promise<void> {
     const difficulty = DIFFICULTIES.find((d) => d === params.get('difficulty')) ?? loadDifficulty();
     startBattle(difficulty, params.has('seed') ? Number(params.get('seed')) : randomSeed(), generatorVersion);
   } else {
-    showMenu();
+    if (!progress.character && !activeBattle() && !lessonSeen('battle') && !Object.keys(progress.stages).length) showHero(true);
+    else showMenu();
   }
 }

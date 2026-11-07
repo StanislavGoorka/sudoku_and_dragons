@@ -10,6 +10,11 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
   createDuel,
+  arenaFighter,
+  isHeroClass,
+  useArenaSkill,
+  type ArenaFighter,
+  type HeroClass,
   DUEL_RULES,
   forfeit,
   generatePuzzle,
@@ -90,11 +95,22 @@ async function handle(uid: string, body: any): Promise<Record<string, unknown>> 
     case 'profile':
       return setProfile(uid, String(body.nickname ?? ''), optional(body.dragon), optional(body.effect));
     case 'create':
-      return createRoom(uid, difficultyOf(body.difficulty));
+      return createRoom(uid, difficultyOf(body.difficulty), classOf(body.hero));
     case 'join':
-      return joinRoom(uid, String(body.code ?? ''));
+      return joinRoom(uid, String(body.code ?? ''), classOf(body.hero));
     case 'queue':
-      return queue(uid, difficultyOf(body.difficulty));
+      return queue(uid, difficultyOf(body.difficulty), classOf(body.hero));
+    case 'skill':
+      return skill(uid, String(body.duelId));
+    case 'arena-stats':
+      return arenaStats(uid);
+    case 'arena-pair': {
+      const id = String(body.duelId ?? '');
+      if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(400, 'no-such-duel');
+      const { data, error } = await admin.rpc('try_pair_arena', { p_duel: id, p_player: uid });
+      if (error) throw error;
+      return { duel: data };
+    }
     case 'move':
       return move(uid, String(body.duelId), Number(body.cell), Number(body.digit));
     case 'timeout':
@@ -108,6 +124,22 @@ async function handle(uid: string, body: any): Promise<Record<string, unknown>> 
     default:
       throw new HttpError(400, 'unknown-action');
   }
+}
+
+function classOf(value: unknown): HeroClass | undefined {
+  if (value === undefined) return undefined; // Older clients keep classic rooms and matchmaking.
+  if (!isHeroClass(value)) throw new HttpError(400, 'bad-class');
+  return value;
+}
+
+async function arenaStats(uid: string): Promise<{ xp: number; rating: number }> {
+  const { data, error } = await admin.from('arena_profiles').select('xp,rating').eq('player', uid).maybeSingle();
+  if (error) throw error;
+  return data ?? { xp: 0, rating: 1000 };
+}
+
+async function makeFighter(uid: string, id: HeroClass): Promise<ArenaFighter> {
+  return arenaFighter(id, (await arenaStats(uid)).xp);
 }
 
 function optional(value: unknown): string | undefined {
@@ -152,13 +184,14 @@ async function newDuel(
   difficulty: Difficulty,
   code: string | null,
   extra: Record<string, unknown> = {},
+  heroes?: [ArenaFighter, ArenaFighter],
 ) {
   const seed = randomInt(2 ** 32);
   const puzzle = generatePuzzle(seed, difficulty);
   const firstTurn: Seat = randomInt(2) === 0 ? 0 : 1;
   const { data, error } = await admin
     .from('duels')
-    .insert({ mode, code, difficulty, player0: uid, state: createDuel(puzzle.givens, firstTurn), ...extra })
+    .insert({ mode, code, difficulty, player0: uid, state: createDuel(puzzle.givens, firstTurn, heroes), ...extra })
     .select()
     .single();
   if (error) throw error;
@@ -174,12 +207,13 @@ async function cancelWaiting(uid: string) {
   await admin.from('duels').update({ status: 'cancelled' }).eq('status', 'waiting').lt('created_at', stale);
 }
 
-async function createRoom(uid: string, difficulty: Difficulty) {
+async function createRoom(uid: string, difficulty: Difficulty, id?: HeroClass) {
   await cancelWaiting(uid);
+  const heroes: [ArenaFighter, ArenaFighter] | undefined = id ? [await makeFighter(uid, id), arenaFighter('guardian')] : undefined;
   for (let attempt = 0; attempt < 20; attempt++) {
     const code = Array.from({ length: 4 }, () => 1 + randomInt(9)).join('');
     try {
-      const duel = await newDuel(uid, 'room', difficulty, code);
+      const duel = await newDuel(uid, 'room', difficulty, code, {}, heroes);
       return { duel, seat: 0 };
     } catch (e) {
       // 23505: the code is taken by another waiting room; try another.
@@ -189,7 +223,7 @@ async function createRoom(uid: string, difficulty: Difficulty) {
   throw new HttpError(503, 'no-free-code');
 }
 
-async function joinRoom(uid: string, code: string) {
+async function joinRoom(uid: string, code: string, id?: HeroClass) {
   if (!/^[1-9]{4}$/.test(code)) throw new HttpError(400, 'bad-code');
   const { data: room } = await admin
     .from('duels')
@@ -200,10 +234,17 @@ async function joinRoom(uid: string, code: string) {
     .maybeSingle();
   if (!room) throw new HttpError(404, 'no-such-room');
   if (room.player0 === uid) throw new HttpError(400, 'own-room');
+  const state = (room as DuelRow).state;
+  if (state.heroes) {
+    if (!id) throw new HttpError(409, 'arena-client-required');
+    state.heroes[1] = await makeFighter(uid, id);
+    state.hp[1] = state.heroes[1].maxHp;
+  }
   const { data, error } = await admin
     .from('duels')
     .update({
       player1: uid,
+      state,
       status: 'playing',
       turn_started_at: new Date().toISOString(),
       version: room.version + 1,
@@ -218,7 +259,7 @@ async function joinRoom(uid: string, code: string) {
   return { duel: data, seat: 1 };
 }
 
-async function queue(uid: string, difficulty: Difficulty) {
+async function queue(uid: string, difficulty: Difficulty, id?: HeroClass) {
   // Claiming an opponent and creating a waiting duel must share one database transaction and lock.
   // Otherwise two requests can both see an empty queue and each leave a separate waiting duel.
   const seed = randomInt(2 ** 32);
@@ -227,7 +268,7 @@ async function queue(uid: string, difficulty: Difficulty) {
   const { data, error } = await admin.rpc('queue_random_duel', {
     p_player: uid,
     p_difficulty: difficulty,
-    p_state: createDuel(puzzle.givens, firstTurn),
+    p_state: createDuel(puzzle.givens, firstTurn, id ? [await makeFighter(uid, id), arenaFighter('guardian')] : undefined),
     p_seed: seed,
     p_solution: puzzle.solution,
   });
@@ -328,11 +369,25 @@ async function claimTimeout(uid: string, duelId: string) {
   return { duel: await save(duel, duel.state, event, new Date(startsAt).toISOString()), event };
 }
 
+async function skill(uid: string, duelId: string) {
+  const duel = await loadDuel(duelId);
+  const seat = seatOf(duel, uid);
+  if (duel.status !== 'playing') throw new HttpError(409, 'not-playing');
+  if (turnExpired(duel, GRACE_SECONDS)) throw new HttpError(409, 'too-late');
+  const result = useArenaSkill(duel.state, seat);
+  if (!result.ok) throw new HttpError(409, result.error);
+  return { duel: await save(duel, duel.state, result.event, duel.turn_started_at), event: result.event };
+}
+
 async function leave(uid: string, duelId: string) {
   // Retries when a join, move or timeout claim changes the duel between reading and writing it.
   for (let attempt = 0; attempt < 3; attempt++) {
     const duel = await loadDuel(duelId);
     const seat = seatOf(duel, uid);
+    if (duel.status === 'cancelled' && duel.next_duel && duel.state.heroes) {
+      duelId = duel.next_duel;
+      continue;
+    }
     if (duel.status === 'waiting') {
       if (await bump(duel, { status: 'cancelled' })) return { cancelled: true };
       // A rival may have joined: reload and forfeit the now-playing duel on the next attempt.
@@ -370,11 +425,14 @@ async function rematch(uid: string, duelId: string) {
     }
 
     // The rival asked first: start the rematch, keeping both players in their seats.
+    const heroes = duel.state.heroes && duel.player1 ? await Promise.all([
+      makeFighter(duel.player0, duel.state.heroes[0].id), makeFighter(duel.player1, duel.state.heroes[1].id),
+    ]) : undefined;
     const next = await newDuel(duel.player0, duel.mode, duel.difficulty, null, {
       player1: duel.player1,
       status: 'playing',
       turn_started_at: new Date().toISOString(),
-    });
+    }, heroes);
     if (await bump(duel, { next_duel: next.id })) return { duel: next, seat };
     await admin.from('duels').delete().eq('id', next.id);
   }

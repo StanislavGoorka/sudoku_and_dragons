@@ -2,6 +2,7 @@ import {
   DUEL_RULES,
   playDuelMove,
   timeoutTurn,
+  useArenaSkill,
   type DuelError,
   type DuelEvent,
   type DuelState,
@@ -22,7 +23,7 @@ export interface ServerVersion extends Snapshot {
   event: DuelEvent | null;
 }
 
-export type Action = { kind: 'move'; cell: number; digit: number } | { kind: 'timeout' };
+export type Action = { kind: 'move'; cell: number; digit: number } | { kind: 'timeout' } | { kind: 'skill' };
 
 /** A local action, shown at once and sent to the server, which has the last word. */
 export interface Prediction {
@@ -89,6 +90,13 @@ export class DuelSync {
     if (!result.ok) return result;
     const turnStartedAt = state.turn !== base.state.turn ? now : base.turnStartedAt;
     return { ok: true, prediction: this.push({ kind: 'move', cell, digit }, result.event, state, turnStartedAt, now) };
+  }
+
+  cast(now: number): Prediction | null {
+    const base = this.shown;
+    const state = structuredClone(base.state);
+    const result = useArenaSkill(state, this.seat);
+    return result.ok ? this.push({ kind: 'skill' }, result.event, state, base.turnStartedAt, now) : null;
   }
 
   /**

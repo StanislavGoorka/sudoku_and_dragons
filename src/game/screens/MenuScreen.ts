@@ -141,11 +141,11 @@ export class MenuScreen extends Container {
 
     this.prevButton = new Button({ text: 'Poprzedni', icon: 'back', onTap: () => this.flip(-1) });
     this.nextButton = new Button({ text: 'Następny', icon: 'back', onTap: () => this.flip(1) });
-    this.playButton = new Button({ text: 'Walcz!', leadingIcon: 'play', variant: 'primary', onTap: () => this.play(this.current) });
+    this.playButton = new Button({ text: 'Walcz!', subtitle: 'Kontynuuj fabułę', leadingIcon: 'play', variant: 'primary', onTap: () => this.play(this.current) });
     this.trainingButton=new Button({text:'Trening i lekcje',leadingIcon:'medal',onTap:options.onTraining});
     this.heroButton = new Button({ text: 'Klasa postaci', onTap: options.onHero });
     this.onlineButton = new Button({
-      text: 'Pojedynek',
+      text: 'Arena',
       subtitle: 'online z graczem',
       leadingIcon: 'multiplayer',
       variant: 'accent',

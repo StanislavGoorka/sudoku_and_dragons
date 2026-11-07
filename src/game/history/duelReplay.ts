@@ -44,7 +44,8 @@ export class DuelReplay {
 
   private event(e: DuelEvent): ReplayEvent {
     const actor = e.seat === this.seat ? 0 : 1;
-    if (e.kind === 'correct') return { kind: e.kind, actor, cell: e.cell, digit: e.digit, damage: e.damage, units: e.completed };
+    if (e.kind === 'correct') return { kind: e.kind, actor, cell: e.cell, digit: e.digit, damage: e.damage, units: e.completed, healed: e.healed };
+    if (e.kind === 'skill') return { kind: 'skill', actor, id: e.id, healed: e.healed, delayed: 0 };
     if (e.kind === 'wrong') return { kind: e.kind, actor, cell: e.cell, digit: e.digit, damage: e.damage };
     return { kind: e.kind, actor };
   }

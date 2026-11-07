@@ -29,6 +29,7 @@ export interface DuelBackend {
   /** The judge's clock, in ms, for turn countdowns. */
   now(): number;
   move(duelId: string, cell: number, digit: number): Promise<{ duel: DuelRow; event: DuelEvent }>;
+  skill?(duelId: string): Promise<{ duel: DuelRow; event: DuelEvent }>;
   claimTimeout(duelId: string): Promise<{ duel: DuelRow }>;
   /** Gives up in the background. Online returns the confirmed row, or nothing when unreachable. */
   leave(duelId: string): Promise<DuelRow | undefined> | void;
@@ -46,6 +47,7 @@ export const onlineDuels: DuelBackend = {
   ranked: true,
   now: serverNow,
   move: online.move,
+  skill: online.skill,
   claimTimeout: online.claimTimeout,
   leave: (duelId) => leaveDuel(duelId),
   rematch: online.rematch,

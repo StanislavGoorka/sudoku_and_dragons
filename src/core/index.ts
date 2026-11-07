@@ -5,6 +5,7 @@ export * from './sudoku/generator.ts';
 export * from './sudoku/logic.ts';
 export * from './sudoku/moves.ts';
 export * from './battle/battle.ts';
+export * from './duel/classes.ts';
 export * from './battle/enemies.ts';
 export * from './duel/duel.ts';
 export * from './duel/bot.ts';

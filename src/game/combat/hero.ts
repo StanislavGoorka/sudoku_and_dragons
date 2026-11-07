@@ -1,34 +1,34 @@
 import { advanceTime, nextTimedDamage, resolveMove, type Battle, type Hit } from '../../core/battle/battle.ts';
 import type { MoveResult } from '../../core/sudoku/moves.ts';
+import { CLASS_IDS, isHeroClass, type HeroClass } from '../../core/duel/classes.ts';
+export { isHeroClass, type HeroClass };
 
 export const HERO_CLASSES = {
   guardian: {
     name: 'Strażnik', skill: 'Bastion', color: 0x75baff,
     passive: 'Pancerz: ataki czasowe smoka zadają o 2 HP mniej (minimum 1).',
     active: 'Bastion: osłona pochłania do 6 HP z najbliższego ciosu smoka, także po błędnej cyfrze.',
+    arena: 'Arena: −2 HP kary za błąd; Bastion pochłania do 6 HP z następnego ciosu rywala.',
   },
   ranger: {
     name: 'Zwiadowca', skill: 'Zasłona', color: 0x8ce5ab,
     passive: 'Szybkość: poprawna cyfra cofa ładowanie ataku o dodatkową sekundę.',
     active: 'Zasłona: cofa ładowanie o maks. 10 s i osłabia cios za następny błąd o 3 HP.',
+    arena: 'Arena: 2 skupienia za każdą poprawną cyfrę; Zasłona zmniejsza karę za następny błąd o 6 HP.',
   },
   alchemist: {
     name: 'Alchemik', skill: 'Eliksir', color: 0xf1b1ff,
     passive: 'Regeneracja: domknięcie wiersza, kolumny lub kwadratu odzyskuje 1 HP na ruch.',
     active: 'Eliksir: odzyskujesz do 8 HP. Można go wypić, gdy brakuje Ci zdrowia.',
+    arena: 'Arena: to samo leczenie. Eliksir możesz wypić w swojej turze.',
   },
 } as const;
 
-export type HeroClass = keyof typeof HERO_CLASSES;
-export const HERO_IDS = Object.keys(HERO_CLASSES) as HeroClass[];
+export const HERO_IDS = CLASS_IDS;
 export const FOCUS_COST = 5;
 
 export interface HeroState { id: HeroClass; focus: number; guarded: boolean }
 export interface SkillUse { id: HeroClass; healed: number; delayed: number }
-
-export function isHeroClass(value: unknown): value is HeroClass {
-  return typeof value === 'string' && Object.hasOwn(HERO_CLASSES, value);
-}
 
 export function parseHero(value: unknown): HeroState | undefined {
   const h = value as HeroState | undefined;

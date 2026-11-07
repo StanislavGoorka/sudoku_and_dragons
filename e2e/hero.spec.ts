@@ -3,12 +3,13 @@ import { ready, skipTutorial, tapButton } from './game.ts';
 
 test('chooses an RPG class, casts a charged potion, and restores it with the battle', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 640 });
-  await skipTutorial(page);
   await page.route('http://127.0.0.1:54321/**', r => r.abort());
-  await page.goto('/'); await ready(page);
-  await tapButton(page, 'Klasa postaci'); await ready(page, 'HeroScreen');
-  await tapButton(page, 'Alchemik'); await tapButton(page, 'Wybierz: Alchemik');
-  await tapButton(page, 'Wstecz'); await ready(page);
+  await page.goto('/'); await ready(page, 'HeroScreen');
+  await page.getByRole('textbox').fill('Arin');
+  await tapButton(page, 'Alchemik'); await tapButton(page, 'Stwórz postać'); await ready(page);
+  await skipTutorial(page);
+  await page.evaluate(() => localStorage.setItem('sudoku-dragons.tutorial-battle', 'seen'));
+  expect(await page.evaluate(() => window.__game.state.character)).toEqual({ name: 'Arin', classId: 'alchemist' });
   await tapButton(page, 'Walcz!'); await ready(page, 'GameScreen');
   const before = await page.evaluate(() => {
     const s = window.__game.screen;

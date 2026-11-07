@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { createDuel, forfeit, generatePuzzle, playDuelMove } from '../src/core/index.ts';
+import { arenaFighter, createDuel, forfeit, generatePuzzle, playDuelMove, useArenaSkill } from '../src/core/index.ts';
 import type { DuelRow } from '../src/game/net/online.ts';
 import { ready, skipTutorial, tapButton, tapCell } from './game.ts';
 
@@ -10,7 +10,7 @@ const puzzle = generatePuzzle(7, 'easy');
 
 /** Deterministic transport failures around the real game screens and core rules. The separate
  * local-stack integration job tests the actual Edge Function, Auth, PostgreSQL and RLS. */
-async function backend(page: Page, waiting = false) {
+async function backend(page: Page, waiting = false, arena = false) {
   const user = { id: userId, aud: 'authenticated', role: 'authenticated', email: '', is_anonymous: true,
     app_metadata: { provider: 'anonymous', providers: ['anonymous'] }, user_metadata: {}, created_at: new Date().toISOString() };
   const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -21,6 +21,11 @@ async function backend(page: Page, waiting = false) {
     player0: userId, player1: waiting ? null : rivalId, state: createDuel(puzzle.givens, 0), last_event: null,
     version: 1, turn_started_at: waiting ? null : new Date().toISOString(), rematch_by: null,
     rematch_declined: false, next_duel: null };
+  if (arena) {
+    row.state = createDuel(puzzle.givens, 0, [arenaFighter('alchemist', 300), arenaFighter('guardian')]);
+    row.state.hp[0] = 125;
+    row.state.heroes![0].focus = 5;
+  }
   let offline = false;
   let rivalWinsOnLeave = false;
   let save: unknown[] = [];
@@ -59,6 +64,12 @@ async function backend(page: Page, waiting = false) {
         }
         // The real handler returns no row when it was already over; the client must re-read it.
         return respond({ cancelled: false, serverTime: Date.now() });
+      }
+      if (body.action === 'skill') {
+        const result = useArenaSkill(row.state, 0);
+        if (!result.ok) return respond({ error: result.error }, 409);
+        row.version++; row.last_event = result.event;
+        return respond({ duel: row, event: result.event, serverTime: Date.now() });
       }
       if (body.action === 'move') {
         const turn = row.state.turn;
@@ -99,6 +110,20 @@ async function backend(page: Page, waiting = false) {
     release: () => { delayReads = false; releaseRead(); },
   };
 }
+
+test('Arena ability is confirmed without changing the board or granting another turn', async ({ page }) => {
+  const server = await backend(page, false, true);
+  await page.goto('/'); await ready(page, 'DuelScreen');
+  await expect.poll(() => page.evaluate(() => window.__game.screen.connection)).toBe('connected');
+  const before = server.row();
+  await tapButton(page, 'Eliksir · 5/5');
+  await expect.poll(() => page.evaluate(() => window.__game.screen.sync.confirmed.version)).toBe(before.version + 1);
+  expect(server.row().state.hp[0]).toBe(133);
+  expect(server.row().state.board).toEqual(before.state.board);
+  expect(server.row().state.movesLeft).toBe(before.state.movesLeft);
+  expect(server.row().turn_started_at).toBe(before.turn_started_at);
+  expect(await page.evaluate(() => window.__game.screen.replay.draft.steps.at(-1).event)).toMatchObject({ kind: 'skill', healed: 8 });
+});
 
 test('discovers an online duel without a local pointer, then restores confirmed moves after reload', async ({ page }) => {
   const server = await backend(page);

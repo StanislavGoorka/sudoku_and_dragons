@@ -18,6 +18,8 @@ import { BoardView } from '../ui/BoardView.ts';
 import { Button } from '../ui/Button.ts';
 import { DuelArena } from '../ui/DuelArena.ts';
 import { WarriorView } from '../ui/WarriorView.ts';
+import { ARENA_FOCUS, canUseArenaSkill } from '../../core/index.ts';
+import { HERO_CLASSES } from '../combat/hero.ts';
 import { Modal } from '../ui/Modal.ts';
 import { NumberPad } from '../ui/NumberPad.ts';
 import { chosenEffect, chosenSkin, chosenTheme, type Reward } from '../progress/progress.ts';
@@ -100,6 +102,7 @@ export class DuelScreen extends Container {
   private readonly leaveButton: Button;
   /** Round button in the other corner: notes mode on (gold) or off. Notes stay on this device. */
   private readonly notesButton: Button;
+  private readonly skillButton?: Button;
   private notesMode = false;
   private modal: Modal | null = null;
   private rematch: RematchState;
@@ -110,6 +113,7 @@ export class DuelScreen extends Container {
   /** The end dialog's title and message before any rematch news is added. */
   private endTitle = '';
   private endMessage = '';
+  private arenaResult?: NonNullable<DuelRow['arena_result']>[number];
   /** The rival gave up, so the end message already says they left. */
   private rivalLeft = false;
   /** "Rewanż!" over the board while the server deals the new one. */
@@ -146,6 +150,7 @@ export class DuelScreen extends Container {
   constructor(row: DuelRow, me: Me, seat: Seat, options: DuelScreenOptions) {
     super();
     this.duelId = row.id;
+    this.arenaResult = row.arena_result?.[seat];
     this.backend = options.backend ?? onlineDuels;
     this.me = me;
     this.seat = seat;
@@ -169,7 +174,11 @@ export class DuelScreen extends Container {
       this.rivalName = known.nickname;
       this.rivalEffect = known.effect;
     }
-    this.arena = new DuelArena(me.nickname, this.rivalName, DUEL_RULES.maxHp, chosenSkin(progress).design, !this.backend.ranked);
+    const hero = row.state.heroes?.[seat], rival = row.state.heroes?.[otherSeat(seat)];
+    this.arena = new DuelArena(hero ? `${HERO_CLASSES[hero.id].name} · ${hero.level}` : me.nickname,
+      this.rivalLabel(this.rivalName), hero?.maxHp ?? DUEL_RULES.maxHp, chosenSkin(progress).design, !this.backend.ranked,
+      rival?.maxHp ?? DUEL_RULES.maxHp);
+    if (hero && this.backend.skill) this.skillButton = new Button({ text: '', onTap: () => this.castSkill() });
     if (known) this.arena.showRival(rivalDesign(known.dragon));
     this.arena.hpBar(true).setHp(this.state.hp[seat]);
     this.arena.hpBar(false).setHp(this.state.hp[otherSeat(seat)]);
@@ -185,6 +194,7 @@ export class DuelScreen extends Container {
     this.hurtFlash.eventMode = 'none';
     this.hurtFlash.alpha = 0;
     this.addChild(this.arena, this.leaveButton, this.notesButton, this.board, this.pad, this.hurtFlash, this.fx);
+    if (this.skillButton) this.addChild(this.skillButton);
     this.connectionLabel.anchor.set(0.5, 0);
     this.connectionLabel.visible = this.backend.ranked;
     this.addChild(this.connectionLabel);
@@ -200,7 +210,7 @@ export class DuelScreen extends Container {
         if (this.destroyed) return;
         this.rivalName = profile.nickname;
         this.rivalEffect = profile.effect;
-        this.arena.setRivalName(profile.nickname);
+        this.arena.setRivalName(this.rivalLabel(profile.nickname));
         this.showRivalFighter(profile.dragon);
       });
     }
@@ -240,7 +250,10 @@ export class DuelScreen extends Container {
     this.notesButton.position.set(left + columnWidth - 7 - buttonSize, arenaY + 5);
     this.notesButton.layout(buttonSize, buttonSize);
     this.arena.position.set(left, arenaY);
-    this.arena.layout(columnWidth, arenaHeight, buttonSize + 4, buttonSize + 4);
+    const skillWidth = this.skillButton ? Math.min(150, Math.floor(columnWidth * .43)) : 0;
+    this.arena.layout(columnWidth, arenaHeight, buttonSize + 4, buttonSize + 4, skillWidth);
+    this.skillButton?.position.set(left + columnWidth - skillWidth - 10, arenaY + arenaHeight - 50);
+    this.skillButton?.layout(skillWidth, 40);
     this.board.position.set((width - boardSize) / 2, boardY);
     this.board.layout(boardSize);
     this.pad.position.set(left, padY);
@@ -297,6 +310,7 @@ export class DuelScreen extends Container {
       return;
     }
     if (this.modal) return;
+    if (event.code === 'Space' && this.skillButton) { event.preventDefault(); this.castSkill(); return; }
     if (/^[1-9]$/.test(event.key)) {
       this.handleDigit(Number(event.key));
       return;
@@ -365,6 +379,7 @@ export class DuelScreen extends Container {
     this.connectionLabel.text = state === 'connected' ? 'Połączono' : state === 'connecting'
       ? 'Łączę ponownie…' : 'Brak połączenia · czekam na internet';
     this.connectionLabel.style.fill = state === 'connected' ? theme.textMuted : theme.gold;
+    this.refreshSkill();
     if (state === 'connected' && previous !== 'connected') {
       // The last request may already have landed. Never replay uncertain input after reconnection.
       this.rollBack(null);
@@ -426,6 +441,22 @@ export class DuelScreen extends Container {
     this.pump();
   }
 
+  private rivalLabel(name: string): string {
+    const h = this.state.heroes?.[otherSeat(this.seat)];
+    return h ? `${name} · ${HERO_CLASSES[h.id].name} ${h.level}` : name;
+  }
+
+  private castSkill(): void {
+    if (this.modal || this.switching || this.connection !== 'connected' || !this.backend.skill) return;
+    this.checkDeadline();
+    const turn = this.state.turn;
+    const prediction = this.sync.cast(this.backend.now());
+    if (!prediction) return;
+    this.playEvent(prediction.event, prediction.after.state);
+    this.afterChange(turn);
+    this.pump();
+  }
+
 /** Notes mode: digits become the player's notes in the selected cell instead of moves. */
   private toggleNotes(): void {
     this.notesMode = !this.notesMode;
@@ -466,7 +497,8 @@ export class DuelScreen extends Container {
     prediction.sent = true;
     const { action } = prediction;
     const request =
-      action.kind === 'move' ? this.backend.move(this.duelId, action.cell, action.digit) : this.backend.claimTimeout(this.duelId);
+      action.kind === 'move' ? this.backend.move(this.duelId, action.cell, action.digit)
+        : action.kind === 'skill' ? this.backend.skill!(this.duelId) : this.backend.claimTimeout(this.duelId);
     request
       .then((result) => this.applyRow(result.duel))
       .catch((error: unknown) => this.handleRefusal(prediction, error))
@@ -491,7 +523,7 @@ export class DuelScreen extends Container {
       prediction.sendAt = this.backend.now() + 300 * prediction.retries;
       return;
     }
-    this.rollBack(prediction.action.kind === 'move' ? refusalMessage(error) : null);
+    this.rollBack(prediction.action.kind !== 'timeout' ? refusalMessage(error) : null);
   }
 
   /** Shows the confirmed duel again, without the predictions the server would not take. */
@@ -525,10 +557,11 @@ export class DuelScreen extends Container {
     }
     const turnBefore = this.state.turn;
     this.replay.observe(row, this.replayNow());
+    this.arenaResult = row.arena_result?.[this.seat];
     const received = this.sync.receive({ ...snapshotOf(row), event: row.last_event });
     this.lastEvent = row.last_event;
     if (received.kind === 'unexpected') {
-      const ownDropped = received.dropped.some((p) => p.action.kind === 'move');
+      const ownDropped = received.dropped.some((p) => p.action.kind !== 'timeout');
       if (received.dropped.length > 0) this.forgetPredictions();
       if (ownDropped) this.showState(received.before.state);
       const { turnStartedAt } = received.before;
@@ -570,7 +603,16 @@ export class DuelScreen extends Container {
   private playEvent(event: DuelEvent, after: DuelState, deadline: number | null = null): void {
     const mine = event.seat === this.seat;
     switch (event.kind) {
+      case 'skill': {
+        const fighter = this.arena.fighter(mine);
+        if (fighter instanceof WarriorView) fighter.cast();
+        if (event.healed) this.arena.hpBar(mine).setHp(after.hp[event.seat]);
+        const def = HERO_CLASSES[event.id];
+        this.toast(event.healed ? `${def.skill}: +${event.healed} HP` : def.skill, def.color);
+        break;
+      }
       case 'correct': {
+        if (event.healed) this.arena.hpBar(mine).setHp(after.hp[event.seat]);
         this.board.reveal(event.cell, event.digit, event.completed, mine ? 'mine' : 'rival');
         if (this.board.countOf(event.digit) === 9) this.pad.setDone(event.digit, true);
         feedback.digit(event.digit);
@@ -624,10 +666,10 @@ export class DuelScreen extends Container {
   /** HP bar (to `hp`, or the shown HP), dragon flinch, damage number and sound for a hit on one player. */
   private hurtPlayer(mine: boolean, damage: number, big: boolean, hp: number | null): void {
     const seat = mine ? this.seat : otherSeat(this.seat);
-    this.arena.hpBar(mine).setHp(hp ?? this.state.hp[seat]);
+    this.arena.hpBar(mine).setHp(this.state.heroes ? this.state.hp[seat] : hp ?? this.state.hp[seat]);
     this.arena.fighter(mine).hurt(big ? 18 : 8);
     const at = this.fx.toLocal(this.arena.fighterPoint(mine), this.arena);
-    floatText(this.fx, `-${damage}`, { x: at.x, y: at.y - 30 }, { color: mine ? theme.error : theme.flash, fontSize: big ? 30 : 22 });
+    floatText(this.fx, damage ? `-${damage}` : 'Blok!', { x: at.x, y: at.y - 30 }, { color: mine ? theme.error : theme.flash, fontSize: big ? 30 : 22 });
     if (big) floatText(this.fx, 'Kwadrat ×2!', { x: at.x, y: at.y - 70 }, { color: theme.combo, fontSize: 24 });
     if (mine) {
       feedback.playerHit();
@@ -642,12 +684,23 @@ export class DuelScreen extends Container {
     const mine = this.state.turn === this.seat;
     this.arena.showTurn(mine, this.state.movesLeft, this.state.finished);
     this.pad.alpha = mine && !this.state.finished ? 1 : 0.45;
+    this.refreshSkill();
     const startedAt = this.sync.shown.turnStartedAt;
     if (turnChanged && mine && !this.state.finished && startedAt !== this.announcedTurn) {
       this.announcedTurn = startedAt;
       feedback.yourTurn();
       this.toast('Twoja tura!', theme.flash);
     }
+  }
+
+  private refreshSkill(): void {
+    const h = this.state.heroes?.[this.seat];
+    if (!h || !this.skillButton) return;
+    const enabled = this.connection === 'connected' && canUseArenaSkill(this.state, this.seat);
+    this.skillButton.setText(`${HERO_CLASSES[h.id].skill} · ${h.focus}/${ARENA_FOCUS}${h.guarded ? ' · osłona' : ''}`);
+    this.skillButton.setVariant(enabled ? 'primary' : 'secondary');
+    this.skillButton.setEnabled(enabled);
+    if (!enabled) this.skillButton.alpha = .88;
   }
 
   /** A short message floating up from the middle of the board. */
@@ -738,6 +791,10 @@ export class DuelScreen extends Container {
     }
     if (this.backend.ranked) {
       if (this.reward) this.endMessage = [this.endMessage, ...rewardLines(this.reward, progress.stars)].join('\n');
+      if (this.arenaResult) {
+        const { rating, delta, earned, xp } = this.arenaResult;
+        this.endMessage += `\nArena: Elo ${rating} (${delta >= 0 ? '+' : ''}${delta}) · +${earned} XP\nPoziom ${Math.floor(xp / 100) + 1} · ${xp % 100}/100 XP`;
+      } else if (this.state.heroes) this.endMessage += '\nBez zmiany Elo i XP Areny.';
     } else {
       this.endMessage += '\nTrening z botem nie daje gwiazdek.';
     }

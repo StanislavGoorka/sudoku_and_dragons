@@ -4,6 +4,7 @@ import {
   applyMove,
   createBattle,
   ENEMIES,
+  PLAYER_MAX_HP,
   battleKnockback, attackInterval, bossHint,
   type Battle,
   type Difficulty,
@@ -41,6 +42,7 @@ import { replayId, ReplayRecorder, replayState, type Replay } from '../history/r
 import { addReplay } from '../history/store.ts';
 import { canUseSkill, createHero, FOCUS_COST, HERO_CLASSES, heroMove, heroTime, useSkill, type HeroState } from '../combat/hero.ts';
 import { chosenHero } from '../combat/heroChoice.ts';
+import { questExperience, storyHpBonus } from '../progress/character.ts';
 
 export interface GameScreenOptions {
   /** Device-local, unranked solo. The enemy never charges timed attacks. */
@@ -99,6 +101,7 @@ export class GameScreen extends Container {
   private endShown = false;
   private reward: Reward | null = null;
   private resultRecorded=false;
+  private questXp = 0;
   private readonly replay: ReplayRecorder;
   private finishedReplay: Replay | null = null;
   private readonly ranked: RankedRun | undefined;
@@ -126,9 +129,10 @@ export class GameScreen extends Container {
     if(options.practice&&(options.stage||options.daily||options.ranked||saved?.stage||saved?.daily||saved?.ranked))throw new Error('Practice cannot be ranked');
     this.ranked = saved?.ranked?.run ?? options.ranked;
     this.rankedMoves = saved?.ranked?.moves ?? [];
-    this.battle = saved ? structuredClone(saved.battle) : createBattle(options.stage?.enemy ?? ENEMIES[puzzle.difficulty]);
+    const maxHp = PLAYER_MAX_HP + (options.stage ? storyHpBonus(questExperience(progress)) : 0);
+    this.battle = saved ? structuredClone(saved.battle) : createBattle(options.stage?.enemy ?? ENEMIES[puzzle.difficulty], maxHp);
     if (!options.daily && !saved?.daily && !this.ranked) {
-      this.hero = saved ? (saved.hero && { ...saved.hero }) : createHero(chosenHero());
+      this.hero = saved ? (saved.hero && { ...saved.hero }) : createHero(progress.character?.classId ?? chosenHero());
     }
     this.grid = [...(saved?.grid ?? puzzle.givens)];
     this.elapsed = saved?.elapsed ?? 0;
@@ -506,11 +510,13 @@ export class GameScreen extends Container {
           queueDailyResult(this.ranked, this.rankedMoves);
           void flushDailyResults().catch(() => {});
         }
+        const xpBefore = this.options.stage ? questExperience(progress) : 0;
         this.reward = recordBattle(progress, {
           difficulty: this.puzzle.difficulty, won: this.battle.outcome === 'won', mistakes: this.mistakes,
           hpLeft: this.battle.playerHp, maxHp: this.battle.playerMaxHp, seconds: this.elapsed,
           bestCombo: this.bestCombo, stage: this.options.stage?.id, daily: this.options.daily,
         });
+        if (this.options.stage) this.questXp = questExperience(progress) - xpBefore;
         // Progress and removal of the checkpoint share the same localStorage write, before animations.
         saveActiveBattle(null);
         saveProgress();
@@ -642,7 +648,7 @@ export class GameScreen extends Container {
       : [{ text: 'Walcz ponownie', variant: 'primary', onTap: () => this.options.onRestart() }];
     actions.push(...this.replayAction(), { text: 'Menu', onTap: () => this.options.onMenu() });
     if (this.ranked && this.options.onRanking) actions.unshift({ text: 'Ranking dnia', onTap: this.options.onRanking });
-    const lines = [...(won ? [] : [hint]), stats, ...rewardLines(reward, progress.stars)];
+    const lines = [...(won ? [] : [hint]), stats, ...(this.questXp ? [`Quest ukończony · +${this.questXp} XP`] : []), ...rewardLines(reward, progress.stars)];
     const stars = won ? new StarRow(reward.goals) : null;
     this.openModal(
       new Modal(

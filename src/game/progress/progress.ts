@@ -3,6 +3,7 @@ import { BOARD_THEMES, boardTheme, DEFAULT_BOARD_THEME, type BoardTheme } from '
 import { DEFAULT_DRAGON_SKIN, DRAGON_SKINS, dragonSkin, type DragonSkin } from '../dragonSkins.ts';
 import { DEFAULT_HIT_EFFECT, HIT_EFFECTS, hitEffect, type HitEffect } from '../hitEffects.ts';
 import { emptyDaily, winDaily, type DailyRecord } from './daily.ts';
+import { parseCharacter, type Character } from './character.ts';
 
 /** The solo levels in the order they unlock. */
 export const LEVELS: Difficulty[] = ['easy', 'medium', 'hard'];
@@ -18,6 +19,7 @@ export interface LevelRecord {
 
 /** Everything the player has achieved; saved on the device (see store.ts). */
 export interface Progress {
+  character: Character | null;
   /** Stars to spend: the currency. */
   stars: number;
   /** Every star ever earned, spent or not. */
@@ -52,6 +54,7 @@ export interface Progress {
 export function emptyProgress(): Progress {
   const level = (): LevelRecord => ({ wins: 0, losses: 0, bestStars: 0, bestTime: null });
   return {
+    character: null,
     stars: 0,
     starsEarned: 0,
     levels: { easy: level(), medium: level(), hard: level() },
@@ -75,6 +78,7 @@ export function parseProgress(data: unknown): Progress {
   const progress = emptyProgress();
   if (typeof data !== 'object' || data === null) return progress;
   const saved = data as Partial<Progress>;
+  progress.character = parseCharacter(saved.character);
   const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0);
   progress.stars = count(saved.stars);
   progress.starsEarned = Math.max(count(saved.starsEarned), progress.stars);
@@ -395,6 +399,8 @@ export function chosenEffect(progress: Progress): HitEffect {
 export function mergeProgress(base: Progress, local: Progress, remote: Progress): Progress {
   const sum = (b: number, l: number, r: number) => Math.max(0, l + r - b);
   const merged = emptyProgress();
+  const changedCharacter = local.character && (local.character.name !== base.character?.name || local.character.classId !== base.character?.classId);
+  merged.character = changedCharacter ? local.character : remote.character ?? local.character;
   let stars = sum(base.stars, local.stars, remote.stars);
   let earned = sum(base.starsEarned, local.starsEarned, remote.starsEarned);
   const mergeRecord = (b: LevelRecord | undefined, l: LevelRecord | undefined, r: LevelRecord | undefined): LevelRecord => {

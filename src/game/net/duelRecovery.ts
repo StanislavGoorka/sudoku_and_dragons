@@ -33,6 +33,7 @@ export async function recoverDuel(me: Me, source: RecoverySource = { find: findD
   const pointer = remembered();
   let row = pointer?.user === me.id ? await source.find(pointer.id) : null;
   const own = (d: DuelRow) => d.player0 === me.id || d.player1 === me.id;
+  if (row && own(row) && row.status === 'cancelled' && row.next_duel) row = await source.find(row.next_duel);
   if (row && (!own(row) || row.status === 'cancelled')) row = null;
   if (!row) row = await source.active(me.id);
   if (!row || !own(row) || row.status === 'cancelled') {

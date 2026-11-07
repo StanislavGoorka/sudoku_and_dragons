@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { ready, tapButton } from './game.ts';
+import { ready, skipTutorial, tapButton } from './game.ts';
 
 test('global errors are sent as technical fields and the player can opt out', async ({ page }) => {
+  await skipTutorial(page);
   const reports: Record<string, unknown>[] = [];
   const encode = (data: object) => Buffer.from(JSON.stringify(data)).toString('base64url');
   const user = { id: '00000000-0000-4000-8000-000000000011', aud: 'authenticated', role: 'authenticated',

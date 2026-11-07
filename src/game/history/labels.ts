@@ -17,7 +17,7 @@ export function eventLabel(event?: ReplayEvent): string {
   if (!event) return 'Stan początkowy zapisu';
   if (event.kind === 'gap') return 'Brak ruchów pośrednich. Oto kolejny znany stan.';
   if (event.kind === 'timer') return `Atak na czas: −${event.damage} HP`;
-  if (event.kind === 'skill') return `${HERO_CLASSES[event.id].skill}${event.healed ? ` · +${event.healed} HP` : event.delayed > 0 ? ` · atak cofnięty o ${Number(event.delayed.toFixed(1))} s` : ' · osłona gotowa'}`;
+  if (event.kind === 'skill') return `${event.actor === 1 ? 'Rywal · ' : ''}${HERO_CLASSES[event.id].skill}${event.healed ? ` · +${event.healed} HP` : event.delayed > 0 ? ` · atak cofnięty o ${Number(event.delayed.toFixed(1))} s` : ' · osłona gotowa'}`;
   const who = event.actor === 0 ? 'Ty' : 'Rywal';
   if (event.kind === 'timeout') return `${who} · koniec czasu tury`;
   if (event.kind === 'forfeit') return `${who} · przegrana walkowerem`;
