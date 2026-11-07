@@ -42,7 +42,7 @@ offline. Poziom Areny i Elo są wyliczane na serwerze, niezależnie od chmury za
 
 ## Uruchomienie online
 
-Najpierw zastosuj migrację `20261107103705_arena_classes.sql`, potem zbuduj paczkę funkcji
+Najpierw zastosuj migrację `20261107112641_arena_classes.sql`, potem zbuduj paczkę funkcji
 (`npm run function:bundle`) i wdróż funkcję Edge `duel`. Na końcu opublikuj klienta. Migracja
 utrzymuje oddzielne kolejki klasyczne i RPG, a już rozpoczęte stare pojedynki pozostają grywalne.
 `npm run test:matchmaking` weryfikuje właściwą migrację na lokalnej bazie: uprawnienia, dobór Elo,
